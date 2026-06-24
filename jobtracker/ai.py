@@ -157,16 +157,33 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
 
     client = _client()
     from google.genai import types  # type: ignore
-    cfg = types.GenerateContentConfig(
-        response_mime_type="application/json" if as_json else "text/plain",
-        temperature=0.4,
-        max_output_tokens=8192,
-    )
+
+    def _cfg_for(model: str):
+        kwargs = dict(
+            response_mime_type="application/json" if as_json else "text/plain",
+            temperature=0.4,
+            max_output_tokens=8192,
+        )
+        # Disable the slow "thinking" pass on flash/lite models (big latency
+        # win). Pro models often require thinking, so leave them untouched.
+        low = model.lower()
+        if "flash" in low or "lite" in low:
+            try:
+                kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
+        try:
+            return types.GenerateContentConfig(**kwargs)
+        except Exception:
+            kwargs.pop("thinking_config", None)
+            return types.GenerateContentConfig(**kwargs)
+
     deadline = time.monotonic() + AI_TIMEOUT_S
     last_exc: Exception | None = None
     for model in _model_candidates():
         if time.monotonic() >= deadline:
             break
+        cfg = _cfg_for(model)
         for i in range(attempts):
             if time.monotonic() >= deadline:
                 break
