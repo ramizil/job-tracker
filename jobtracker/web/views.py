@@ -9,7 +9,7 @@ from flask import (
     request, send_file, url_for,
 )
 
-from .. import ai, analytics, exporter, tracker
+from .. import ai, analytics, config, exporter, tracker
 from .. import resume as resume_mod
 from ..config import TAILORED_DIR
 from ..matcher import score_job
@@ -55,6 +55,37 @@ def md_to_html(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+@bp.route("/settings", methods=["GET", "POST"])
+def settings():
+    if request.method == "POST":
+        updates = {k: request.form.get(k, "").strip() for k in config.EDITABLE_KEYS}
+        try:
+            config.update_env_file(updates)
+            flash("Settings saved and applied (no restart needed).", "ok")
+        except Exception as exc:
+            flash(f"Could not save settings: {exc}", "error")
+        return redirect(url_for("main.settings"))
+    return render_template(
+        "settings.html",
+        values=config.current_settings(),
+        fields=config.EDITABLE_KEYS,
+        sources=[s.name for s in get_sources()],
+        ai_on=ai.is_configured(),
+        env_path=str(config.ENV_PATH),
+    )
+
+
+@bp.route("/settings/rebuild-profile", methods=["POST"])
+def rebuild_profile():
+    try:
+        prof = resume_mod.build_profile()
+        flash(f"Match profile rebuilt — {len(prof.get('skills', {}))} skills "
+              f"detected from your resume.", "ok")
+    except Exception as exc:
+        flash(f"Could not build profile: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
 @bp.route("/quit", methods=["GET", "POST"])
 def quit_app():
     """Confirm (GET) then stop the local server (POST)."""

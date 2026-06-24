@@ -1,7 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Help · Job Tracker{% endblock %}
 {% block content %}
-<h1>❓ Help — starting &amp; stopping the server</h1>
+<h1>❓ Help &amp; how to use it</h1>
+
+<section class="panel">
+  <h2>🚀 Step-by-step: from zero to tailored CV</h2>
+  <ol class="steps">
+    <li><b>Configure your keys (one time).</b> Open
+      <a href="{{ url_for('main.settings') }}">⚙ Settings</a> and paste your API keys.
+      Values save to your local <code>.env</code> and apply immediately.</li>
+    <li><b>Add LinkedIn / job search.</b> LinkedIn has no public jobs API, so jobs
+      (including LinkedIn postings) come via <b>JSearch</b>. In Settings, add a
+      <code>RAPIDAPI_KEY</code> from
+      <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a>
+      (free Basic plan → copy the <i>X-RapidAPI-Key</i>). Optionally add a free
+      <code>JOOBLE_API_KEY</code>.</li>
+    <li><b>Turn on AI.</b> In Settings add a <code>GEMINI_API_KEY</code> from
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>
+      to unlock fit analysis &amp; resume tailoring.</li>
+    <li><b>Point to your resume.</b> Set <code>RESUME_PATH</code> in Settings to your
+      CV (HTML), then click <b>Rebuild match profile</b>.</li>
+    <li><b>Find jobs.</b> Go to <a href="{{ url_for('main.search') }}">Search</a>,
+      enter a title (or leave blank to use your target titles) and location, and
+      <b>Save</b> the ones you like. They land in your tracker as <i>saved</i>.</li>
+    <li><b>…or add one manually.</b> On
+      <a href="{{ url_for('main.applications') }}">Applications</a> click
+      <b>+ Add application</b>, paste the LinkedIn URL and the <b>job description</b>
+      (the description powers AI &amp; match scoring).</li>
+    <li><b>Track progress.</b> Drag cards across the
+      <a href="{{ url_for('main.board') }}">Board</a> (saved → applied → screening →
+      interview → offer). Open an application to add notes or mark it rejected
+      (with stage + reason).</li>
+    <li><b>Analyze fit.</b> Open an application →
+      <b>Analyze fit with Gemini</b>. You get a YES/MAYBE/NO verdict, a
+      requirement-by-requirement match, risks, and concrete resume fixes.</li>
+    <li><b>Tailor your CV.</b> Tick the suggestions you want →
+      <b>Generate tailored resume</b>. Review/edit it, then
+      <b>Print / Save as PDF</b> (pixel-perfect) or <b>Download PDF</b>.</li>
+    <li><b>Review &amp; export.</b> The <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+      shows your funnel, response/interview rates and rejection reasons. Export
+      everything via <b>CSV</b> / <b>Excel</b> in the top bar.</li>
+  </ol>
+</section>
+
+<h2>Starting &amp; stopping the server</h2>
 
 <div class="grid2">
   <section class="panel">

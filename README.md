@@ -46,10 +46,22 @@ python -m jobtracker init
 python -m jobtracker profile --rebuild
 ```
 
-## API keys (only needed for `search`)
+## Configuration — two ways
+1. **From the UI (easiest):** start the app and open **⚙ Settings**. Paste your
+   keys, resume path and Gemini model; they save to `.env` and apply instantly
+   (no restart). The Settings page also rebuilds your match profile.
+2. **By hand:** copy `.env.example` to `.env` and fill in the values.
+
+### Adding LinkedIn
+LinkedIn has **no public jobs API**. This app surfaces LinkedIn postings through
+**JSearch** (Google-for-Jobs). Add a `RAPIDAPI_KEY` in Settings and LinkedIn jobs
+show up in **Search**. You can also add any single LinkedIn job by hand on the
+**Applications** page (paste the URL + description).
+
+## API keys (only needed for `search` / AI)
 | Key | Source | Notes |
 |-----|--------|-------|
-| `RAPIDAPI_KEY` | [JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | **Primary**, Israel coverage, free tier |
+| `RAPIDAPI_KEY` | [JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | **Primary**, Israel + LinkedIn, free tier |
 | `JOOBLE_API_KEY` | [Jooble](https://jooble.org/api/about) | Free, Israel coverage |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | [Adzuna](https://developer.adzuna.com/) | Optional, **no Israel** (remote/UK/US/EU) |
 | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) | For AI fit analysis & resume tailoring |

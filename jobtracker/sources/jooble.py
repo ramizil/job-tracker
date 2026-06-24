@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import requests
 
-from ..config import JOOBLE_API_KEY
+from .. import config
 from .base import JobResult, JobSource
 
 _ENDPOINT = "https://jooble.org/api/"
@@ -16,7 +16,7 @@ class JoobleSource(JobSource):
     name = "jooble"
 
     def is_configured(self) -> bool:
-        return bool(JOOBLE_API_KEY)
+        return bool(config.JOOBLE_API_KEY)
 
     def search(self, query: str, location: str = "Israel",
                limit: int = 20) -> list[JobResult]:
@@ -25,7 +25,7 @@ class JoobleSource(JobSource):
 
         payload = {"keywords": query, "location": location}
         resp = requests.post(
-            _ENDPOINT + JOOBLE_API_KEY,
+            _ENDPOINT + config.JOOBLE_API_KEY,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=30,

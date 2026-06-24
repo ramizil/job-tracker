@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import requests
 
-from ..config import ADZUNA_APP_ID, ADZUNA_APP_KEY
+from .. import config
 from .base import JobResult, JobSource
 
 # Adzuna supported countries (no IL). Default to GB; override via location like
@@ -21,7 +21,7 @@ class AdzunaSource(JobSource):
     name = "adzuna"
 
     def is_configured(self) -> bool:
-        return bool(ADZUNA_APP_ID and ADZUNA_APP_KEY)
+        return bool(config.ADZUNA_APP_ID and config.ADZUNA_APP_KEY)
 
     def search(self, query: str, location: str = "gb",
                limit: int = 20) -> list[JobResult]:
@@ -34,8 +34,8 @@ class AdzunaSource(JobSource):
 
         url = f"https://api.adzuna.com/v1/api/jobs/{country}/search/1"
         params = {
-            "app_id": ADZUNA_APP_ID,
-            "app_key": ADZUNA_APP_KEY,
+            "app_id": config.ADZUNA_APP_ID,
+            "app_key": config.ADZUNA_APP_KEY,
             "what": query,
             "results_per_page": min(50, max(1, limit)),
             "content-type": "application/json",

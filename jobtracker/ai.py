@@ -13,7 +13,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from .config import GEMINI_API_KEY, GEMINI_MODEL, RESUME_PATH
+from . import config
 
 
 class AIError(RuntimeError):
@@ -21,20 +21,20 @@ class AIError(RuntimeError):
 
 
 def is_configured() -> bool:
-    return bool(GEMINI_API_KEY)
+    return bool(config.GEMINI_API_KEY)
 
 
 def _client():
-    if not GEMINI_API_KEY:
+    if not config.GEMINI_API_KEY:
         raise AIError(
-            "No Gemini API key configured. Add GEMINI_API_KEY to your .env "
+            "No Gemini API key configured. Add it on the Settings page "
             "(get one at https://aistudio.google.com/app/apikey)."
         )
     try:
         from google import genai  # type: ignore
     except ImportError as exc:  # pragma: no cover
         raise AIError("google-genai is not installed (pip install google-genai).") from exc
-    return genai.Client(api_key=GEMINI_API_KEY)
+    return genai.Client(api_key=config.GEMINI_API_KEY)
 
 
 # Tried in order. If the primary is overloaded (503), out of quota (429) or
@@ -47,7 +47,7 @@ _FALLBACK_MODELS = [
 
 def _model_candidates() -> list[str]:
     seen: list[str] = []
-    for m in [GEMINI_MODEL, *_FALLBACK_MODELS]:
+    for m in [config.GEMINI_MODEL, *_FALLBACK_MODELS]:
         if m and m not in seen:
             seen.append(m)
     return seen
@@ -89,7 +89,7 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
 
 
 def resume_text(resume_path: Path | None = None) -> str:
-    path = Path(resume_path) if resume_path else RESUME_PATH
+    path = Path(resume_path) if resume_path else config.RESUME_PATH
     html = path.read_text(encoding="utf-8", errors="ignore")
     soup = BeautifulSoup(html, "html.parser")
     for t in soup(["style", "script"]):
@@ -98,7 +98,7 @@ def resume_text(resume_path: Path | None = None) -> str:
 
 
 def resume_html(resume_path: Path | None = None) -> str:
-    path = Path(resume_path) if resume_path else RESUME_PATH
+    path = Path(resume_path) if resume_path else config.RESUME_PATH
     return path.read_text(encoding="utf-8", errors="ignore")
 
 

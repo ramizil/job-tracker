@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import requests
 
-from ..config import RAPIDAPI_KEY
+from .. import config
 from .base import JobResult, JobSource
 
 _ENDPOINT = "https://jsearch.p.rapidapi.com/search"
@@ -18,7 +18,7 @@ class JSearchSource(JobSource):
     name = "jsearch"
 
     def is_configured(self) -> bool:
-        return bool(RAPIDAPI_KEY)
+        return bool(config.RAPIDAPI_KEY)
 
     def search(self, query: str, location: str = "Israel",
                limit: int = 20) -> list[JobResult]:
@@ -34,7 +34,7 @@ class JSearchSource(JobSource):
             "num_pages": str(num_pages),
         }
         headers = {
-            "X-RapidAPI-Key": RAPIDAPI_KEY,
+            "X-RapidAPI-Key": config.RAPIDAPI_KEY,
             "X-RapidAPI-Host": _HOST,
         }
         resp = requests.get(_ENDPOINT, headers=headers, params=params, timeout=30)

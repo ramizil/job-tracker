@@ -12,7 +12,8 @@ from typing import Any
 import yaml
 from bs4 import BeautifulSoup
 
-from .config import PROFILE_PATH, RESUME_PATH
+from . import config
+from .config import PROFILE_PATH
 
 # A curated skill dictionary. Keys are canonical skills; values are aliases that
 # may appear in a job description. Extend freely in data/profile.yaml.
@@ -71,7 +72,7 @@ def _read_text(path: Path) -> str:
 
 def build_profile(resume_path: Path | None = None) -> dict[str, Any]:
     """Parse the resume and return a profile dict (also saved to disk)."""
-    path = Path(resume_path) if resume_path else RESUME_PATH
+    path = Path(resume_path) if resume_path else config.RESUME_PATH
     if not path.exists():
         raise FileNotFoundError(f"Resume not found: {path}")
 

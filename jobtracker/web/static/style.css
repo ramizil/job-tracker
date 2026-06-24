@@ -139,3 +139,12 @@ pre.notes,pre.jd{background:#0b0f14;border:1px solid var(--rule);border-radius:8
 .searchbar{display:flex;gap:8px;margin:12px 0}
 .searchbar input:first-child{flex:1}
 .kbd{display:inline-block;background:#0b0f14;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:1px 7px;font-family:Consolas,monospace;font-size:12px}
+.setting{margin:10px 0}
+.setting label{display:block;font-weight:600;margin-bottom:4px;font-size:13px}
+.setting input{width:100%}
+.setting small{display:block;color:var(--muted);margin-top:4px;font-size:12px}
+.rec{background:var(--accent2);color:#fff;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:6px}
+.steps{counter-reset:step;list-style:none;padding:0}
+.steps>li{counter-increment:step;position:relative;padding:10px 0 10px 44px;border-bottom:1px solid var(--rule)}
+.steps>li::before{content:counter(step);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:50%;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.steps b{color:#cdd9e5}

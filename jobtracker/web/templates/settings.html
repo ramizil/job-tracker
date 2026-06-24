@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Settings · Job Tracker{% endblock %}
+{% block content %}
+<h1>⚙ Settings</h1>
+<p class="muted">All values are saved to your local <code>{{ env_path }}</code>
+   (git-ignored) and applied immediately — no restart needed.</p>
+
+<div class="banner">
+  <b>Want LinkedIn jobs?</b> LinkedIn has no public jobs API, so this app pulls
+  LinkedIn postings through <b>JSearch</b> (Google-for-Jobs). Add a
+  <code>RAPIDAPI_KEY</code> below — free at
+  <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a>
+  (Subscribe to the free Basic plan, then copy your <i>X-RapidAPI-Key</i>).
+  You can always add a single LinkedIn job by hand on the
+  <a href="{{ url_for('main.applications') }}">Applications</a> page too.
+</div>
+
+<form method="post" action="{{ url_for('main.settings') }}">
+  <section class="panel">
+    <h2>🔎 Job search sources</h2>
+    <div class="setting">
+      <label for="RAPIDAPI_KEY">RapidAPI key — JSearch (LinkedIn + Israel) <span class="rec">recommended</span></label>
+      <input type="text" id="RAPIDAPI_KEY" name="RAPIDAPI_KEY" value="{{ values.RAPIDAPI_KEY }}" placeholder="paste your X-RapidAPI-Key" autocomplete="off">
+      <small>Get it at <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a> (free tier).</small>
+    </div>
+    <div class="setting">
+      <label for="JOOBLE_API_KEY">Jooble API key (free, Israel)</label>
+      <input type="text" id="JOOBLE_API_KEY" name="JOOBLE_API_KEY" value="{{ values.JOOBLE_API_KEY }}" placeholder="optional" autocomplete="off">
+      <small>Request free at <a href="https://jooble.org/api/about" target="_blank" rel="noopener">jooble.org/api/about</a>.</small>
+    </div>
+    <div class="row">
+      <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
+        <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>
+      <div class="setting"><label for="ADZUNA_APP_KEY">Adzuna app key</label>
+        <input type="text" id="ADZUNA_APP_KEY" name="ADZUNA_APP_KEY" value="{{ values.ADZUNA_APP_KEY }}" placeholder="optional" autocomplete="off"></div>
+    </div>
+    <p class="muted">Currently active sources: <b>{{ sources | join(', ') if sources else 'none' }}</b></p>
+  </section>
+
+  <section class="panel">
+    <h2>🤖 AI (Gemini)</h2>
+    <div class="setting">
+      <label for="GEMINI_API_KEY">Gemini API key</label>
+      <input type="text" id="GEMINI_API_KEY" name="GEMINI_API_KEY" value="{{ values.GEMINI_API_KEY }}" placeholder="AIza..." autocomplete="off">
+      <small>Get it at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>. Status: {% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off</span>{% endif %}</small>
+    </div>
+    <div class="setting">
+      <label for="GEMINI_MODEL">Gemini model</label>
+      <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash">
+      <small>Default <code>gemini-2.5-flash</code>. Falls back automatically if a model is busy.</small>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>📄 Resume</h2>
+    <div class="setting">
+      <label for="RESUME_PATH">Resume HTML path</label>
+      <input type="text" id="RESUME_PATH" name="RESUME_PATH" value="{{ values.RESUME_PATH }}" placeholder="C:\path\to\your-cv.html">
+      <small>Used for match scoring &amp; AI tailoring. After changing it, rebuild the profile below.</small>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn primary" type="submit">💾 Save settings</button>
+  </div>
+</form>
+
+<section class="panel">
+  <h2>Match profile</h2>
+  <p class="muted">Rebuild the weighted skill profile from your resume (do this after changing the resume path).</p>
+  <form method="post" action="{{ url_for('main.rebuild_profile') }}">
+    <button class="btn" type="submit">🔁 Rebuild match profile from resume</button>
+  </form>
+</section>
+{% endblock %}
