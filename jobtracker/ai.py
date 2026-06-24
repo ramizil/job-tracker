@@ -24,6 +24,11 @@ def is_configured() -> bool:
     return bool(config.GEMINI_API_KEY)
 
 
+# Hard ceiling for any single AI operation (seconds). Keeps a slow/overloaded
+# Gemini call from hanging the request forever.
+AI_TIMEOUT_S = 180
+
+
 def _client():
     if not config.GEMINI_API_KEY:
         raise AIError(
@@ -34,7 +39,15 @@ def _client():
         from google import genai  # type: ignore
     except ImportError as exc:  # pragma: no cover
         raise AIError("google-genai is not installed (pip install google-genai).") from exc
-    return genai.Client(api_key=config.GEMINI_API_KEY)
+    # Bound each HTTP call so it cannot hang indefinitely (timeout in ms).
+    try:
+        from google.genai import types  # type: ignore
+        return genai.Client(
+            api_key=config.GEMINI_API_KEY,
+            http_options=types.HttpOptions(timeout=AI_TIMEOUT_S * 1000),
+        )
+    except Exception:
+        return genai.Client(api_key=config.GEMINI_API_KEY)
 
 
 # Tried in order. If the primary is overloaded (503), out of quota (429) or
@@ -97,9 +110,14 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
         temperature=0.4,
         max_output_tokens=8192,
     )
+    deadline = time.monotonic() + AI_TIMEOUT_S
     last_exc: Exception | None = None
     for model in _model_candidates():
+        if time.monotonic() >= deadline:
+            break
         for i in range(attempts):
+            if time.monotonic() >= deadline:
+                break
             try:
                 resp = client.models.generate_content(
                     model=model, contents=prompt, config=cfg
@@ -113,10 +131,15 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
                 msg = str(exc)
                 overloaded = "503" in msg or "UNAVAILABLE" in msg or "overloaded" in msg
                 # Retry same model once on transient overload, then fall back.
-                if overloaded and i < attempts - 1:
+                if overloaded and i < attempts - 1 and time.monotonic() < deadline:
                     time.sleep(1.2)
                     continue
                 break  # move to next candidate model
+    if last_exc and ("timeout" in str(last_exc).lower() or time.monotonic() >= deadline):
+        raise AIError(
+            f"Gemini didn't respond within {AI_TIMEOUT_S // 60} minutes "
+            "(it may be overloaded). Please try again."
+        )
     raise AIError(
         f"All Gemini models were unavailable (last error: {last_exc}). "
         "This is usually a temporary overload - try again in a moment."
