@@ -53,6 +53,40 @@ def _model_candidates() -> list[str]:
     return seen
 
 
+def _parse_json(raw: str) -> Any:
+    """Parse JSON from an LLM response, tolerating fences, prose wrappers and
+    the occasional malformed/truncated output. Raises AIError if unrecoverable."""
+    text = (raw or "").strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    # 1) straight parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # 2) narrow to the outermost {...} block
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    candidate = m.group(0) if m else text
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        pass
+    # 3) repair malformed / truncated LLM JSON
+    try:
+        from json_repair import repair_json
+        fixed = repair_json(candidate, return_objects=True)
+        if isinstance(fixed, (dict, list)):
+            return fixed
+        if isinstance(fixed, str) and fixed.strip():
+            return json.loads(fixed)
+    except Exception:
+        pass
+    raise AIError(
+        "Gemini returned malformed JSON that couldn't be repaired. "
+        "Please click Re-run — it usually succeeds on the next try."
+    )
+
+
 def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
     import time
 
@@ -61,6 +95,7 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
     cfg = types.GenerateContentConfig(
         response_mime_type="application/json" if as_json else "text/plain",
         temperature=0.4,
+        max_output_tokens=8192,
     )
     last_exc: Exception | None = None
     for model in _model_candidates():
@@ -145,14 +180,9 @@ def analyze_fit(*, title: str, company: str, location: str,
         resume=(resume or resume_text())[:9000],
     )
     raw = _generate(prompt, as_json=True)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        # Best-effort: pull the first {...} block.
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not m:
-            raise AIError("Could not parse the AI analysis (invalid JSON).")
-        data = json.loads(m.group(0))
+    data = _parse_json(raw)
+    if not isinstance(data, dict):
+        raise AIError("Gemini returned an unexpected analysis format. Please Re-run.")
     data.setdefault("fit_level", "MAYBE")
     data.setdefault("verdict", "")
     data.setdefault("suggestions", [])
@@ -182,13 +212,9 @@ def parse_job(text: str) -> dict[str, str]:
     employment_type} from a pasted job posting. Raises AIError on failure."""
     prompt = _PARSE_PROMPT.format(text=(text or "")[:8000])
     raw = _generate(prompt, as_json=True)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not m:
-            raise AIError("Could not parse the pasted job (invalid JSON).")
-        data = json.loads(m.group(0))
+    data = _parse_json(raw)
+    if not isinstance(data, dict):
+        data = {}
     keys = ("title", "company", "location", "salary", "employment_type")
     return {k: str(data.get(k, "") or "").strip() for k in keys}
 
