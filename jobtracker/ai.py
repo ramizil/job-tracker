@@ -24,6 +24,10 @@ def is_configured() -> bool:
     return bool(config.GEMINI_API_KEY)
 
 
+def _lang_name(language: str | None) -> str:
+    return {"he": "Hebrew", "en": "English"}.get((language or "en").lower(), "English")
+
+
 # Hard ceiling for any single AI operation (seconds). Keeps a slow/overloaded
 # Gemini call from hanging the request forever.
 AI_TIMEOUT_S = 180
@@ -165,6 +169,11 @@ _ANALYSIS_PROMPT = """You are a senior technical recruiter and career coach.
 Compare the CANDIDATE RESUME against the JOB POSTING and produce a brutally
 honest fit analysis. Return ONLY valid JSON with EXACTLY this shape:
 
+LANGUAGE: Write all human-readable text values (verdict, requirement, evidence,
+risks, suggestion action/rationale, analysis_markdown) in {lang}. Keep the JSON
+keys, the "fit_level" value (YES/MAYBE/NO) and the "match" value
+(strong/partial/gap) in English regardless of language.
+
 {{
   "fit_level": "YES" | "MAYBE" | "NO",
   "verdict": "one concise sentence (e.g. 'Strong match but overqualified')",
@@ -195,9 +204,11 @@ CANDIDATE RESUME (plain text):
 
 
 def analyze_fit(*, title: str, company: str, location: str,
-                description: str, resume: str | None = None) -> dict[str, Any]:
+                description: str, resume: str | None = None,
+                language: str = "en") -> dict[str, Any]:
     """Return a structured fit analysis dict (see _ANALYSIS_PROMPT)."""
     prompt = _ANALYSIS_PROMPT.format(
+        lang=_lang_name(language),
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:8000],
         resume=(resume or resume_text())[:9000],
@@ -209,6 +220,7 @@ def analyze_fit(*, title: str, company: str, location: str,
     data.setdefault("fit_level", "MAYBE")
     data.setdefault("verdict", "")
     data.setdefault("suggestions", [])
+    data["language"] = (language or "en").lower()
     return data
 
 
@@ -259,6 +271,7 @@ facts present in their resume. Rules:
 - Do NOT invent employers, dates, titles, metrics, or skills.
 - Plain text only (no markdown, no placeholders like [Your Name] unless the
   name is unknown). End with a brief, warm sign-off.
+- Write the ENTIRE letter in {lang} (natural, professional {lang}).
 
 {extra}JOB:
 Title: {title}
@@ -274,10 +287,11 @@ CANDIDATE RESUME (plain text):
 
 def cover_letter(*, title: str, company: str, location: str = "",
                  description: str = "", instructions: str = "",
-                 resume: str | None = None) -> str:
+                 resume: str | None = None, language: str = "en") -> str:
     """Generate a tailored cover letter (plain text). Raises AIError on failure."""
     extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
     prompt = _COVER_LETTER_PROMPT.format(
+        lang=_lang_name(language),
         extra=extra, title=title or "", company=company or "",
         location=location or "", description=(description or "")[:6000],
         resume=(resume or resume_text())[:9000],
@@ -295,6 +309,7 @@ sent with a LinkedIn connection request or a job application. Rules:
 - Mention the specific role and 1-2 of the strongest, relevant strengths.
 - A light, confident call to action at the end.
 - No markdown, no subject line, no placeholders. Just the message body.
+- Write the ENTIRE message in {lang} (natural, professional {lang}).
 
 {extra}JOB:
 Title: {title}
@@ -306,10 +321,11 @@ CANDIDATE RESUME (plain text):
 
 
 def recruiter_note(*, title: str, company: str, instructions: str = "",
-                   resume: str | None = None) -> str:
+                   resume: str | None = None, language: str = "en") -> str:
     """Generate a short recruiter outreach note (plain text)."""
     extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
     prompt = _RECRUITER_NOTE_PROMPT.format(
+        lang=_lang_name(language),
         extra=extra, title=title or "", company=company or "",
         resume=(resume or resume_text())[:6000],
     )

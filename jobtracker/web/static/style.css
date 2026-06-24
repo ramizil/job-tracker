@@ -113,6 +113,9 @@ button.is-busy{opacity:.6;cursor:progress}
 @keyframes spin{to{transform:rotate(360deg)}}
 .gen-text{font-size:13px;line-height:1.55;white-space:pre-wrap}
 .muted.sm{font-size:11px}
+.lang{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);flex:0 0 auto}
+.lang select{padding:6px 8px}
+.lang-sm{padding:2px 6px;font-size:12px}
 .add-details summary{list-style:none}
 .filters,.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .chip{padding:4px 11px;border:1px solid var(--rule);border-radius:999px;color:var(--muted);font-size:12px;text-transform:capitalize}

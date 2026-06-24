@@ -358,10 +358,11 @@ def analyze(app_id: int):
     r = tracker.get_application(app_id)
     if not r:
         abort(404)
+    language = request.form.get("language", "en")
     try:
         result = ai.analyze_fit(
             title=r["title"], company=r["company"], location=r["location"] or "",
-            description=r["description"] or "",
+            description=r["description"] or "", language=language,
         )
         tracker.set_ai_analysis(app_id, result)
         flash("AI fit analysis complete.", "ok")
@@ -376,10 +377,12 @@ def cover_letter(app_id: int):
     if not r:
         abort(404)
     instructions = request.form.get("instructions", "").strip()
+    language = request.form.get("language", "en")
     try:
         text = ai.cover_letter(
             title=r["title"], company=r["company"], location=r["location"] or "",
             description=r["description"] or "", instructions=instructions,
+            language=language,
         )
         tracker.set_cover_letter(app_id, text)
         flash("Cover letter generated.", "ok")
@@ -403,9 +406,11 @@ def recruiter_note(app_id: int):
     if not r:
         abort(404)
     instructions = request.form.get("instructions", "").strip()
+    language = request.form.get("language", "en")
     try:
         text = ai.recruiter_note(
             title=r["title"], company=r["company"], instructions=instructions,
+            language=language,
         )
         tracker.set_recruiter_note(app_id, text)
         flash("Recruiter note generated.", "ok")
