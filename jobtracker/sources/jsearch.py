@@ -10,8 +10,19 @@ import requests
 from .. import config
 from .base import JobResult, JobSource
 
-_ENDPOINT = "https://jsearch.p.rapidapi.com/search"
 _HOST = "jsearch.p.rapidapi.com"
+_BASE = "https://jsearch.p.rapidapi.com"
+# Newer JSearch deployments expose "/search-v2" (response: data.jobs[]),
+# older ones expose "/search" (response: data[]). We try v2 first and fall
+# back automatically, so the client works regardless of the subscription.
+_ENDPOINTS = ("/search-v2", "/search")
+
+# Map a free-text location to an ISO country code for the API's `country` filter.
+_COUNTRY = {
+    "israel": "il", "tel aviv": "il", "haifa": "il", "jerusalem": "il",
+    "united states": "us", "usa": "us", "uk": "gb", "united kingdom": "gb",
+    "germany": "de", "remote": None,
+}
 
 
 class JSearchSource(JobSource):
@@ -19,6 +30,13 @@ class JSearchSource(JobSource):
 
     def is_configured(self) -> bool:
         return bool(config.RAPIDAPI_KEY)
+
+    def _country_for(self, location: str) -> str | None:
+        loc = (location or "").strip().lower()
+        for key, code in _COUNTRY.items():
+            if key in loc:
+                return code
+        return None
 
     def search(self, query: str, location: str = "Israel",
                limit: int = 20) -> list[JobResult]:
@@ -33,13 +51,42 @@ class JSearchSource(JobSource):
             "page": "1",
             "num_pages": str(num_pages),
         }
+        country = self._country_for(location)
+        if country:
+            params["country"] = country
         headers = {
             "X-RapidAPI-Key": config.RAPIDAPI_KEY,
             "X-RapidAPI-Host": _HOST,
         }
-        resp = requests.get(_ENDPOINT, headers=headers, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json().get("data") or []
+
+        payload = None
+        last_exc: Exception | None = None
+        for ep in _ENDPOINTS:
+            try:
+                resp = requests.get(_BASE + ep, headers=headers,
+                                    params=params, timeout=30)
+            except Exception as exc:  # network/SSL issues
+                last_exc = exc
+                continue
+            if resp.status_code == 404:
+                # Endpoint not available on this subscription; try the next one.
+                continue
+            resp.raise_for_status()
+            payload = resp.json()
+            break
+        if payload is None:
+            if last_exc:
+                raise last_exc
+            return []
+
+        # Normalise both response shapes into a flat list of job dicts.
+        raw = payload.get("data")
+        if isinstance(raw, dict):
+            data = raw.get("jobs") or []
+        elif isinstance(raw, list):
+            data = raw
+        else:
+            data = []
 
         results: list[JobResult] = []
         for j in data[:limit]:
