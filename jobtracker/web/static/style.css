@@ -219,6 +219,11 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 .sugg:hover{border-color:rgba(34,211,238,.45);background:rgba(34,211,238,.06)}
 .sugg input{margin-top:3px}
 .md p{margin:6px 0}.md h1,.md h2,.md h3{color:#dbe6f5}
+/* Bidirectional text: let each line/paragraph pick its own direction so
+   English words/punctuation embedded in Hebrew (and vice-versa) render correctly. */
+[dir="auto"]{unicode-bidi:plaintext}
+.md p,.md li,.md h1,.md h2,.md h3,.md blockquote{unicode-bidi:plaintext}
+textarea[dir="auto"]{unicode-bidi:plaintext}
 .tailored-links{margin-top:10px}
 
 /* board */

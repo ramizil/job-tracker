@@ -78,12 +78,12 @@
 
         {% if analysis.requirements %}
         <h3>Requirements</h3>
-        <table class="mini reqs" dir="auto"><tbody>
+        <table class="mini reqs"><tbody>
           {% for q in analysis.requirements %}
           <tr>
             <td class="m-{{ q.match }}">{{ q.match }}</td>
-            <td><b>{{ q.area }}</b><br><span class="muted">{{ q.requirement }}</span></td>
-            <td>{{ q.evidence }}</td>
+            <td dir="auto"><b>{{ q.area }}</b><br><span class="muted">{{ q.requirement }}</span></td>
+            <td dir="auto">{{ q.evidence }}</td>
           </tr>
           {% endfor %}
         </tbody></table>
@@ -91,7 +91,7 @@
 
         {% if analysis.risks %}
         <h3>Risks</h3>
-        <ul class="risks" dir="auto">{% for r in analysis.risks %}<li>{{ r }}</li>{% endfor %}</ul>
+        <ul class="risks">{% for r in analysis.risks %}<li dir="auto">{{ r }}</li>{% endfor %}</ul>
         {% endif %}
 
         <h3>Suggested resume fixes</h3>
