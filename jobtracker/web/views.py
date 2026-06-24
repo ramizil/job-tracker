@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import html as html_lib
 import json
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 
 from flask import (
     Blueprint, Response, abort, flash, redirect, render_template,
@@ -25,6 +29,65 @@ BOARD_LANES = ["saved", "applied", "screening", "interview", "offer", "accepted"
 
 def _tailored_path(app_id: int):
     return TAILORED_DIR / f"{app_id}.html"
+
+
+_BROWSER_CANDIDATES = [
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+]
+
+
+def _find_browser() -> str | None:
+    """Locate a local Chromium-based browser (Edge/Chrome) for headless PDF."""
+    env = os.environ.get("JOBTRACKER_BROWSER")
+    if env and os.path.exists(env):
+        return env
+    for p in _BROWSER_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    for name in ("msedge", "chrome", "chromium", "brave"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def _render_pdf_with_browser(html: str) -> bytes | None:
+    """Render HTML to a pixel-perfect PDF using the local browser in headless
+    mode (same engine as the Print button). Returns None if unavailable."""
+    browser = _find_browser()
+    if not browser:
+        return None
+    tmp = tempfile.mkdtemp(prefix="jt-pdf-")
+    src = os.path.join(tmp, "resume.html")
+    pdf = os.path.join(tmp, "resume.pdf")
+    profile = os.path.join(tmp, "prof")
+    try:
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(html)
+        url = "file:///" + src.replace("\\", "/")
+        base = [
+            browser, "--disable-gpu", "--no-sandbox", "--no-first-run",
+            "--no-pdf-header-footer", f"--user-data-dir={profile}",
+            f"--print-to-pdf={pdf}", url,
+        ]
+        for headless in ("--headless=new", "--headless"):
+            try:
+                subprocess.run([browser, headless, *base[1:]], timeout=60,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               check=False)
+            except Exception:
+                continue
+            if os.path.exists(pdf) and os.path.getsize(pdf) > 0:
+                with open(pdf, "rb") as f:
+                    return f.read()
+        return None
+    except Exception:
+        return None
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # Recognise common job sites (incl. Israeli boards) from a pasted URL.
@@ -569,28 +632,34 @@ def resume_view(app_id: int):
 def resume_pdf(app_id: int):
     if not _tailored_path(app_id).exists():
         abort(404)
-    html = _tailored_path(app_id).read_text(encoding="utf-8")
-    try:
-        from xhtml2pdf import pisa
-    except ImportError:
-        flash("xhtml2pdf not installed - use the Print button (Save as PDF).", "error")
-        return redirect(url_for("main.resume_review", app_id=app_id))
     import io
-    out = io.BytesIO()
-    try:
-        result = pisa.CreatePDF(src=html, dest=out, encoding="utf-8")
-        failed = bool(result.err)
-    except Exception:
-        failed = True
-    if failed or out.getbuffer().nbytes == 0:
-        flash("Server-side PDF couldn't render this resume's CSS. Use the "
-              "Print / Save as PDF button for a pixel-perfect PDF.", "error")
-        return redirect(url_for("main.resume_review", app_id=app_id))
-    out.seek(0)
+    html = _tailored_path(app_id).read_text(encoding="utf-8")
     r = tracker.get_application(app_id)
     name = re.sub(r"[^A-Za-z0-9]+", "_", f"resume_{r['company']}_{r['title']}").strip("_")
-    return send_file(out, mimetype="application/pdf", as_attachment=True,
-                     download_name=f"{name}.pdf")
+
+    # 1) Best fidelity: render with the local headless browser (Chromium engine,
+    #    identical to the Print button). Handles all modern CSS.
+    data = _render_pdf_with_browser(html)
+    if data:
+        return send_file(io.BytesIO(data), mimetype="application/pdf",
+                         as_attachment=True, download_name=f"{name}.pdf")
+
+    # 2) Fallback: xhtml2pdf (limited CSS support, but no browser needed).
+    try:
+        from xhtml2pdf import pisa
+        out = io.BytesIO()
+        result = pisa.CreatePDF(src=html, dest=out, encoding="utf-8")
+        if not result.err and out.getbuffer().nbytes > 0:
+            out.seek(0)
+            return send_file(out, mimetype="application/pdf", as_attachment=True,
+                             download_name=f"{name}.pdf")
+    except Exception:
+        pass
+
+    flash("Couldn't build the PDF on the server (no local browser found and the "
+          "fallback renderer failed). Use the Print / Save as PDF button for a "
+          "pixel-perfect PDF.", "error")
+    return redirect(url_for("main.resume_review", app_id=app_id))
 
 
 # --------------------------------------------------------------------------- #
