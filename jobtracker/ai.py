@@ -70,6 +70,54 @@ def _model_candidates() -> list[str]:
     return seen
 
 
+# Short-lived cache so the Settings page doesn't hit the API on every load.
+_MODELS_CACHE: dict[str, Any] = {"key": None, "at": 0.0, "models": []}
+_MODELS_TTL_S = 300
+
+
+def list_models() -> list[str]:
+    """Available Gemini model ids that support text generation.
+
+    Queries the live API (cached for a few minutes) and falls back to the
+    curated list if no key is set or the call fails.
+    """
+    import time
+
+    key = config.GEMINI_API_KEY or ""
+    now = time.monotonic()
+    if (_MODELS_CACHE["key"] == key and _MODELS_CACHE["models"]
+            and now - _MODELS_CACHE["at"] < _MODELS_TTL_S):
+        return list(_MODELS_CACHE["models"])
+
+    models: list[str] = []
+    if key:
+        try:
+            client = _client()
+            _SKIP = ("embedding", "aqa", "imagen", "veo", "-tts", "gemma",
+                     "image", "computer-use", "native-audio", "-live",
+                     "robotics", "translate", "vision")
+            for m in client.models.list():
+                name = (getattr(m, "name", "") or "").split("/")[-1]
+                if not name or any(s in name for s in _SKIP):
+                    continue
+                actions = (getattr(m, "supported_actions", None)
+                           or getattr(m, "supported_generation_methods", None) or [])
+                if actions and not any("generatecontent" in str(a).lower() for a in actions):
+                    continue
+                models.append(name)
+            models = sorted(set(models))
+            gem = [m for m in models if m.startswith("gemini")]
+            models = gem or models
+        except Exception:
+            models = []
+
+    if not models:
+        models = list(_FALLBACK_MODELS)
+
+    _MODELS_CACHE.update(key=key, at=now, models=models)
+    return list(models)
+
+
 def _parse_json(raw: str) -> Any:
     """Parse JSON from an LLM response, tolerating fences, prose wrappers and
     the occasional malformed/truncated output. Raises AIError if unrecoverable."""

@@ -103,6 +103,7 @@ def settings():
         backup_dir=str(config.BACKUP_DIR),
         data_dir=str(config.DATA_DIR),
         jooble_usage=usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None,
+        gemini_models=ai.list_models(),
     )
 
 

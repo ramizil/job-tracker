@@ -53,8 +53,14 @@
     </div>
     <div class="setting">
       <label for="GEMINI_MODEL">Gemini model</label>
-      <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash">
-      <small>Default <code>gemini-2.5-flash</code>. Falls back automatically if a model is busy.</small>
+      <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash" list="gemini-models" autocomplete="off">
+      <datalist id="gemini-models">
+        {% for m in gemini_models %}<option value="{{ m }}">{% endfor %}
+      </datalist>
+      <small>
+        Pick from the dropdown{% if values.GEMINI_API_KEY %} (available on your key){% endif %} or type any model id.
+        Default <code>gemini-2.5-flash</code>; falls back automatically if a model is busy.
+      </small>
     </div>
   </section>
 
