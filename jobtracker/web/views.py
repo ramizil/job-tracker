@@ -24,7 +24,8 @@ from ..sources import get_sources
 bp = Blueprint("main", __name__)
 
 # Columns shown on the Kanban board (drop the terminal/parked ones into a lane).
-BOARD_LANES = ["saved", "applied", "screening", "interview", "offer", "accepted"]
+BOARD_LANES = ["saved", "applied", "screening", "interview", "offer",
+               "accepted", "rejected", "withdrawn"]
 
 
 def _tailored_path(app_id: int):
