@@ -10,17 +10,112 @@
     <a class="btn sm" href="{{ url_for('main.resume_view', app_id=app.id) }}" target="_blank">Open in tab</a>
   </div>
 </div>
-<p class="muted">Review on the left. Edit the HTML on the right and Save to update. Print gives the highest-fidelity PDF (uses the resume's print CSS).</p>
+<p class="muted">Click straight into the resume on the left to edit the text, then <b>Save changes</b>. Or fine-tune it with Gemini on the right. Print gives the highest-fidelity PDF.</p>
 
 <div class="review">
   <div class="preview">
+    <div class="rtoolbar">
+      <span class="muted sm" id="edit-hint">✏️ Loading editable preview…</span>
+      <span>
+        <button class="btn sm" type="button" id="reset-frame">Discard</button>
+        <button class="btn sm primary" type="button" id="save-wysiwyg">💾 Save changes</button>
+      </span>
+    </div>
     <iframe id="rframe" src="{{ url_for('main.resume_view', app_id=app.id) }}"></iframe>
   </div>
+
   <div class="editor">
-    <form method="post" action="{{ url_for('main.resume_save', app_id=app.id) }}">
-      <textarea name="html" spellcheck="false">{{ tailored_html }}</textarea>
-      <button class="btn primary" type="submit">Save edits</button>
-    </form>
+    <section class="panel">
+      <h2>✨ Fine-tune with Gemini</h2>
+      <p class="muted sm">Describe the change in plain language. Gemini keeps your styling and only re-words / re-orders content that's already true.</p>
+      <form method="post" action="{{ url_for('main.resume_refine', app_id=app.id) }}" data-loading="Refining your resume with Gemini…" class="stack">
+        <textarea name="instructions" rows="4" placeholder="e.g. 'Make the summary punchier, max 3 lines'
+'Move Cloud & Infrastructure skills above Databases'
+'Emphasise Playwright, pytest and CI/CD'
+'Trim to a single page and tighten bullets'"></textarea>
+        <button class="btn primary" type="submit">✨ Refine with Gemini</button>
+      </form>
+      <div class="quick-tunes mt">
+        <span class="muted sm">Quick:</span>
+        <button type="button" class="chip qt">Shorten to one page</button>
+        <button type="button" class="chip qt">Punchier summary</button>
+        <button type="button" class="chip qt">Emphasise this job's keywords</button>
+        <button type="button" class="chip qt">Stronger action verbs</button>
+      </div>
+    </section>
+
+    <details class="panel" id="src-panel">
+      <summary><b>&lt;/&gt; Edit HTML source</b> <span class="muted sm">(advanced)</span></summary>
+      <form method="post" action="{{ url_for('main.resume_save', app_id=app.id) }}" class="stack mt">
+        <textarea name="html" class="code" spellcheck="false">{{ tailored_html }}</textarea>
+        <button class="btn" type="submit">Save HTML</button>
+      </form>
+    </details>
   </div>
 </div>
+
+<form id="wysiwyg-form" method="post" action="{{ url_for('main.resume_save', app_id=app.id) }}" hidden>
+  <textarea name="html" id="wysiwyg-html"></textarea>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var frame = document.getElementById('rframe');
+  var hint = document.getElementById('edit-hint');
+  var saveBtn = document.getElementById('save-wysiwyg');
+  var dirty = false;
+
+  function makeEditable() {
+    try {
+      var doc = frame.contentDocument;
+      if (!doc || !doc.body) return;
+      doc.body.contentEditable = 'true';
+      doc.body.style.outline = 'none';
+      doc.body.addEventListener('input', function () {
+        dirty = true;
+        hint.textContent = '● Unsaved edits — click Save changes';
+        hint.style.color = '#fbbf24';
+      });
+      hint.textContent = '✏️ Click anywhere in the resume to edit text.';
+    } catch (e) {
+      hint.textContent = 'Preview not editable here — use Edit HTML source below.';
+    }
+  }
+  frame.addEventListener('load', makeEditable);
+
+  saveBtn.addEventListener('click', function () {
+    try {
+      var doc = frame.contentDocument;
+      doc.body.removeAttribute('contenteditable');
+      var html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+      document.getElementById('wysiwyg-html').value = html;
+      document.getElementById('wysiwyg-form').submit();
+    } catch (e) {
+      alert('Could not read the edited resume: ' + e.message);
+    }
+  });
+
+  document.getElementById('reset-frame').addEventListener('click', function () {
+    if (!dirty || confirm('Discard your unsaved in-page edits?')) {
+      frame.contentWindow.location.reload();
+    }
+  });
+
+  // Quick-tune chips populate the Gemini instructions box.
+  var box = document.querySelector('textarea[name="instructions"]');
+  document.querySelectorAll('.qt').forEach(function (b) {
+    b.addEventListener('click', function () {
+      box.value = (box.value ? box.value.trim() + '\n' : '') + b.textContent.trim();
+      box.focus();
+    });
+  });
+
+  // Warn before leaving with unsaved in-page edits.
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
 {% endblock %}

@@ -506,6 +506,31 @@ def resume_save(app_id: int):
     return redirect(url_for("main.resume_review", app_id=app_id))
 
 
+@bp.route("/application/<int:app_id>/resume/refine", methods=["POST"])
+def resume_refine(app_id: int):
+    """Fine-tune the existing tailored resume with free-form Gemini instructions."""
+    r = tracker.get_application(app_id)
+    if not r or not _tailored_path(app_id).exists():
+        abort(404)
+    instructions = request.form.get("instructions", "").strip()
+    if not instructions:
+        flash("Type a fine-tune instruction first.", "error")
+        return redirect(url_for("main.resume_review", app_id=app_id))
+    try:
+        current = _tailored_path(app_id).read_text(encoding="utf-8")
+        html = ai.tailor_resume(
+            title=r["title"], company=r["company"],
+            description=r["description"] or "", instructions=instructions,
+            original_html=current,
+        )
+        _tailored_path(app_id).write_text(html, encoding="utf-8")
+        tracker.mark_tailored(app_id)
+        flash("Resume refined with Gemini.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.resume_review", app_id=app_id))
+
+
 @bp.route("/application/<int:app_id>/resume/view")
 def resume_view(app_id: int):
     """Raw tailored HTML (shown inside the review iframe / print)."""

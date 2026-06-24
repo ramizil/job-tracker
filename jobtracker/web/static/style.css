@@ -244,11 +244,19 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .pchip{padding:6px 11px;border-radius:10px;font-size:12px}
 
 /* resume review */
-.review{display:grid;grid-template-columns:1fr 1fr;gap:14px;height:75vh}
+.review{display:grid;grid-template-columns:1.1fr .9fr;gap:14px;height:80vh}
 @media(max-width:1000px){.review{grid-template-columns:1fr;height:auto}}
-.preview,.editor{height:100%}
-.preview iframe{width:100%;height:100%;background:#fff;border:1px solid var(--rule);border-radius:12px}
-.editor textarea{width:100%;height:calc(100% - 46px);font-family:Consolas,monospace;font-size:12px}
+.preview{height:100%;display:flex;flex-direction:column;gap:8px}
+.rtoolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.preview iframe{flex:1;width:100%;min-height:420px;background:#fff;border:1px solid var(--rule);border-radius:12px}
+.editor{height:100%;overflow:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px}
+@media(max-width:1000px){.editor{height:auto;overflow:visible}}
+.editor .panel{margin-bottom:0}
+.editor .code{width:100%;height:320px;font-family:Consolas,monospace;font-size:12px}
+.quick-tunes{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.quick-tunes .chip{cursor:pointer}
+#src-panel summary{cursor:pointer;list-style:none}
+#src-panel summary::-webkit-details-marker{display:none}
 .searchbar{display:flex;gap:8px;margin:12px 0}
 .searchbar input:first-child{flex:1}
 .kbd{display:inline-block;background:rgba(8,14,24,.8);border:1px solid var(--rule);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-family:Consolas,monospace;font-size:12px}
