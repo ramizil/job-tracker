@@ -136,3 +136,4 @@ pre.notes,pre.jd{background:#0b0f14;border:1px solid var(--rule);border-radius:8
 .editor textarea{width:100%;height:calc(100% - 46px);font-family:Consolas,monospace;font-size:12px}
 .searchbar{display:flex;gap:8px;margin:12px 0}
 .searchbar input:first-child{flex:1}
+.kbd{display:inline-block;background:#0b0f14;border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:1px 7px;font-family:Consolas,monospace;font-size:12px}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Help · Job Tracker{% endblock %}
+{% block content %}
+<h1>❓ Help — starting &amp; stopping the server</h1>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>▶ Start the server</h2>
+    <p>Open <b>PowerShell</b> in the project folder and run:</p>
+    <pre class="jd">cd C:\GIT\RAMI\job-tracker
+.\.venv\Scripts\Activate.ps1
+python -m jobtracker web</pre>
+    <p>Then open <a href="{{ url_for('main.dashboard') }}">http://{{ host }}</a> in your browser.</p>
+    <h3>Options</h3>
+    <pre class="jd"># custom port
+python -m jobtracker web --port 8080
+
+# allow other devices on your network
+python -m jobtracker web --host 0.0.0.0 --port 5000</pre>
+  </section>
+
+  <section class="panel">
+    <h2>■ Stop the server</h2>
+    <p><b>Easiest:</b> click into the PowerShell window that is running the
+       server and press <span class="kbd">Ctrl</span> + <span class="kbd">C</span>.</p>
+    <p>If it is running in the background (or you closed the window), stop it by
+       its port:</p>
+    <pre class="jd"># find &amp; stop whatever is listening on port {{ port }}
+$p = (Get-NetTCPConnection -LocalPort {{ port }} -State Listen).OwningProcess
+Stop-Process -Id $p -Force</pre>
+    <p class="muted">Closing the terminal that launched it also stops it.</p>
+    <h3>Restart</h3>
+    <p>Stop it (above), then run the start command again.</p>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Status &amp; configuration</h2>
+  <table class="mini"><tbody>
+    <tr><td>Server address</td><td>http://{{ host }}</td></tr>
+    <tr><td>Gemini AI</td><td>{% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off</span> — add <code>GEMINI_API_KEY</code> to <code>.env</code>{% endif %}</td></tr>
+    <tr><td>Job search sources</td><td>{% if sources %}{{ sources | join(', ') }}{% else %}<span class="muted">none — add <code>RAPIDAPI_KEY</code> or <code>JOOBLE_API_KEY</code> to <code>.env</code></span>{% endif %}</td></tr>
+  </tbody></table>
+  <p class="muted">After editing <code>.env</code>, stop and start the server for the changes to take effect.</p>
+</section>
+
+<section class="panel">
+  <h2>Quick tips</h2>
+  <ul>
+    <li><b>Add a job</b> from the <a href="{{ url_for('main.applications') }}">Applications</a> page — paste the job description so AI analysis &amp; match scoring work.</li>
+    <li><b>Move status</b> by dragging cards on the <a href="{{ url_for('main.board') }}">Board</a>.</li>
+    <li><b>Analyze fit &amp; tailor your CV</b> from any application's detail page.</li>
+    <li><b>Export</b> everything via the <b>CSV</b> / <b>Excel</b> buttons in the top bar.</li>
+  </ul>
+</section>
+{% endblock %}

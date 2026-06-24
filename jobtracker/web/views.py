@@ -55,6 +55,19 @@ def md_to_html(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+@bp.route("/help")
+def help_page():
+    import sys
+    return render_template(
+        "help.html",
+        host=request.host,
+        port=(request.host.split(":", 1) + ["5000"])[1] if ":" in request.host else "5000",
+        python=sys.executable,
+        ai_on=ai.is_configured(),
+        sources=[s.name for s in get_sources()],
+    )
+
+
 @bp.route("/")
 def dashboard():
     funnel = analytics.funnel()
