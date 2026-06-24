@@ -401,6 +401,67 @@ def recruiter_note(*, title: str, company: str, instructions: str = "",
 
 
 # --------------------------------------------------------------------------- #
+_INTERVIEW_PREP_PROMPT = """You are an experienced interview coach preparing the
+candidate for an interview or take-home/technical test for the job below. Use
+ONLY the facts in their resume; never invent experience. Produce a practical,
+specific prep guide in Markdown with these sections (use ## headings and bullet
+lists, keep it skimmable):
+
+## Likely technical questions
+- 6-10 questions an interviewer would realistically ask for THIS role, based on
+  the job's required skills. For each, add a one-line hint on how the candidate
+  should answer using their actual background.
+
+## Behavioural / fit questions
+- 4-6 likely behavioural questions, each with a short STAR-style angle the
+  candidate can use, grounded in their real experience.
+
+## Likely take-home / live test
+- What a practical test for this role probably looks like, and 3-5 concrete tips
+  to do well on it.
+
+## Address your gaps
+- For each notable gap/risk vs the job, a short, honest way to handle it if asked.
+
+## Smart questions to ask them
+- 4-6 thoughtful questions the candidate should ask the interviewer.
+
+## Quick prep checklist
+- 4-6 actionable things to review/practise before the interview.
+
+Write everything in {lang} (natural, professional {lang}). Output Markdown only,
+no preamble.
+
+{extra}JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def interview_prep(*, title: str, company: str, location: str = "",
+                   description: str = "", instructions: str = "",
+                   resume: str | None = None, language: str = "en") -> str:
+    """Generate an interview / test preparation guide (Markdown)."""
+    extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
+    prompt = _INTERVIEW_PREP_PROMPT.format(
+        lang=_lang_name(language),
+        extra=extra, title=title or "", company=company or "",
+        location=location or "", description=(description or "")[:7000],
+        resume=(resume or resume_text())[:9000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```\w*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text
+
+
+# --------------------------------------------------------------------------- #
 _TAILOR_PROMPT = """You are an expert resume writer. Rewrite the candidate's
 HTML resume so it is optimally positioned for the SPECIFIC job below, applying
 the TAILORING INSTRUCTIONS. Hard rules:

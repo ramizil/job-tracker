@@ -217,6 +217,16 @@ def set_recruiter_note(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_interview_prep(app_id: int, text: str) -> bool:
+    """Persist (generated or edited) interview / test prep guide."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET interview_prep=?, interview_prep_at=?, updated_at=? WHERE id=?",
+            (text, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def mark_tailored(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute(

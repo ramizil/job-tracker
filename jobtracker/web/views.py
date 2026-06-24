@@ -433,6 +433,35 @@ def recruiter_note_save(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id) + "#note")
 
 
+@bp.route("/application/<int:app_id>/interview-prep", methods=["POST"])
+def interview_prep(app_id: int):
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    instructions = request.form.get("instructions", "").strip()
+    language = request.form.get("language", "en")
+    try:
+        text = ai.interview_prep(
+            title=r["title"], company=r["company"], location=r["location"] or "",
+            description=r["description"] or "", instructions=instructions,
+            language=language,
+        )
+        tracker.set_interview_prep(app_id, text)
+        flash("Interview prep generated.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#prep")
+
+
+@bp.route("/application/<int:app_id>/interview-prep/save", methods=["POST"])
+def interview_prep_save(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    tracker.set_interview_prep(app_id, request.form.get("text", ""))
+    flash("Interview prep saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#prep")
+
+
 @bp.route("/application/<int:app_id>/tailor", methods=["POST"])
 def tailor(app_id: int):
     r = tracker.get_application(app_id)

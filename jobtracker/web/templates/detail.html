@@ -175,6 +175,39 @@
         {% endif %}
       {% endif %}
     </section>
+
+    <section class="panel ai" id="prep">
+      <div class="panel-head"><h2>🎤 Interview &amp; test prep</h2>
+        {% if app.interview_prep_at %}<span class="muted sm">saved {{ (app.interview_prep_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">Likely questions, take-home/test tips and smart questions to ask — generated from this job and your resume. Handy once you reach the interview or test stage.</p>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% else %}
+        <form method="post" action="{{ url_for('main.interview_prep', app_id=app.id) }}" data-loading="Building your interview prep with Gemini…" class="stack">
+          <input name="instructions" placeholder="optional: e.g. 'focus on system design', 'it's a live coding test', 'emphasise leadership'">
+          <div class="row">
+            <label class="lang">Language
+              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
+            </label>
+            <button class="btn primary" type="submit">{{ 'Regenerate' if app.interview_prep else 'Generate' }} interview prep</button>
+          </div>
+        </form>
+        {% if app.interview_prep %}
+        <div class="md mt" dir="auto">{{ app.interview_prep | md | safe }}</div>
+        <details class="mt">
+          <summary class="btn sm">Edit prep</summary>
+          <form method="post" action="{{ url_for('main.interview_prep_save', app_id=app.id) }}" class="stack mt">
+            <textarea name="text" rows="16" class="gen-text" dir="auto">{{ app.interview_prep }}</textarea>
+            <div class="actions">
+              <button class="btn" type="submit">Save edits</button>
+              <button class="btn sm" type="button" data-copy="prev">Copy</button>
+            </div>
+          </form>
+        </details>
+        {% endif %}
+      {% endif %}
+    </section>
   </div>
 </div>
 
