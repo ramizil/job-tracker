@@ -210,7 +210,11 @@ def board():
     lanes = {st: [] for st in BOARD_LANES}
     parked = []
     for r in tracker.list_applications():
-        (lanes.get(r["status"], None) or parked).append(r)
+        st = r["status"]
+        if st in lanes:
+            lanes[st].append(r)
+        else:
+            parked.append(r)
     return render_template("board.html", lanes=lanes, parked=parked,
                            lane_order=BOARD_LANES)
 
