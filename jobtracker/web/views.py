@@ -9,7 +9,7 @@ from flask import (
     request, send_file, url_for,
 )
 
-from .. import ai, analytics, backup, config, exporter, tracker
+from .. import ai, analytics, backup, config, exporter, tracker, usage
 from .. import resume as resume_mod
 from ..config import TAILORED_DIR
 from ..matcher import score_job
@@ -74,6 +74,7 @@ def settings():
         env_path=str(config.ENV_PATH),
         backup_dir=str(config.BACKUP_DIR),
         data_dir=str(config.DATA_DIR),
+        jooble_usage=usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None,
     )
 
 
@@ -474,14 +475,27 @@ def search():
             query = " OR ".join(prof.get("target_titles", [])[:3])
         for src in get_sources():
             try:
+                count = 0
                 for job in src.search(query, location=location, limit=20):
                     m = score_job(job.title, job.description, prof)
                     results.append({"job": job, "score": m.score})
+                    count += 1
+                flash(f"{src.name}: {count} result(s).", "ok")
             except Exception as exc:
                 flash(f"{src.name}: {exc}", "error")
         results.sort(key=lambda x: x["score"], reverse=True)
+    # Jooble free-tier usage feedback.
+    ju = usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None
+    if ju and ju["tracked"]:
+        if ju["exhausted"]:
+            flash("Jooble free quota (500) is used up — get a new key at "
+                  "jooble.org/api/about and update it in Settings.", "error")
+        elif ju["low"]:
+            flash(f"Heads-up: only {ju['remaining']} Jooble requests left of "
+                  f"{ju['limit']}. Consider getting a fresh key soon.", "error")
     return render_template("search.html", results=results, query=query,
-                           location=location, configured=configured)
+                           location=location, configured=configured,
+                           jooble_usage=ju)
 
 
 @bp.route("/search/save", methods=["POST"])

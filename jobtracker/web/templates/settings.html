@@ -26,7 +26,14 @@
     <div class="setting">
       <label for="JOOBLE_API_KEY">Jooble API key (free, Israel)</label>
       <input type="text" id="JOOBLE_API_KEY" name="JOOBLE_API_KEY" value="{{ values.JOOBLE_API_KEY }}" placeholder="optional" autocomplete="off">
-      <small>Request free at <a href="https://jooble.org/api/about" target="_blank" rel="noopener">jooble.org/api/about</a>.</small>
+      <small>Request free at <a href="https://jooble.org/api/about" target="_blank" rel="noopener">jooble.org/api/about</a>.
+        {% if jooble_usage and jooble_usage.tracked %}
+          Usage: <b class="{{ 'fit fit-no' if jooble_usage.low else '' }}">{{ jooble_usage.count }}/{{ jooble_usage.limit }}</b>
+          ({{ jooble_usage.remaining }} left).
+          {% if jooble_usage.exhausted %}<b>Quota used up — get a new key.</b>
+          {% elif jooble_usage.low %}<b>Running low — get a fresh key soon.</b>{% endif %}
+        {% else %}<i>Usage tracked after your first search.</i>{% endif %}
+      </small>
     </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>

@@ -5,7 +5,11 @@
 {% if not configured %}
   <div class="banner">No job source configured. Add <code>RAPIDAPI_KEY</code> (JSearch) or <code>JOOBLE_API_KEY</code> to <code>.env</code>.</div>
 {% else %}
-  <p class="muted">Sources: {{ configured | join(', ') }}</p>
+  <p class="muted">Sources: {{ configured | join(', ') }}
+    {% if jooble_usage and jooble_usage.tracked %}
+      · Jooble: <b class="{{ 'fit fit-no' if jooble_usage.low else '' }}">{{ jooble_usage.remaining }}</b>/{{ jooble_usage.limit }} requests left
+    {% endif %}
+  </p>
 {% endif %}
 
 <form method="post" class="searchbar" data-loading="Searching job boards…">
