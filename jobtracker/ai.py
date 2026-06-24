@@ -160,6 +160,40 @@ def analyze_fit(*, title: str, company: str, location: str,
 
 
 # --------------------------------------------------------------------------- #
+_PARSE_PROMPT = """You are a parser. Extract structured fields from the pasted
+job posting below. Return ONLY valid JSON with EXACTLY this shape (use an empty
+string "" for anything you cannot determine, never guess):
+
+{{
+  "title": "the job title",
+  "company": "the hiring company / employer name",
+  "location": "city, country (or 'Remote')",
+  "salary": "salary or range if stated, else ''",
+  "employment_type": "Full-time | Part-time | Contract | Intern | ''"
+}}
+
+PASTED JOB POSTING:
+{text}
+"""
+
+
+def parse_job(text: str) -> dict[str, str]:
+    """Best-effort extraction of {title, company, location, salary,
+    employment_type} from a pasted job posting. Raises AIError on failure."""
+    prompt = _PARSE_PROMPT.format(text=(text or "")[:8000])
+    raw = _generate(prompt, as_json=True)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not m:
+            raise AIError("Could not parse the pasted job (invalid JSON).")
+        data = json.loads(m.group(0))
+    keys = ("title", "company", "location", "salary", "employment_type")
+    return {k: str(data.get(k, "") or "").strip() for k in keys}
+
+
+# --------------------------------------------------------------------------- #
 _TAILOR_PROMPT = """You are an expert resume writer. Rewrite the candidate's
 HTML resume so it is optimally positioned for the SPECIFIC job below, applying
 the TAILORING INSTRUCTIONS. Hard rules:

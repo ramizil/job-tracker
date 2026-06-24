@@ -181,6 +181,57 @@ def add():
     return redirect(url_for("main.detail", app_id=app_id))
 
 
+@bp.route("/application/paste", methods=["GET", "POST"])
+def paste_job():
+    """Capture a job by pasting its text + the URL it came from.
+
+    Title/company/location/salary are auto-extracted with AI when left blank
+    (and the AI key is configured); the full pasted text becomes the
+    description used for match scoring and fit analysis.
+    """
+    if request.method == "GET":
+        return render_template("paste.html", statuses=STATUSES,
+                               ai_on=ai.is_configured())
+
+    f = request.form
+    text = (f.get("description") or "").strip()
+    url = (f.get("url") or "").strip()
+    if not text:
+        flash("Paste the job text first.", "error")
+        return redirect(url_for("main.paste_job"))
+
+    title = (f.get("title") or "").strip()
+    company = (f.get("company") or "").strip()
+    location = (f.get("location") or "").strip()
+    salary = (f.get("salary") or "").strip()
+
+    # Auto-extract any blank fields with AI when available.
+    if ai.is_configured() and not (title and company):
+        try:
+            parsed = ai.parse_job(text)
+            title = title or parsed.get("title", "")
+            company = company or parsed.get("company", "")
+            location = location or parsed.get("location", "")
+            salary = salary or parsed.get("salary", "")
+        except ai.AIError as exc:
+            flash(f"AI extraction skipped: {exc}", "error")
+
+    # Fallbacks so we always have something usable.
+    if not title:
+        title = text.splitlines()[0][:120] if text else "(untitled)"
+    if not company:
+        company = "(unknown)"
+
+    score = score_job(title, text).score
+    app_id = tracker.add_application(
+        company=company, title=title, location=location, url=url,
+        description=text, salary=salary, source=f.get("source", "paste"),
+        status=f.get("status", "saved"), match_score=score,
+    )
+    flash(f"Captured job as #{app_id}. Review and adjust the details below.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id))
+
+
 @bp.route("/application/<int:app_id>/status", methods=["POST"])
 def set_status(app_id: int):
     if request.is_json:

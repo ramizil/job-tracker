@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Paste a Job · Job Tracker{% endblock %}
+{% block content %}
+<div class="panel-head"><h1>📋 Paste a Job</h1></div>
+
+<p class="muted" style="max-width:760px">
+  Copy a posting from LinkedIn, AllJobs, Drushim, an email — anything — and paste
+  it below together with the page URL. {% if ai_on %}AI will auto-fill the title,
+  company, location and salary for you (leave them blank).{% else %}Fill in the
+  title and company yourself, or turn on the Gemini key in
+  <a href="{{ url_for('main.settings') }}">Settings</a> to auto-extract them.{% endif %}
+</p>
+
+<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}">
+  <label class="fld">
+    <span>Source URL <em>(where you copied it from)</em></span>
+    <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/view/..." autofocus>
+  </label>
+
+  <label class="fld">
+    <span>Job posting text *</span>
+    <textarea name="description" rows="16" required
+      placeholder="Paste the full job description here (title, company, requirements, everything)…"></textarea>
+  </label>
+
+  <fieldset class="paste-meta">
+    <legend>Details {% if ai_on %}<em>— optional, auto-filled by AI when blank</em>{% else %}<em>— title &amp; company recommended</em>{% endif %}</legend>
+    <div class="row">
+      <input name="title" placeholder="Title{{ '' if ai_on else ' *' }}">
+      <input name="company" placeholder="Company{{ '' if ai_on else ' *' }}">
+    </div>
+    <div class="row">
+      <input name="location" placeholder="Location">
+      <input name="salary" placeholder="Salary">
+    </div>
+    <div class="row">
+      <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s=='saved' }}>{{ s }}</option>{% endfor %}</select>
+      <input name="source" placeholder="Source" value="paste">
+    </div>
+  </fieldset>
+
+  <button class="btn primary" type="submit">
+    {% if ai_on %}Capture &amp; auto-extract{% else %}Capture job{% endif %}
+  </button>
+</form>
+{% endblock %}
