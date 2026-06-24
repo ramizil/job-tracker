@@ -17,11 +17,15 @@
     <div class="rtoolbar">
       <span class="muted sm" id="edit-hint">✏️ Loading editable preview…</span>
       <span>
+        <button class="btn sm" type="button" id="toggle-wide" title="Toggle full-width view">⛶ Wide</button>
         <button class="btn sm" type="button" id="reset-frame">Discard</button>
         <button class="btn sm primary" type="button" id="save-wysiwyg">💾 Save changes</button>
       </span>
     </div>
-    <iframe id="rframe" src="{{ url_for('main.resume_view', app_id=app.id) }}"></iframe>
+    <div class="frame-wrap" id="frame-wrap">
+      <iframe id="rframe" src="{{ url_for('main.resume_view', app_id=app.id) }}"></iframe>
+    </div>
+    <span class="muted sm frame-tip">Drag the bottom-right corner to resize the document, or use <b>⛶ Wide</b> for full width.</span>
   </div>
 
   <div class="editor">
@@ -101,6 +105,16 @@
     if (!dirty || confirm('Discard your unsaved in-page edits?')) {
       frame.contentWindow.location.reload();
     }
+  });
+
+  // Full-width toggle: give the document the whole row.
+  var wideBtn = document.getElementById('toggle-wide');
+  var review = document.querySelector('.review');
+  wideBtn.addEventListener('click', function () {
+    var wide = review.classList.toggle('wide');
+    wideBtn.textContent = wide ? '▣ Split' : '⛶ Wide';
+    // Clear any manual resize so the CSS width can take over cleanly.
+    document.getElementById('frame-wrap').style.width = '';
   });
 
   // Quick-tune chips populate the Gemini instructions box.
