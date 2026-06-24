@@ -9,18 +9,19 @@
 <body>
   <header class="topbar">
     <div class="brand"><a href="{{ url_for('main.dashboard') }}">🎯 Job&nbsp;Tracker</a></div>
+    {% set ep = request.endpoint %}
     <nav>
-      <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-      <a href="{{ url_for('main.board') }}">Board</a>
-      <a href="{{ url_for('main.applications') }}">Applications</a>
-      <a href="{{ url_for('main.search') }}">Search</a>
-      <a href="{{ url_for('main.paste_job') }}">📋 Paste Job</a>
+      <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">Dashboard</a>
+      <a href="{{ url_for('main.board') }}" class="{{ 'active' if ep == 'main.board' }}">Board</a>
+      <a href="{{ url_for('main.applications') }}" class="{{ 'active' if ep in ['main.applications', 'main.detail'] }}">Applications</a>
+      <a href="{{ url_for('main.search') }}" class="{{ 'active' if ep == 'main.search' }}">Search</a>
+      <a href="{{ url_for('main.paste_job') }}" class="{{ 'active' if ep == 'main.paste_job' }}">📋 Paste Job</a>
       <span class="sep"></span>
       <a href="{{ url_for('main.export_csv') }}">CSV</a>
       <a href="{{ url_for('main.export_xlsx') }}">Excel</a>
       <span class="sep"></span>
-      <a href="{{ url_for('main.settings') }}">⚙ Settings</a>
-      <a href="{{ url_for('main.help_page') }}">❓ Help</a>
+      <a href="{{ url_for('main.settings') }}" class="{{ 'active' if ep == 'main.settings' }}">⚙ Settings</a>
+      <a href="{{ url_for('main.help_page') }}" class="{{ 'active' if ep == 'main.help_page' }}">❓ Help</a>
       <a href="{{ url_for('main.quit_app') }}" class="quit">⏻ Quit</a>
     </nav>
   </header>

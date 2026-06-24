@@ -15,8 +15,9 @@ h3{font-size:13px;margin:14px 0 6px;color:#aebac8;text-transform:uppercase;lette
 .topbar{display:flex;align-items:center;gap:18px;padding:10px 20px;background:#0b0f14;border-bottom:1px solid var(--rule);position:sticky;top:0;z-index:20}
 .brand a{font-weight:700;color:#fff}
 .topbar nav{display:flex;gap:16px;align-items:center}
-.topbar nav a{color:var(--muted)}
+.topbar nav a{color:var(--muted);padding:4px 2px;border-bottom:2px solid transparent}
 .topbar nav a:hover{color:#fff;text-decoration:none}
+.topbar nav a.active{color:#fff;font-weight:600;border-bottom-color:var(--accent,#4da3ff)}
 .topbar nav a.quit{color:#ff9a9a}
 .topbar nav a.quit:hover{color:#ffb4b4}
 .sep{width:1px;height:18px;background:var(--rule)}
