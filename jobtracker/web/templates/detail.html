@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}#{{ app.id }} {{ app.company }} · Job Tracker{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.applications') }}">&larr; All applications</a>
+<div class="detail-head">
+  <h1>{{ app.title }}</h1>
+  <span class="pill status-{{ app.status }}">{{ app.status }}</span>
+  {% if app.ai_fit_level %}<span class="fit fit-{{ app.ai_fit_level|lower }}">{{ app.ai_fit_level }}</span>{% endif %}
+</div>
+<p class="sub">{{ app.company }}{% if app.location %} · {{ app.location }}{% endif %}
+  · match {{ '%.0f'|format(app.match_score or 0) }}%
+  {% if app.url %} · <a href="{{ app.url }}" target="_blank" rel="noopener">job link ↗</a>{% endif %}</p>
+
+<div class="grid2">
+  <div>
+    <section class="panel">
+      <h2>Move status</h2>
+      <form method="post" action="{{ url_for('main.set_status', app_id=app.id) }}" class="inline">
+        <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s==app.status }}>{{ s }}</option>{% endfor %}</select>
+        <input name="note" placeholder="note (optional)">
+        <button class="btn" type="submit">Update</button>
+      </form>
+      <details class="mt"><summary class="btn danger sm">Mark rejected…</summary>
+        <form method="post" action="{{ url_for('main.reject', app_id=app.id) }}" class="stack">
+          <label>Stage <select name="stage">{% for s in stages %}<option>{{ s }}</option>{% endfor %}</select></label>
+          <label>Reason <select name="reason">{% for s in reasons %}<option>{{ s }}</option>{% endfor %}</select></label>
+          <input name="note" placeholder="free-text note">
+          <button class="btn danger" type="submit">Confirm rejection</button>
+        </form>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>Notes</h2>
+      {% if app.notes %}<pre class="notes">{{ app.notes }}</pre>{% endif %}
+      <form method="post" action="{{ url_for('main.note', app_id=app.id) }}" class="inline">
+        <input name="text" placeholder="add a note" style="flex:1">
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+
+    {% if app.description %}
+    <section class="panel"><h2>Job description</h2><pre class="jd">{{ app.description }}</pre></section>
+    {% endif %}
+
+    <section class="panel">
+      <h2>History</h2>
+      <table class="mini"><tbody>
+        {% for h in history %}
+        <tr><td>{{ (h.changed_at or '')[:19] }}</td><td>{{ h.old_status or '—' }} → {{ h.new_status }}</td><td>{{ h.note }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel ai">
+      <div class="panel-head"><h2>🤖 AI fit analysis</h2></div>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> to <code>.env</code> to enable AI analysis.</p>
+      {% elif not analysis %}
+        <p class="muted">Run a Gemini analysis of how well your resume fits this job.</p>
+        <form method="post" action="{{ url_for('main.analyze', app_id=app.id) }}">
+          <button class="btn primary" type="submit">Analyze fit with Gemini</button>
+        </form>
+      {% else %}
+        <div class="verdict">
+          <span class="fit big fit-{{ (analysis.fit_level or 'maybe')|lower }}">{{ analysis.fit_level }}</span>
+          <div><b>{{ analysis.verdict }}</b>{% if analysis.fit_score is defined %}<div class="muted">fit score {{ analysis.fit_score }}/100</div>{% endif %}</div>
+          <form method="post" action="{{ url_for('main.analyze', app_id=app.id) }}" class="reanalyze">
+            <button class="btn sm" type="submit">Re-run</button>
+          </form>
+        </div>
+
+        {% if analysis.requirements %}
+        <h3>Requirements</h3>
+        <table class="mini reqs"><tbody>
+          {% for q in analysis.requirements %}
+          <tr>
+            <td class="m-{{ q.match }}">{{ q.match }}</td>
+            <td><b>{{ q.area }}</b><br><span class="muted">{{ q.requirement }}</span></td>
+            <td>{{ q.evidence }}</td>
+          </tr>
+          {% endfor %}
+        </tbody></table>
+        {% endif %}
+
+        {% if analysis.risks %}
+        <h3>Risks</h3>
+        <ul class="risks">{% for r in analysis.risks %}<li>{{ r }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <h3>Suggested resume fixes</h3>
+        <form method="post" action="{{ url_for('main.tailor', app_id=app.id) }}">
+          {% for s in analysis.suggestions %}
+          <label class="sugg">
+            <input type="checkbox" name="suggestion" value="[{{ s.target }}] {{ s.action }}" checked>
+            <span><b>{{ s.target }}:</b> {{ s.action }}<br><span class="muted">{{ s.rationale }}</span></span>
+          </label>
+          {% endfor %}
+          <textarea name="instructions" rows="2" placeholder="extra tailoring instructions (optional)"></textarea>
+          <button class="btn primary" type="submit">Generate tailored resume →</button>
+        </form>
+
+        {% if has_tailored %}
+        <div class="tailored-links">
+          <a class="btn" href="{{ url_for('main.resume_review', app_id=app.id) }}">Review tailored resume</a>
+        </div>
+        {% endif %}
+
+        {% if analysis.analysis_markdown %}
+        <details class="mt"><summary class="btn sm">Full AI write-up</summary>
+          <div class="md">{{ analysis.analysis_markdown | md | safe }}</div>
+        </details>
+        {% endif %}
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('main.delete', app_id=app.id) }}" onsubmit="return confirm('Delete this application?')">
+  <button class="btn danger sm" type="submit">Delete application</button>
+</form>
+{% endblock %}

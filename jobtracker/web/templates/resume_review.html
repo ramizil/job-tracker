@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Tailored resume · #{{ app.id }}{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.detail', app_id=app.id) }}">&larr; Back to application</a>
+<div class="panel-head">
+  <h1>Tailored resume — {{ app.company }}</h1>
+  <div class="actions">
+    <button class="btn" onclick="document.getElementById('rframe').contentWindow.print()">🖨 Print / Save as PDF</button>
+    <a class="btn" href="{{ url_for('main.resume_pdf', app_id=app.id) }}">⬇ Download PDF</a>
+    <a class="btn sm" href="{{ url_for('main.resume_view', app_id=app.id) }}" target="_blank">Open in tab</a>
+  </div>
+</div>
+<p class="muted">Review on the left. Edit the HTML on the right and Save to update. Print gives the highest-fidelity PDF (uses the resume's print CSS).</p>
+
+<div class="review">
+  <div class="preview">
+    <iframe id="rframe" src="{{ url_for('main.resume_view', app_id=app.id) }}"></iframe>
+  </div>
+  <div class="editor">
+    <form method="post" action="{{ url_for('main.resume_save', app_id=app.id) }}">
+      <textarea name="html" spellcheck="false">{{ tailored_html }}</textarea>
+      <button class="btn primary" type="submit">Save edits</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -172,6 +172,40 @@ def add_note(app_id: int, text: str) -> bool:
         return True
 
 
+def set_ai_analysis(app_id: int, analysis: dict[str, Any]) -> bool:
+    """Persist a Gemini fit-analysis result on the application."""
+    import json
+    with get_connection() as conn:
+        cur = conn.execute(
+            """UPDATE applications
+                 SET ai_fit_level=?, ai_verdict=?, ai_analysis_json=?,
+                     ai_analyzed_at=?, updated_at=? WHERE id=?""",
+            (analysis.get("fit_level", ""), analysis.get("verdict", ""),
+             json.dumps(analysis, ensure_ascii=False), now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
+def get_ai_analysis(app_id: int) -> dict[str, Any] | None:
+    import json
+    row = get_application(app_id)
+    if not row or not row["ai_analysis_json"]:
+        return None
+    try:
+        return json.loads(row["ai_analysis_json"])
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def mark_tailored(app_id: int) -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET tailored_at=?, updated_at=? WHERE id=?",
+            (now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def delete_application(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute("DELETE FROM applications WHERE id=?", (app_id,))

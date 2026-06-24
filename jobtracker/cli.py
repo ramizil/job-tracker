@@ -256,6 +256,37 @@ def match(app_id: int = typer.Argument(...)):
 
 
 @app.command()
+def web(host: str = typer.Option("127.0.0.1", "--host"),
+        port: int = typer.Option(5000, "--port", "-p"),
+        debug: bool = typer.Option(False, "--debug")):
+    """Launch the Flask web dashboard (funnel, Kanban, AI, export)."""
+    from .web import create_app
+    console.print(f"[green]Dashboard:[/green] http://{host}:{port}")
+    create_app().run(host=host, port=port, debug=debug)
+
+
+@app.command()
+def analyze(app_id: int = typer.Argument(...)):
+    """Run a Gemini resume-fit analysis for one application."""
+    from . import ai
+    r = tracker.get_application(app_id)
+    if not r:
+        console.print(f"[red]No application #{app_id}[/red]"); raise typer.Exit(1)
+    try:
+        result = ai.analyze_fit(
+            title=r["title"], company=r["company"], location=r["location"] or "",
+            description=r["description"] or "",
+        )
+    except ai.AIError as exc:
+        console.print(f"[red]{exc}[/red]"); raise typer.Exit(1)
+    tracker.set_ai_analysis(app_id, result)
+    console.print(f"[bold]{result.get('fit_level')}[/bold] - {result.get('verdict')}")
+    for s in result.get("suggestions", []):
+        console.print(f"  [cyan]{s.get('target')}[/cyan]: {s.get('action')}")
+    console.print("[dim]Open the web dashboard to tailor & export the resume.[/dim]")
+
+
+@app.command()
 def stats():
     """Pipeline funnel + rejection analysis + source effectiveness."""
     t = analytics.totals()

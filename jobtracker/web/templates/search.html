@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Search · Job Tracker{% endblock %}
+{% block content %}
+<h1>Search jobs</h1>
+{% if not configured %}
+  <div class="banner">No job source configured. Add <code>RAPIDAPI_KEY</code> (JSearch) or <code>JOOBLE_API_KEY</code> to <code>.env</code>.</div>
+{% else %}
+  <p class="muted">Sources: {{ configured | join(', ') }}</p>
+{% endif %}
+
+<form method="post" class="searchbar">
+  <input name="query" value="{{ query }}" placeholder="e.g. performance test engineer (blank = your target titles)">
+  <input name="location" value="{{ location }}" placeholder="Location">
+  <button class="btn primary" type="submit" {{ 'disabled' if not configured }}>Search</button>
+</form>
+
+{% if results %}
+<table class="grid">
+  <thead><tr><th>Match</th><th>Title</th><th>Company</th><th>Location</th><th>Src</th><th></th></tr></thead>
+  <tbody>
+    {% for item in results %}
+    {% set j = item.job %}
+    <tr>
+      <td>{{ '%.0f'|format(item.score) }}%</td>
+      <td><a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.title }}</a></td>
+      <td>{{ j.company }}</td>
+      <td>{{ j.location }}</td>
+      <td>{{ j.source }}</td>
+      <td>
+        <form method="post" action="{{ url_for('main.search_save') }}">
+          <input type="hidden" name="company" value="{{ j.company }}">
+          <input type="hidden" name="title" value="{{ j.title }}">
+          <input type="hidden" name="location" value="{{ j.location }}">
+          <input type="hidden" name="url" value="{{ j.url }}">
+          <input type="hidden" name="salary" value="{{ j.salary }}">
+          <input type="hidden" name="source" value="{{ j.source }}">
+          <input type="hidden" name="description" value="{{ j.description }}">
+          <button class="btn sm" type="submit">Save</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

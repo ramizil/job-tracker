@@ -58,7 +58,29 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+# Columns added after the initial release. Applied idempotently on init.
+EXTRA_COLUMNS: dict[str, str] = {
+    "ai_fit_level": "TEXT",        # YES / MAYBE / NO
+    "ai_verdict": "TEXT",          # one-line verdict
+    "ai_analysis_json": "TEXT",    # full structured analysis (JSON)
+    "ai_analyzed_at": "TEXT",
+    "tailored_at": "TEXT",         # when a tailored resume was generated
+}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)")}
+    for name, decl in EXTRA_COLUMNS.items():
+        if name not in cols:
+            conn.execute(f"ALTER TABLE applications ADD COLUMN {name} {decl}")
+
+
 def init_db() -> None:
-    """Create tables/indexes if they do not exist."""
+    """Create tables/indexes if missing, then apply column migrations."""
     with get_connection() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
+
+
+# Alias used by the web app at startup.
+ensure_schema = init_db

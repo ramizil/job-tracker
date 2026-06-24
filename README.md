@@ -16,13 +16,22 @@ APIs (**JSearch** via RapidAPI is primary and covers Israel; **Jooble** is a fre
 fallback) that already index LinkedIn/Indeed/Glassdoor listings.
 
 ## Features
+- **Web dashboard (Flask)**: visual funnel, metric cards, and a drag-and-drop
+  **Kanban board** to move applications through the pipeline.
 - SQLite-backed application tracker (CRUD + full **status history**).
 - **Rejection logging**: capture the stage and reason for every rejection.
 - **Resume profile**: parses your HTML CV into weighted skill keywords.
 - **Match scoring**: every job is scored 0–100% against your resume.
-- **Search**: query aggregators, rank by match, import top matches in one command.
+- **Search**: query aggregators, rank by match, import top matches.
 - **Analytics**: pipeline funnel, response/interview rates, rejection breakdowns,
   per-source effectiveness, and a match-score signal (advanced vs rejected).
+- **Gemini AI fit analysis**: for any job, get a recruiter-style verdict
+  (YES/MAYBE/NO), a requirement-by-requirement match, risks, and concrete
+  **resume-fix suggestions**.
+- **AI resume tailoring**: pick the suggestions, generate a tailored CV (same
+  styling), review/edit it, and export to **PDF** (browser Print = pixel-perfect;
+  server-side PDF as a fallback).
+- **CSV / Excel export** of all applications.
 
 ## Setup (Windows / PowerShell)
 ```powershell
@@ -43,6 +52,24 @@ python -m jobtracker profile --rebuild
 | `RAPIDAPI_KEY` | [JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | **Primary**, Israel coverage, free tier |
 | `JOOBLE_API_KEY` | [Jooble](https://jooble.org/api/about) | Free, Israel coverage |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | [Adzuna](https://developer.adzuna.com/) | Optional, **no Israel** (remote/UK/US/EU) |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) | For AI fit analysis & resume tailoring |
+
+> The AI model is configurable via `GEMINI_MODEL` (default `gemini-2.5-flash`).
+> If a model is overloaded/out of quota, the client automatically falls back to
+> other available Gemini models.
+
+## Web dashboard
+```powershell
+python -m jobtracker web            # http://127.0.0.1:5000
+python -m jobtracker web --port 8080
+```
+- **Dashboard** – funnel, response/interview rates, rejection breakdowns.
+- **Board** – drag cards between columns to update status.
+- **Applications** – add/edit, paste the job description (powers AI + matching).
+- **Application detail** – run *Analyze fit with Gemini*, then *Generate tailored
+  resume* from the suggested fixes, review/edit, and Print/Download as PDF.
+- **Search** – query aggregators and save jobs (needs an API key).
+- **Export** – CSV / Excel buttons in the top bar.
 
 ## Usage
 ```powershell
@@ -69,6 +96,12 @@ python -m jobtracker reject 3 --stage technical_interview --reason missing_skill
 python -m jobtracker note 3 "Recruiter said they want more AWS depth"
 python -m jobtracker stats
 python -m jobtracker match 3
+
+# AI fit analysis (also available in the web UI)
+python -m jobtracker analyze 3
+
+# Launch the web dashboard
+python -m jobtracker web
 ```
 
 ## Status pipeline
@@ -78,19 +111,21 @@ python -m jobtracker match 3
 ## Project layout
 ```
 jobtracker/
-  config.py     paths + env
-  db.py         SQLite schema/connection
+  config.py     paths + env (API keys, Gemini model)
+  db.py         SQLite schema/connection + migrations
   models.py     statuses, rejection stages/reasons
   resume.py     HTML CV -> weighted skill profile
   matcher.py    job <-> resume match scoring
-  tracker.py    application CRUD + history + rejection
+  tracker.py    application CRUD + history + rejection + AI fields
   analytics.py  funnel / rejection / source analysis
+  ai.py         Gemini fit analysis + resume tailoring
+  exporter.py   CSV / Excel export
   sources/      jsearch.py, jooble.py, adzuna.py
-  cli.py        Typer CLI
-data/           local SQLite DB + profile.yaml (git-ignored)
+  web/          Flask app (views, templates, static)
+  cli.py        Typer CLI (incl. `web`, `analyze`)
+data/           local SQLite DB + profile.yaml + tailored/ (git-ignored)
 ```
 
 ## Roadmap
-- Flask web dashboard (visual funnel + Kanban board).
-- CSV/Excel export of applications.
 - Auto follow-up reminders for stale "applied" rows.
+- Multi-resume variants and A/B tracking of which CV gets more responses.

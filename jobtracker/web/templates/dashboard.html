@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Job Tracker{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+{% if not ai_on %}
+<div class="banner">Gemini AI is not configured. Add <code>GEMINI_API_KEY</code> to <code>.env</code> to enable fit analysis &amp; resume tailoring.</div>
+{% endif %}
+
+<section class="cards">
+  <div class="metric"><span class="num">{{ totals.total }}</span><span class="lbl">Tracked</span></div>
+  <div class="metric"><span class="num">{{ totals.applied_or_beyond }}</span><span class="lbl">Applied+</span></div>
+  <div class="metric"><span class="num">{{ totals.active }}</span><span class="lbl">Active</span></div>
+  <div class="metric"><span class="num">{{ totals.interviews_reached }}</span><span class="lbl">Interviews</span></div>
+  <div class="metric"><span class="num">{{ totals.response_rate_pct }}%</span><span class="lbl">Response rate</span></div>
+  <div class="metric"><span class="num">{{ totals.interview_rate_pct }}%</span><span class="lbl">Interview rate</span></div>
+</section>
+
+<div class="grid2">
+  <section class="panel">
+    <h2>Pipeline funnel</h2>
+    {% set maxv = (funnel.values() | list | max) or 1 %}
+    {% for st, n in funnel.items() %}
+      <div class="funnel-row">
+        <span class="funnel-label status-{{ st }}">{{ st }}</span>
+        <div class="funnel-bar"><div class="funnel-fill status-{{ st }}" style="width: {{ (n / maxv * 100) | round(0, 'floor') }}%"></div></div>
+        <span class="funnel-num">{{ n }}</span>
+      </div>
+    {% endfor %}
+  </section>
+
+  <section class="panel">
+    <h2>Why rejected</h2>
+    {% if rej_stage %}
+      <h3>By stage</h3>
+      <table class="mini"><tbody>
+      {% for s, n in rej_stage %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
+      </tbody></table>
+      <h3>By reason</h3>
+      <table class="mini"><tbody>
+      {% for s, n in rej_reason %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
+      </tbody></table>
+    {% else %}
+      <p class="muted">No rejections logged yet.</p>
+    {% endif %}
+    {% if insight.avg_match_advanced is not none or insight.avg_match_rejected is not none %}
+      <p class="muted">Match signal — advanced avg <b>{{ insight.avg_match_advanced }}%</b>, rejected avg <b>{{ insight.avg_match_rejected }}%</b></p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>Recent applications</h2><a class="btn sm" href="{{ url_for('main.applications') }}">View all</a></div>
+  <table class="grid">
+    <thead><tr><th>ID</th><th>Status</th><th>Match</th><th>Company</th><th>Title</th><th>AI</th></tr></thead>
+    <tbody>
+      {% for r in recent %}
+      <tr onclick="location.href='{{ url_for('main.detail', app_id=r.id) }}'">
+        <td>{{ r.id }}</td>
+        <td><span class="pill status-{{ r.status }}">{{ r.status }}</span></td>
+        <td>{{ '%.0f'|format(r.match_score or 0) }}%</td>
+        <td>{{ r.company }}</td>
+        <td>{{ r.title }}</td>
+        <td>{% if r.ai_fit_level %}<span class="fit fit-{{ r.ai_fit_level|lower }}">{{ r.ai_fit_level }}</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">No applications yet — add one from the Applications page.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

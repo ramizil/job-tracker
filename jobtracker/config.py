@@ -19,6 +19,10 @@ DATA_DIR.mkdir(exist_ok=True)
 DB_PATH = Path(os.getenv("JOBTRACKER_DB", DATA_DIR / "jobtracker.db"))
 PROFILE_PATH = DATA_DIR / "profile.yaml"
 
+# Tailored resumes (AI-generated) are written here.
+TAILORED_DIR = DATA_DIR / "tailored"
+TAILORED_DIR.mkdir(exist_ok=True)
+
 # Resume used to build the matching profile. Falls back to the bundled sample.
 DEFAULT_RESUME = BASE_DIR / "sample_resume.html"
 RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
@@ -28,3 +32,7 @@ RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "").strip()
 JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "").strip()
 ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID", "").strip()
 ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY", "").strip()
+
+# --- Gemini AI (resume fit analysis + tailoring) ---------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
