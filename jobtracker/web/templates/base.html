@@ -39,6 +39,36 @@
     {% block content %}{% endblock %}
   </main>
 
+  <div id="loading-overlay" class="loading-overlay" hidden>
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div class="loading-msg" id="loading-msg">Working…</div>
+      <div class="loading-sub">Gemini can take 10–30 seconds. Please don't close this window.</div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var overlay = document.getElementById('loading-overlay');
+      var msgEl = document.getElementById('loading-msg');
+      function show(msg) {
+        if (msg) msgEl.textContent = msg;
+        overlay.hidden = false;
+      }
+      document.querySelectorAll('form[data-loading]').forEach(function (form) {
+        form.addEventListener('submit', function () {
+          show(form.getAttribute('data-loading'));
+          // Disable the clicked button so it can't be double-submitted.
+          form.querySelectorAll('button[type="submit"]').forEach(function (b) {
+            b.disabled = true; b.classList.add('is-busy');
+          });
+        });
+      });
+      // Hide overlay if the user navigates back to a cached page.
+      window.addEventListener('pageshow', function () { overlay.hidden = true; });
+    })();
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

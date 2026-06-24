@@ -11,7 +11,7 @@
   <a href="{{ url_for('main.settings') }}">Settings</a> to auto-extract them.{% endif %}
 </p>
 
-<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}">
+<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"{% if ai_on %} data-loading="Reading the posting & extracting details with Gemini…"{% endif %}>
   <label class="fld">
     <span>Source URL <em>(where you copied it from)</em></span>
     <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/view/..." autofocus>

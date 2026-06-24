@@ -100,6 +100,15 @@ form.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .paste-form .fld em,.paste-meta em{color:var(--muted);font-style:normal;font-size:12px}
 .paste-meta{border:1px solid var(--rule);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
 .paste-meta legend{padding:0 6px;font-size:13px;color:var(--ink)}
+
+.loading-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(5,8,12,.72);backdrop-filter:blur(2px)}
+.loading-overlay[hidden]{display:none}
+.loading-card{background:var(--card,#121821);border:1px solid var(--rule);border-radius:14px;padding:28px 34px;text-align:center;max-width:360px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.loading-card .spinner{width:42px;height:42px;margin:0 auto 16px;border:4px solid var(--rule);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.loading-msg{font-size:15px;font-weight:600;color:var(--ink)}
+.loading-sub{margin-top:8px;font-size:12.5px;color:var(--muted)}
+button.is-busy{opacity:.6;cursor:progress}
+@keyframes spin{to{transform:rotate(360deg)}}
 .add-details summary{list-style:none}
 .filters,.actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 .chip{padding:4px 11px;border:1px solid var(--rule);border-radius:999px;color:var(--muted);font-size:12px;text-transform:capitalize}
