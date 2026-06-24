@@ -71,6 +71,8 @@ EXTRA_COLUMNS: dict[str, str] = {
     "recruiter_note_at": "TEXT",
     "interview_prep": "TEXT",      # interview / test prep guide (Markdown)
     "interview_prep_at": "TEXT",
+    "mock_interview": "TEXT",      # mock interview Q&A simulation (JSON)
+    "mock_interview_at": "TEXT",
 }
 
 

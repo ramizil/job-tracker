@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html as html_lib
+import json
 import re
 
 from flask import (
@@ -234,9 +235,15 @@ def detail(app_id: int):
     if not r:
         abort(404)
     analysis = tracker.get_ai_analysis(app_id)
+    mock = None
+    if r["mock_interview"]:
+        try:
+            mock = json.loads(r["mock_interview"])
+        except (TypeError, ValueError):
+            mock = None
     return render_template(
         "detail.html", app=r, history=tracker.get_history(app_id),
-        analysis=analysis, statuses=STATUSES, stages=REJECTION_STAGES,
+        analysis=analysis, mock=mock, statuses=STATUSES, stages=REJECTION_STAGES,
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
         has_tailored=_tailored_path(app_id).exists(),
     )
@@ -460,6 +467,24 @@ def interview_prep_save(app_id: int):
     tracker.set_interview_prep(app_id, request.form.get("text", ""))
     flash("Interview prep saved.", "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#prep")
+
+
+@bp.route("/application/<int:app_id>/mock-interview", methods=["POST"])
+def mock_interview(app_id: int):
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    language = request.form.get("language", "en")
+    try:
+        data = ai.mock_interview(
+            title=r["title"], company=r["company"], location=r["location"] or "",
+            description=r["description"] or "", language=language,
+        )
+        tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
+        flash("Mock interview generated.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#mock")
 
 
 @bp.route("/application/<int:app_id>/tailor", methods=["POST"])

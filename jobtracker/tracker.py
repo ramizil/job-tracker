@@ -227,6 +227,16 @@ def set_interview_prep(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_mock_interview(app_id: int, text: str) -> bool:
+    """Persist a generated mock-interview Q&A simulation (JSON string)."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET mock_interview=?, mock_interview_at=?, updated_at=? WHERE id=?",
+            (text, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def mark_tailored(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute(

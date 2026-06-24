@@ -219,6 +219,15 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 .sugg:hover{border-color:rgba(34,211,238,.45);background:rgba(34,211,238,.06)}
 .sugg input{margin-top:3px}
 .md p{margin:6px 0}.md h1,.md h2,.md h3{color:#dbe6f5}
+/* mock interview */
+.mi-player{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border:1px solid var(--rule);border-radius:12px;background:rgba(8,14,24,.4)}
+.mock-qa{display:flex;flex-direction:column;gap:10px}
+.mi-pair{border:1px solid var(--rule);border-radius:12px;padding:11px 13px;background:rgba(30,41,64,.4);transition:border-color .2s,box-shadow .2s}
+.mi-pair.first{border-color:rgba(124,58,237,.4)}
+.mi-pair.speaking{border-color:rgba(34,211,238,.7);box-shadow:0 0 22px -6px rgba(34,211,238,.65)}
+.mi-q{margin:0 0 6px;font-weight:600;color:#dbe6f5}
+.mi-a{margin:0;color:var(--ink);line-height:1.6}
+.mi-tag{display:inline-block;background:var(--grad);color:#fff;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:800;margin-right:4px;vertical-align:middle}
 /* Bidirectional text: let each line/paragraph pick its own direction so
    English words/punctuation embedded in Hebrew (and vice-versa) render correctly. */
 [dir="auto"]{unicode-bidi:plaintext}

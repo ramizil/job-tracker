@@ -462,6 +462,76 @@ def interview_prep(*, title: str, company: str, location: str = "",
 
 
 # --------------------------------------------------------------------------- #
+_MOCK_INTERVIEW_PROMPT = """You are simulating a realistic, friendly job
+interview for the role below. Produce a natural back-and-forth between an
+INTERVIEWER and the CANDIDATE. Ground every candidate answer ONLY in the facts
+in their resume — never invent employers, dates, numbers or skills.
+
+STYLE (very important):
+- Conversational and warm, NOT formal or robotic. Write the way real people
+  actually speak in an interview — contractions, short sentences, a little
+  personality. Avoid corporate buzzwords and clichés.
+- First-person answers, spoken aloud (they will be read by a text-to-speech
+  voice), so keep sentences easy to say. No bullet points, no markdown inside
+  answers.
+- The VERY FIRST question must be the classic opener "Tell me about yourself"
+  (translated naturally if not English), and its answer is a relaxed ~45-75s
+  personal pitch built from the resume.
+- 7 to 9 questions total: mix the opener, a few role-specific technical ones,
+  a couple of behavioural ones, and end with the candidate asking 1 good
+  question back.
+
+Write everything in {lang} (natural, native-sounding {lang}).
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "qa": [
+    {{"q": "interviewer question", "a": "candidate's natural spoken answer"}}
+  ]
+}}
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def mock_interview(*, title: str, company: str, location: str = "",
+                   description: str = "", resume: str | None = None,
+                   language: str = "en") -> dict[str, Any]:
+    """Generate a natural mock-interview Q&A simulation grounded in the resume.
+
+    Returns {"language": "...", "qa": [{"q": ..., "a": ...}, ...]}.
+    """
+    prompt = _MOCK_INTERVIEW_PROMPT.format(
+        lang=_lang_name(language),
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:7000],
+        resume=(resume or resume_text())[:9000],
+    )
+    raw = _generate(prompt, as_json=True)
+    data = _parse_json(raw)
+    if isinstance(data, list):
+        data = {"qa": data}
+    if not isinstance(data, dict):
+        raise AIError("Gemini returned an unexpected interview format. Please try again.")
+    qa = data.get("qa") or []
+    clean = [
+        {"q": str(p.get("q", "")).strip(), "a": str(p.get("a", "")).strip()}
+        for p in qa if isinstance(p, dict) and (p.get("q") or p.get("a"))
+    ]
+    if not clean:
+        raise AIError("Gemini didn't return any interview questions. Please try again.")
+    return {"language": (language or "en").lower(), "qa": clean}
+
+
+# --------------------------------------------------------------------------- #
 _TAILOR_PROMPT = """You are an expert resume writer. Rewrite the candidate's
 HTML resume so it is optimally positioned for the SPECIFIC job below, applying
 the TAILORING INSTRUCTIONS. Hard rules:

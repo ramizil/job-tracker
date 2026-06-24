@@ -208,6 +208,45 @@
         {% endif %}
       {% endif %}
     </section>
+
+    <section class="panel ai" id="mock">
+      <div class="panel-head"><h2>🎙️ Mock interview</h2>
+        {% if app.mock_interview_at %}<span class="muted sm">saved {{ (app.mock_interview_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">A natural, relaxed interview simulation built from your resume — starts with “Tell me about yourself”. You can listen to it like a recording.</p>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% else %}
+        <form method="post" action="{{ url_for('main.mock_interview', app_id=app.id) }}" data-loading="Running your mock interview with Gemini…" class="stack">
+          <div class="row">
+            <label class="lang">Language
+              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
+            </label>
+            <button class="btn primary" type="submit">{{ 'Regenerate' if mock else 'Generate' }} mock interview</button>
+          </div>
+        </form>
+
+        {% if mock and mock.qa %}
+        <div class="mi-player mt" data-lang="{{ 'he-IL' if mock.language == 'he' else 'en-US' }}">
+          <button class="btn sm primary" type="button" id="mi-play">▶ Listen</button>
+          <button class="btn sm" type="button" id="mi-pause" disabled>⏸ Pause</button>
+          <button class="btn sm" type="button" id="mi-stop" disabled>⏹ Stop</button>
+          <label class="lang">Speed
+            <select id="mi-rate"><option value="0.9">0.9×</option><option value="1" selected>1×</option><option value="1.1">1.1×</option><option value="1.25">1.25×</option></select>
+          </label>
+          <span class="muted sm" id="mi-status"></span>
+        </div>
+        <div class="mock-qa mt" dir="auto">
+          {% for p in mock.qa %}
+          <div class="mi-pair{{ ' first' if loop.first }}">
+            <p class="mi-q"><span class="mi-tag">Q{{ loop.index }}</span> {{ p.q }}</p>
+            <p class="mi-a">{{ p.a }}</p>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endif %}
+    </section>
   </div>
 </div>
 
@@ -229,5 +268,106 @@
       });
     });
   });
+</script>
+
+<script>
+// Mock-interview audio playback via the browser's built-in speech synthesis.
+(function () {
+  var player = document.querySelector('.mi-player');
+  if (!player) return;
+  var synth = window.speechSynthesis;
+  var playBtn = document.getElementById('mi-play');
+  var pauseBtn = document.getElementById('mi-pause');
+  var stopBtn = document.getElementById('mi-stop');
+  var rateSel = document.getElementById('mi-rate');
+  var status = document.getElementById('mi-status');
+  var lang = player.getAttribute('data-lang') || 'en-US';
+
+  if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+    status.textContent = 'Audio playback not supported in this browser.';
+    playBtn.disabled = true;
+    return;
+  }
+
+  var pairs = Array.prototype.slice.call(document.querySelectorAll('.mock-qa .mi-pair'));
+
+  function pickVoices() {
+    var voices = synth.getVoices() || [];
+    var base = lang.split('-')[0];
+    var match = voices.filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf(base) === 0; });
+    return { interviewer: match[0] || null, candidate: match[1] || match[0] || null, count: match.length };
+  }
+
+  function buildQueue() {
+    var v = pickVoices();
+    if (v.count === 0) {
+      status.textContent = 'No ' + lang + ' voice installed — using the default voice.';
+    } else {
+      status.textContent = '';
+    }
+    var rate = parseFloat(rateSel.value) || 1;
+    var utts = [];
+    pairs.forEach(function (pair) {
+      var q = pair.querySelector('.mi-q');
+      var a = pair.querySelector('.mi-a');
+      [[q, v.interviewer, 0.95], [a, v.candidate, 1.05]].forEach(function (row) {
+        var el = row[0];
+        if (!el) return;
+        var u = new SpeechSynthesisUtterance(el.textContent.replace(/^Q\d+\s*/, ''));
+        u.lang = lang;
+        if (row[1]) u.voice = row[1];
+        u.pitch = row[2];
+        u.rate = rate;
+        u._pair = pair;
+        utts.push(u);
+      });
+    });
+    return utts;
+  }
+
+  function clearHighlight() {
+    pairs.forEach(function (p) { p.classList.remove('speaking'); });
+  }
+  function setButtons(playing) {
+    pauseBtn.disabled = !playing;
+    stopBtn.disabled = !playing;
+    playBtn.textContent = playing ? '▶ Restart' : '▶ Listen';
+  }
+
+  function play() {
+    synth.cancel();
+    clearHighlight();
+    var utts = buildQueue();
+    if (!utts.length) return;
+    utts.forEach(function (u, i) {
+      u.onstart = function () {
+        clearHighlight();
+        if (u._pair) {
+          u._pair.classList.add('speaking');
+          u._pair.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      };
+      if (i === utts.length - 1) {
+        u.onend = function () { clearHighlight(); setButtons(false); };
+      }
+    });
+    utts.forEach(function (u) { synth.speak(u); });
+    setButtons(true);
+    pauseBtn.textContent = '⏸ Pause';
+  }
+
+  playBtn.addEventListener('click', play);
+  pauseBtn.addEventListener('click', function () {
+    if (synth.paused) { synth.resume(); pauseBtn.textContent = '⏸ Pause'; }
+    else { synth.pause(); pauseBtn.textContent = '▶ Resume'; }
+  });
+  stopBtn.addEventListener('click', function () {
+    synth.cancel(); clearHighlight(); setButtons(false);
+  });
+  // Voice list can load asynchronously.
+  if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = function () {};
+  // Stop speech if the user navigates away.
+  window.addEventListener('beforeunload', function () { synth.cancel(); });
+})();
 </script>
 {% endblock %}
