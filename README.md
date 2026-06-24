@@ -58,10 +58,24 @@ python -m jobtracker profile --rebuild
 > If a model is overloaded/out of quota, the client automatically falls back to
 > other available Gemini models.
 
+## Launch (double-click)
+- **`start.bat`** — double-click to start. On first run it creates the venv and
+  installs dependencies, then opens the dashboard in a **standalone, maximized
+  app window** (Edge/Chrome app mode — no tabs/address bar). A console window
+  stays open; press `Ctrl+C` there (or click **⏻ Quit** in the app) to stop.
+- **`JobTracker.vbs`** — same, but with **no console window** (pure app feel).
+  Stop it with the in-app **⏻ Quit** button.
+
+> Tip: right-click `start.bat` → *Send to → Desktop (create shortcut)* for a
+> one-click desktop launcher. You can change its icon in the shortcut's
+> Properties.
+
 ## Web dashboard
 ```powershell
-python -m jobtracker web            # http://127.0.0.1:5000
+python -m jobtracker web              # opens an app window at http://127.0.0.1:5000
 python -m jobtracker web --port 8080
+python -m jobtracker web --no-open    # don't auto-open a window
+python -m jobtracker web --fullscreen # open the app window fullscreen
 ```
 - **Dashboard** – funnel, response/interview rates, rejection breakdowns.
 - **Board** – drag cards between columns to update status.

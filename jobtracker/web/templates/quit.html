@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Quit · Job Tracker{% endblock %}
+{% block content %}
+<section class="panel" style="max-width:520px;margin:40px auto;text-align:center">
+  {% if stopped %}
+    <h1>✅ Server stopped</h1>
+    <p class="muted">The Job Tracker server has shut down. You can close this window.</p>
+    <p><button class="btn" onclick="window.close()">Close window</button></p>
+  {% else %}
+    <h1>⏻ Stop the server?</h1>
+    <p class="muted">This stops the local Job Tracker server. Your data is saved.
+       To use it again, run <code>start.bat</code> (or <code>python -m jobtracker web</code>).</p>
+    <form method="post" action="{{ url_for('main.quit_app') }}">
+      <button class="btn danger" type="submit">Yes, stop the server</button>
+      <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

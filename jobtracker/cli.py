@@ -258,10 +258,23 @@ def match(app_id: int = typer.Argument(...)):
 @app.command()
 def web(host: str = typer.Option("127.0.0.1", "--host"),
         port: int = typer.Option(5000, "--port", "-p"),
-        debug: bool = typer.Option(False, "--debug")):
+        debug: bool = typer.Option(False, "--debug"),
+        open_window: bool = typer.Option(True, "--open/--no-open",
+                                         help="Open a standalone app window."),
+        fullscreen: bool = typer.Option(False, "--fullscreen",
+                                        help="Open the app window fullscreen.")):
     """Launch the Flask web dashboard (funnel, Kanban, AI, export)."""
     from .web import create_app
-    console.print(f"[green]Dashboard:[/green] http://{host}:{port}")
+    disp = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    url = f"http://{disp}:{port}/"
+    console.print(f"[green]Dashboard:[/green] {url}")
+    console.print("[dim]Press Ctrl+C in this window to stop the server.[/dim]")
+    if open_window:
+        import threading
+        from .launcher import open_app_window
+        threading.Timer(
+            1.5, open_app_window, kwargs={"url": url, "fullscreen": fullscreen}
+        ).start()
     create_app().run(host=host, port=port, debug=debug)
 
 

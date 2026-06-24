@@ -55,6 +55,23 @@ def md_to_html(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+@bp.route("/quit", methods=["GET", "POST"])
+def quit_app():
+    """Confirm (GET) then stop the local server (POST)."""
+    if request.method == "POST":
+        import os
+        import threading
+        import time
+
+        def _shutdown():
+            time.sleep(0.6)
+            os._exit(0)
+
+        threading.Thread(target=_shutdown, daemon=True).start()
+        return render_template("quit.html", stopped=True)
+    return render_template("quit.html", stopped=False)
+
+
 @bp.route("/help")
 def help_page():
     import sys

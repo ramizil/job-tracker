@@ -6,7 +6,10 @@
 <div class="grid2">
   <section class="panel">
     <h2>▶ Start the server</h2>
-    <p>Open <b>PowerShell</b> in the project folder and run:</p>
+    <p><b>Easiest:</b> double-click <code>start.bat</code> in the project folder
+       (or <code>JobTracker.vbs</code> for no console window). A standalone app
+       window opens automatically.</p>
+    <p>Or from <b>PowerShell</b>:</p>
     <pre class="jd">cd C:\GIT\RAMI\job-tracker
 .\.venv\Scripts\Activate.ps1
 python -m jobtracker web</pre>
@@ -21,8 +24,9 @@ python -m jobtracker web --host 0.0.0.0 --port 5000</pre>
 
   <section class="panel">
     <h2>■ Stop the server</h2>
-    <p><b>Easiest:</b> click into the PowerShell window that is running the
-       server and press <span class="kbd">Ctrl</span> + <span class="kbd">C</span>.</p>
+    <p><b>Easiest:</b> click <a href="{{ url_for('main.quit_app') }}">⏻ Quit</a>
+       in the top bar — or press <span class="kbd">Ctrl</span> +
+       <span class="kbd">C</span> in the server console window.</p>
     <p>If it is running in the background (or you closed the window), stop it by
        its port:</p>
     <pre class="jd"># find &amp; stop whatever is listening on port {{ port }}

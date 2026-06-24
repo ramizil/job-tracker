@@ -17,6 +17,8 @@ h3{font-size:13px;margin:14px 0 6px;color:#aebac8;text-transform:uppercase;lette
 .topbar nav{display:flex;gap:16px;align-items:center}
 .topbar nav a{color:var(--muted)}
 .topbar nav a:hover{color:#fff;text-decoration:none}
+.topbar nav a.quit{color:#ff9a9a}
+.topbar nav a.quit:hover{color:#ffb4b4}
 .sep{width:1px;height:18px;background:var(--rule)}
 .container{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
 
