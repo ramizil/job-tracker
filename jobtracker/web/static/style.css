@@ -18,7 +18,7 @@ body{
 }
 /* animated aurora field */
 body::before{
-  content:"";position:fixed;inset:-20%;z-index:-2;pointer-events:none;
+  content:"";position:fixed;inset:-20%;z-index:-3;pointer-events:none;
   background:
     radial-gradient(40% 50% at 18% 22%,rgba(34,211,238,.18),transparent 60%),
     radial-gradient(45% 55% at 82% 18%,rgba(168,85,247,.20),transparent 60%),
@@ -29,7 +29,7 @@ body::before{
 }
 /* faint tech grid overlay */
 body::after{
-  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;opacity:.5;
   background-image:
     linear-gradient(rgba(124,150,200,.05) 1px,transparent 1px),
     linear-gradient(90deg,rgba(124,150,200,.05) 1px,transparent 1px);
@@ -40,10 +40,18 @@ body::after{
   0%{transform:translate3d(0,0,0) scale(1)}
   100%{transform:translate3d(0,-3%,0) scale(1.06)}
 }
+/* constellation canvas sits above the gradient/grid, below content */
+#fx{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none}
 a{color:var(--accent);text-decoration:none;transition:color .15s,text-shadow .15s}
 a:hover{text-decoration:none;text-shadow:0 0 12px rgba(34,211,238,.6)}
 code{background:rgba(8,14,24,.8);padding:1px 6px;border-radius:5px;color:#7dd3fc;font-size:.9em;border:1px solid var(--rule)}
-h1{font-size:23px;margin:14px 0;letter-spacing:.2px}
+h1{
+  font-size:23px;margin:14px 0;letter-spacing:.2px;font-weight:800;
+  background:linear-gradient(100deg,#eaf2ff 0%,#22d3ee 30%,#a855f7 55%,#eaf2ff 80%);
+  background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:titleflow 7s linear infinite;
+}
+@keyframes titleflow{to{background-position:220% 0}}
 h2{font-size:15px;margin:0 0 10px;color:#dbe6f5;letter-spacing:.3px}
 h3{font-size:12px;margin:14px 0 6px;color:#94a8c4;text-transform:uppercase;letter-spacing:1.4px}
 ::selection{background:rgba(124,58,237,.45);color:#fff}
@@ -134,15 +142,17 @@ table.mini td.r{text-align:right;color:var(--muted)}
 .fit-yes{background:rgba(16,52,34,.7);color:#9af3c4;border:1px solid rgba(52,211,153,.55);box-shadow:0 0 16px -4px rgba(52,211,153,.6)}
 .fit-maybe{background:rgba(40,34,14,.7);color:#ffe6a3;border:1px solid rgba(251,191,36,.5);box-shadow:0 0 16px -4px rgba(251,191,36,.5)}
 .fit-no{background:rgba(46,18,22,.7);color:#ffc0c8;border:1px solid rgba(251,113,133,.5);box-shadow:0 0 16px -4px rgba(251,113,133,.55)}
-.status-saved{background:rgba(11,40,58,.8);color:#7cc7ff}
-.status-applied{background:rgba(16,42,68,.85);color:#69b4ff}
-.status-screening{background:rgba(42,36,16,.85);color:#ffe08a}
-.status-interview{background:rgba(42,16,48,.85);color:#e6a8ff}
-.status-offer{background:rgba(14,42,24,.85);color:#7ff0a6}
-.status-accepted{background:rgba(14,42,24,.85);color:#7ff0a6}
-.status-rejected{background:rgba(42,18,18,.85);color:#ffb4b4}
-.status-withdrawn{background:rgba(28,37,48,.85);color:#9aa7b6}
-.status-ghosted{background:rgba(28,37,48,.85);color:#9aa7b6}
+[class*="status-"]{border:1px solid transparent;text-shadow:0 0 8px currentColor;transition:box-shadow .2s,transform .15s}
+.pchip[class*="status-"]:hover,.pill[class*="status-"]:hover{transform:translateY(-1px)}
+.status-saved{background:rgba(11,40,58,.8);color:#7cc7ff;border-color:rgba(124,199,255,.4);box-shadow:0 0 14px -2px rgba(124,199,255,.55)}
+.status-applied{background:rgba(16,42,68,.85);color:#69b4ff;border-color:rgba(105,180,255,.4);box-shadow:0 0 14px -2px rgba(105,180,255,.55)}
+.status-screening{background:rgba(42,36,16,.85);color:#ffe08a;border-color:rgba(255,224,138,.4);box-shadow:0 0 14px -2px rgba(255,224,138,.5)}
+.status-interview{background:rgba(42,16,48,.85);color:#e6a8ff;border-color:rgba(230,168,255,.45);box-shadow:0 0 16px -2px rgba(230,168,255,.6)}
+.status-offer{background:rgba(14,42,24,.85);color:#7ff0a6;border-color:rgba(127,240,166,.45);box-shadow:0 0 16px -2px rgba(127,240,166,.6)}
+.status-accepted{background:rgba(14,42,24,.85);color:#7ff0a6;border-color:rgba(127,240,166,.45);box-shadow:0 0 16px -2px rgba(127,240,166,.6)}
+.status-rejected{background:rgba(42,18,18,.85);color:#ffb4b4;border-color:rgba(255,180,180,.4);box-shadow:0 0 14px -2px rgba(255,180,180,.5)}
+.status-withdrawn{background:rgba(28,37,48,.85);color:#9aa7b6;border-color:rgba(154,167,182,.3)}
+.status-ghosted{background:rgba(28,37,48,.85);color:#9aa7b6;border-color:rgba(154,167,182,.3)}
 
 /* buttons / forms */
 .btn{
@@ -249,6 +259,8 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 
 @media(prefers-reduced-motion:reduce){
   body::before{animation:none}
-  .funnel-fill{animation:none}
+  .funnel-fill,h1{animation:none}
+  h1{color:#eaf2ff;-webkit-text-fill-color:#eaf2ff}
+  #fx{display:none}
   *{transition:none!important}
 }
