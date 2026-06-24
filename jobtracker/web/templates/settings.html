@@ -60,10 +60,41 @@
     </div>
   </section>
 
+  <section class="panel">
+    <h2>💾 Backup location</h2>
+    <div class="setting">
+      <label for="BACKUP_DIR">Backup folder</label>
+      <input type="text" id="BACKUP_DIR" name="BACKUP_DIR" value="{{ values.BACKUP_DIR }}" placeholder="C:\Users\...\OneDrive\JobTrackerBackups">
+      <small>Tip: point this at a <b>OneDrive</b> folder so backups are private and auto-synced to the cloud. Save settings first, then use “Back up now” below.</small>
+    </div>
+  </section>
+
   <div class="actions">
     <button class="btn primary" type="submit">💾 Save settings</button>
   </div>
 </form>
+
+<section class="panel">
+  <h2>🗄️ Backup &amp; restore</h2>
+  <p class="muted">A backup copies your database (all applications + AI analyses,
+    cover letters, recruiter notes), match profile, settings (<code>.env</code>)
+    and tailored resumes. Your live data lives in <code>{{ data_dir }}</code>.</p>
+  <div class="actions">
+    <form method="post" action="{{ url_for('main.backup_now') }}">
+      <button class="btn primary" type="submit">📦 Back up now → {{ backup_dir }}</button>
+    </form>
+    <a class="btn" href="{{ url_for('main.backup_download') }}">⬇️ Download backup (.zip)</a>
+  </div>
+  <details class="mt">
+    <summary class="btn sm danger">Restore from a backup folder…</summary>
+    <form method="post" action="{{ url_for('main.restore') }}" class="stack mt"
+          onsubmit="return confirm('Restore will OVERWRITE your current database and settings. Continue?')">
+      <input name="folder" placeholder="path to a jobtracker-backup-YYYYMMDD-HHMMSS folder">
+      <small>Overwrites the current DB, profile, settings and tailored resumes with the backup's contents.</small>
+      <button class="btn danger" type="submit">Restore (overwrite current data)</button>
+    </form>
+  </details>
+</section>
 
 <section class="panel">
   <h2>Match profile</h2>

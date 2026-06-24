@@ -28,6 +28,15 @@ TAILORED_DIR.mkdir(exist_ok=True)
 
 DEFAULT_RESUME = BASE_DIR / "sample_resume.html"
 
+
+def _default_backup_dir() -> Path:
+    """Prefer a OneDrive folder (auto-synced + private), else a local folder."""
+    for var in ("OneDriveCommercial", "OneDrive", "OneDriveConsumer"):
+        root = os.getenv(var)
+        if root and Path(root).exists():
+            return Path(root) / "JobTrackerBackups"
+    return BASE_DIR / "backups"
+
 # Keys that the Settings UI manages (editable). Maps env var -> description.
 EDITABLE_KEYS: dict[str, str] = {
     "RAPIDAPI_KEY": "JSearch (RapidAPI) - includes LinkedIn listings, Israel",
@@ -37,6 +46,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
     "GEMINI_MODEL": "Gemini model (default gemini-2.5-flash)",
     "RESUME_PATH": "Path to your resume HTML",
+    "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
 }
 
 # Module-level settings (re-assigned by reload()).
@@ -47,12 +57,13 @@ ADZUNA_APP_KEY = ""
 GEMINI_API_KEY = ""
 GEMINI_MODEL = "gemini-2.5-flash"
 RESUME_PATH = DEFAULT_RESUME
+BACKUP_DIR = _default_backup_dir()
 
 
 def reload() -> None:
     """(Re)load values from .env into this module's globals."""
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
-    global GEMINI_API_KEY, GEMINI_MODEL, RESUME_PATH
+    global GEMINI_API_KEY, GEMINI_MODEL, RESUME_PATH, BACKUP_DIR
 
     load_dotenv(ENV_PATH, override=True)
     RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "").strip()
@@ -62,6 +73,7 @@ def reload() -> None:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
     RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
+    BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or _default_backup_dir())
 
 
 def current_settings() -> dict[str, str]:
@@ -74,6 +86,7 @@ def current_settings() -> dict[str, str]:
         "GEMINI_API_KEY": GEMINI_API_KEY,
         "GEMINI_MODEL": GEMINI_MODEL,
         "RESUME_PATH": str(RESUME_PATH),
+        "BACKUP_DIR": str(BACKUP_DIR),
     }
 
 

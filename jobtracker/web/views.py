@@ -9,7 +9,7 @@ from flask import (
     request, send_file, url_for,
 )
 
-from .. import ai, analytics, config, exporter, tracker
+from .. import ai, analytics, backup, config, exporter, tracker
 from .. import resume as resume_mod
 from ..config import TAILORED_DIR
 from ..matcher import score_job
@@ -72,7 +72,44 @@ def settings():
         sources=[s.name for s in get_sources()],
         ai_on=ai.is_configured(),
         env_path=str(config.ENV_PATH),
+        backup_dir=str(config.BACKUP_DIR),
+        data_dir=str(config.DATA_DIR),
     )
+
+
+@bp.route("/settings/backup", methods=["POST"])
+def backup_now():
+    dest = request.form.get("dest", "").strip() or None
+    try:
+        folder = backup.make_backup(dest)
+        flash(f"Backup saved to {folder}", "ok")
+    except Exception as exc:
+        flash(f"Backup failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/backup/download")
+def backup_download():
+    import io
+    data = backup.backup_zip_bytes()
+    stamp = __import__("datetime").datetime.now().strftime("%Y%m%d-%H%M%S")
+    return send_file(io.BytesIO(data), mimetype="application/zip",
+                     as_attachment=True,
+                     download_name=f"jobtracker-backup-{stamp}.zip")
+
+
+@bp.route("/settings/restore", methods=["POST"])
+def restore():
+    folder = request.form.get("folder", "").strip()
+    if not folder:
+        flash("Enter the path to a backup folder to restore from.", "error")
+        return redirect(url_for("main.settings"))
+    try:
+        restored = backup.restore_from(folder)
+        flash(f"Restored: {', '.join(restored) or 'nothing found'}.", "ok")
+    except Exception as exc:
+        flash(f"Restore failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
 
 
 @bp.route("/settings/rebuild-profile", methods=["POST"])
