@@ -4,10 +4,11 @@
 <div class="panel-head"><h1>📋 Paste a Job</h1></div>
 
 <p class="muted" style="max-width:760px">
-  Copy a posting from LinkedIn, AllJobs, Drushim, an email — anything — and paste
-  it below together with the page URL. {% if ai_on %}AI will auto-fill the title,
-  company, location and salary for you (leave them blank).{% else %}Fill in the
-  title and company yourself, or turn on the Gemini key in
+  Copy a posting from <b>LinkedIn, AllJobs, Drushim, JobMaster, Glassdoor</b> —
+  Hebrew or English — and paste it below with the page URL.
+  {% if ai_on %}AI will auto-fill the title, company, location and salary for you
+  (leave them blank), and the source is detected from the URL automatically.
+  {% else %}Fill in the title and company yourself, or turn on the Gemini key in
   <a href="{{ url_for('main.settings') }}">Settings</a> to auto-extract them.{% endif %}
 </p>
 
@@ -35,7 +36,7 @@
     </div>
     <div class="row">
       <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s=='saved' }}>{{ s }}</option>{% endfor %}</select>
-      <input name="source" placeholder="Source" value="paste">
+      <input name="source" placeholder="Source (auto-detected from URL, e.g. linkedin)">
     </div>
   </fieldset>
 

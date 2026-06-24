@@ -26,6 +26,34 @@ def _tailored_path(app_id: int):
     return TAILORED_DIR / f"{app_id}.html"
 
 
+# Recognise common job sites (incl. Israeli boards) from a pasted URL.
+_SOURCE_DOMAINS = [
+    ("linkedin.com", "linkedin"),
+    ("alljobs.co.il", "alljobs"),
+    ("drushim.co.il", "drushim"),
+    ("jobmaster.co.il", "jobmaster"),
+    ("jobinfo.co.il", "jobinfo"),
+    ("ethosia.co.il", "ethosia"),
+    ("glassdoor.", "glassdoor"),
+    ("indeed.", "indeed"),
+    ("jooble.org", "jooble"),
+    ("comeet.com", "comeet"),
+    ("greenhouse.io", "greenhouse"),
+    ("lever.co", "lever"),
+    ("facebook.com", "facebook"),
+    ("google.com", "google"),
+]
+
+
+def _source_from_url(url: str) -> str:
+    """Best-effort job-source label inferred from a posting URL."""
+    u = (url or "").lower()
+    for needle, label in _SOURCE_DOMAINS:
+        if needle in u:
+            return label
+    return ""
+
+
 def md_to_html(text: str) -> str:
     """Tiny, safe markdown -> HTML (headings, bold, bullets, line breaks)."""
     if not text:
@@ -260,10 +288,16 @@ def paste_job():
     if not company:
         company = "(unknown)"
 
+    # Prefer a source auto-detected from the URL (e.g. linkedin, alljobs,
+    # drushim) over the generic default.
+    source = (f.get("source") or "").strip()
+    if source in ("", "paste"):
+        source = _source_from_url(url) or "paste"
+
     score = score_job(title, text).score
     app_id = tracker.add_application(
         company=company, title=title, location=location, url=url,
-        description=text, salary=salary, source=f.get("source", "paste"),
+        description=text, salary=salary, source=source,
         status=f.get("status", "saved"), match_score=score,
     )
     flash(f"Captured job as #{app_id}. Review and adjust the details below.", "ok")

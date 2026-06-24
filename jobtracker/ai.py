@@ -191,13 +191,17 @@ def analyze_fit(*, title: str, company: str, location: str,
 
 # --------------------------------------------------------------------------- #
 _PARSE_PROMPT = """You are a parser. Extract structured fields from the pasted
-job posting below. Return ONLY valid JSON with EXACTLY this shape (use an empty
-string "" for anything you cannot determine, never guess):
+job posting below. The posting may be in English or Hebrew and may come from
+LinkedIn, AllJobs, Drushim, JobMaster, Glassdoor, Indeed or a company site,
+so ignore site navigation/boilerplate and focus on the actual vacancy.
+
+Return ONLY valid JSON with EXACTLY this shape (use an empty string "" for
+anything you cannot determine, never guess):
 
 {{
-  "title": "the job title",
+  "title": "the job title (keep its original language)",
   "company": "the hiring company / employer name",
-  "location": "city, country (or 'Remote')",
+  "location": "city, country (or 'Remote'). For Israeli cities include 'Israel'",
   "salary": "salary or range if stated, else ''",
   "employment_type": "Full-time | Part-time | Contract | Intern | ''"
 }}
