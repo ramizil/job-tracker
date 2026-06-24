@@ -220,6 +220,79 @@ def parse_job(text: str) -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------- #
+_COVER_LETTER_PROMPT = """You are an expert career writer. Write a tailored
+cover letter for the candidate applying to the job below, grounded ONLY in the
+facts present in their resume. Rules:
+- 3 to 4 short paragraphs, ~250-350 words total.
+- Confident and specific, never generic or boastful. No clichés like
+  "I am writing to apply".
+- Open with a strong hook tying the candidate's strongest, relevant experience
+  to this specific role/company.
+- Reference 2-3 concrete requirements from the job and the matching evidence.
+- Do NOT invent employers, dates, titles, metrics, or skills.
+- Plain text only (no markdown, no placeholders like [Your Name] unless the
+  name is unknown). End with a brief, warm sign-off.
+
+{extra}JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def cover_letter(*, title: str, company: str, location: str = "",
+                 description: str = "", instructions: str = "",
+                 resume: str | None = None) -> str:
+    """Generate a tailored cover letter (plain text). Raises AIError on failure."""
+    extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
+    prompt = _COVER_LETTER_PROMPT.format(
+        extra=extra, title=title or "", company=company or "",
+        location=location or "", description=(description or "")[:6000],
+        resume=(resume or resume_text())[:9000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```\w*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text
+
+
+_RECRUITER_NOTE_PROMPT = """You are the candidate. Write a SHORT outreach
+message to the recruiter / hiring manager for the job below — the kind of note
+sent with a LinkedIn connection request or a job application. Rules:
+- 3 to 5 sentences, under ~90 words. Warm, professional, direct.
+- Mention the specific role and 1-2 of the strongest, relevant strengths.
+- A light, confident call to action at the end.
+- No markdown, no subject line, no placeholders. Just the message body.
+
+{extra}JOB:
+Title: {title}
+Company: {company}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def recruiter_note(*, title: str, company: str, instructions: str = "",
+                   resume: str | None = None) -> str:
+    """Generate a short recruiter outreach note (plain text)."""
+    extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
+    prompt = _RECRUITER_NOTE_PROMPT.format(
+        extra=extra, title=title or "", company=company or "",
+        resume=(resume or resume_text())[:6000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```\w*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text
+
+
+# --------------------------------------------------------------------------- #
 _TAILOR_PROMPT = """You are an expert resume writer. Rewrite the candidate's
 HTML resume so it is optimally positioned for the SPECIFIC job below, applying
 the TAILORING INSTRUCTIONS. Hard rules:

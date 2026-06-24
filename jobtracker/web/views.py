@@ -290,6 +290,59 @@ def analyze(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id))
 
 
+@bp.route("/application/<int:app_id>/cover-letter", methods=["POST"])
+def cover_letter(app_id: int):
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    instructions = request.form.get("instructions", "").strip()
+    try:
+        text = ai.cover_letter(
+            title=r["title"], company=r["company"], location=r["location"] or "",
+            description=r["description"] or "", instructions=instructions,
+        )
+        tracker.set_cover_letter(app_id, text)
+        flash("Cover letter generated.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#cover")
+
+
+@bp.route("/application/<int:app_id>/cover-letter/save", methods=["POST"])
+def cover_letter_save(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    tracker.set_cover_letter(app_id, request.form.get("text", ""))
+    flash("Cover letter saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#cover")
+
+
+@bp.route("/application/<int:app_id>/recruiter-note", methods=["POST"])
+def recruiter_note(app_id: int):
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    instructions = request.form.get("instructions", "").strip()
+    try:
+        text = ai.recruiter_note(
+            title=r["title"], company=r["company"], instructions=instructions,
+        )
+        tracker.set_recruiter_note(app_id, text)
+        flash("Recruiter note generated.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#note")
+
+
+@bp.route("/application/<int:app_id>/recruiter-note/save", methods=["POST"])
+def recruiter_note_save(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    tracker.set_recruiter_note(app_id, request.form.get("text", ""))
+    flash("Recruiter note saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#note")
+
+
 @bp.route("/application/<int:app_id>/tailor", methods=["POST"])
 def tailor(app_id: int):
     r = tracker.get_application(app_id)

@@ -115,10 +115,72 @@
         {% endif %}
       {% endif %}
     </section>
+
+    <section class="panel ai" id="cover">
+      <div class="panel-head"><h2>✉️ Cover letter</h2>
+        {% if app.cover_letter_at %}<span class="muted sm">saved {{ (app.cover_letter_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% else %}
+        <form method="post" action="{{ url_for('main.cover_letter', app_id=app.id) }}" data-loading="Writing your cover letter with Gemini…" class="stack">
+          <input name="instructions" placeholder="optional: tone / points to emphasise (e.g. 'emphasise hands-on QA, keep it warm')">
+          <button class="btn primary" type="submit">{{ 'Regenerate' if app.cover_letter else 'Generate' }} cover letter</button>
+        </form>
+        {% if app.cover_letter %}
+        <form method="post" action="{{ url_for('main.cover_letter_save', app_id=app.id) }}" class="stack mt">
+          <textarea name="text" rows="14" class="gen-text">{{ app.cover_letter }}</textarea>
+          <div class="actions">
+            <button class="btn" type="submit">Save edits</button>
+            <button class="btn sm" type="button" data-copy="prev">Copy</button>
+          </div>
+        </form>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="panel ai" id="note">
+      <div class="panel-head"><h2>💬 Note to recruiter</h2>
+        {% if app.recruiter_note_at %}<span class="muted sm">saved {{ (app.recruiter_note_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% else %}
+        <form method="post" action="{{ url_for('main.recruiter_note', app_id=app.id) }}" data-loading="Writing your recruiter note with Gemini…" class="stack">
+          <input name="instructions" placeholder="optional: e.g. 'mention I'm open to relocation', 'keep it casual'">
+          <button class="btn primary" type="submit">{{ 'Regenerate' if app.recruiter_note else 'Generate' }} recruiter note</button>
+        </form>
+        {% if app.recruiter_note %}
+        <form method="post" action="{{ url_for('main.recruiter_note_save', app_id=app.id) }}" class="stack mt">
+          <textarea name="text" rows="6" class="gen-text">{{ app.recruiter_note }}</textarea>
+          <div class="actions">
+            <button class="btn" type="submit">Save edits</button>
+            <button class="btn sm" type="button" data-copy="prev">Copy</button>
+          </div>
+        </form>
+        {% endif %}
+      {% endif %}
+    </section>
   </div>
 </div>
 
 <form method="post" action="{{ url_for('main.delete', app_id=app.id) }}" onsubmit="return confirm('Delete this application?')">
   <button class="btn danger sm" type="submit">Delete application</button>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('button[data-copy="prev"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ta = btn.closest('form').querySelector('textarea');
+      if (!ta) return;
+      navigator.clipboard.writeText(ta.value).then(function () {
+        var old = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = old; }, 1500);
+      });
+    });
+  });
+</script>
 {% endblock %}

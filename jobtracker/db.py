@@ -65,6 +65,10 @@ EXTRA_COLUMNS: dict[str, str] = {
     "ai_analysis_json": "TEXT",    # full structured analysis (JSON)
     "ai_analyzed_at": "TEXT",
     "tailored_at": "TEXT",         # when a tailored resume was generated
+    "cover_letter": "TEXT",        # generated/edited cover letter
+    "cover_letter_at": "TEXT",
+    "recruiter_note": "TEXT",      # short outreach message to the recruiter
+    "recruiter_note_at": "TEXT",
 }
 
 

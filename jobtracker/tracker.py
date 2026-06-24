@@ -197,6 +197,26 @@ def get_ai_analysis(app_id: int) -> dict[str, Any] | None:
         return None
 
 
+def set_cover_letter(app_id: int, text: str) -> bool:
+    """Persist (generated or edited) cover letter text."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET cover_letter=?, cover_letter_at=?, updated_at=? WHERE id=?",
+            (text, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
+def set_recruiter_note(app_id: int, text: str) -> bool:
+    """Persist (generated or edited) recruiter outreach note."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET recruiter_note=?, recruiter_note_at=?, updated_at=? WHERE id=?",
+            (text, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def mark_tailored(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute(
