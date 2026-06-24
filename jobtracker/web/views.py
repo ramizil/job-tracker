@@ -152,6 +152,14 @@ def rebuild_profile():
     return redirect(url_for("main.settings"))
 
 
+@bp.route("/heartbeat", methods=["POST", "GET"])
+def heartbeat():
+    """Liveness ping from an open UI tab; resets the idle-shutdown timer."""
+    from . import watchdog
+    watchdog.ping()
+    return ("", 204)
+
+
 @bp.route("/quit", methods=["GET", "POST"])
 def quit_app():
     """Confirm (GET) then stop the local server (POST)."""

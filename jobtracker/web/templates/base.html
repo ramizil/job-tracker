@@ -69,6 +69,22 @@
     })();
   </script>
 
+  <script>
+    // Liveness heartbeat: keeps the local server alive only while a tab is open.
+    // When the window/tab is closed, pings stop and the server auto-shuts down.
+    (function () {
+      function beat() {
+        fetch('{{ url_for('main.heartbeat') }}', { method: 'POST', keepalive: true })
+          .catch(function () {});
+      }
+      beat();
+      setInterval(beat, 15000);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) beat();
+      });
+    })();
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

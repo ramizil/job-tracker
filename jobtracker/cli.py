@@ -262,20 +262,32 @@ def web(host: str = typer.Option("127.0.0.1", "--host"),
         open_window: bool = typer.Option(True, "--open/--no-open",
                                          help="Open a standalone app window."),
         fullscreen: bool = typer.Option(False, "--fullscreen",
-                                        help="Open the app window fullscreen.")):
+                                        help="Open the app window fullscreen."),
+        auto_shutdown: bool = typer.Option(
+            True, "--auto-shutdown/--no-auto-shutdown",
+            help="Stop the server automatically when the browser is closed."),
+        idle_timeout: int = typer.Option(
+            90, "--idle-timeout",
+            help="Seconds with no open tab before auto-shutdown.")):
     """Launch the Flask web dashboard (funnel, Kanban, AI, export)."""
     from .web import create_app
     disp = "127.0.0.1" if host in ("0.0.0.0", "") else host
     url = f"http://{disp}:{port}/"
     console.print(f"[green]Dashboard:[/green] {url}")
     console.print("[dim]Press Ctrl+C in this window to stop the server.[/dim]")
+    if auto_shutdown:
+        console.print(f"[dim]Auto-shutdown: on (stops ~{idle_timeout}s after the "
+                      "window is closed).[/dim]")
     if open_window:
         import threading
         from .launcher import open_app_window
         threading.Timer(
             1.5, open_app_window, kwargs={"url": url, "fullscreen": fullscreen}
         ).start()
-    create_app().run(host=host, port=port, debug=debug)
+    if auto_shutdown:
+        from .web import watchdog
+        watchdog.start(timeout=idle_timeout)
+    create_app().run(host=host, port=port, debug=debug, threaded=True)
 
 
 @app.command()
