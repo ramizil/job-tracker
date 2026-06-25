@@ -234,10 +234,13 @@ _ANALYSIS_PROMPT = """You are a senior technical recruiter and career coach.
 Compare the CANDIDATE RESUME against the JOB POSTING and produce a brutally
 honest fit analysis. Return ONLY valid JSON with EXACTLY this shape:
 
-LANGUAGE: Write all human-readable text values (verdict, requirement, evidence,
-risks, suggestion action/rationale, analysis_markdown) in {lang}. Keep the JSON
-keys, the "fit_level" value (YES/MAYBE/NO) and the "match" value
-(strong/partial/gap) in English regardless of language.
+LANGUAGE (bilingual, REQUIRED): Write EVERY human-readable text value (verdict,
+requirement, evidence, risks, suggestion action/rationale) in BOTH English and
+Hebrew, formatted as "English text — Hebrew text" (English first, then " — ",
+then the Hebrew translation). For "analysis_markdown", write the full write-up
+in English first, then a "## עברית" heading followed by the same write-up in
+Hebrew. Keep the JSON keys, the "fit_level" value (YES/MAYBE/NO) and the "match"
+value (strong/partial/gap) in English only.
 
 {{
   "fit_level": "YES" | "MAYBE" | "NO",
@@ -271,9 +274,12 @@ CANDIDATE RESUME (plain text):
 def analyze_fit(*, title: str, company: str, location: str,
                 description: str, resume: str | None = None,
                 language: str = "en") -> dict[str, Any]:
-    """Return a structured fit analysis dict (see _ANALYSIS_PROMPT)."""
+    """Return a structured fit analysis dict (see _ANALYSIS_PROMPT).
+
+    The analysis is always produced bilingually (English + Hebrew); the
+    ``language`` argument is accepted for API compatibility but ignored.
+    """
     prompt = _ANALYSIS_PROMPT.format(
-        lang=_lang_name(language),
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:8000],
         resume=(resume or resume_text())[:9000],
@@ -285,7 +291,7 @@ def analyze_fit(*, title: str, company: str, location: str,
     data.setdefault("fit_level", "MAYBE")
     data.setdefault("verdict", "")
     data.setdefault("suggestions", [])
-    data["language"] = (language or "en").lower()
+    data["language"] = "bi"
     return data
 
 
@@ -374,7 +380,7 @@ sent with a LinkedIn connection request or a job application. Rules:
 - Mention the specific role and 1-2 of the strongest, relevant strengths.
 - A light, confident call to action at the end.
 - No markdown, no subject line, no placeholders. Just the message body.
-- Write the ENTIRE message in {lang} (natural, professional {lang}).
+{lang_rule}
 
 {extra}JOB:
 Title: {title}
@@ -387,10 +393,26 @@ CANDIDATE RESUME (plain text):
 
 def recruiter_note(*, title: str, company: str, instructions: str = "",
                    resume: str | None = None, language: str = "en") -> str:
-    """Generate a short recruiter outreach note (plain text)."""
+    """Generate a short recruiter outreach note (plain text).
+
+    An English version is always included. If the chosen language is not
+    English, the note is produced in that language first and then the English
+    version below a divider; otherwise it is English only.
+    """
+    lang = (language or "en").lower()
+    if lang == "en":
+        lang_rule = "- Write the ENTIRE message in English (natural, professional English)."
+    else:
+        ln = _lang_name(lang)
+        lang_rule = (
+            f"- Produce TWO versions of the message. First the message in {ln} "
+            f"(natural, professional {ln}), then a line containing only '———', "
+            "then the SAME message in English. Label the first block with a line "
+            f"'{ln}:' and the English block with a line 'English:'."
+        )
     extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
     prompt = _RECRUITER_NOTE_PROMPT.format(
-        lang=_lang_name(language),
+        lang_rule=lang_rule,
         extra=extra, title=title or "", company=company or "",
         resume=(resume or resume_text())[:6000],
     )

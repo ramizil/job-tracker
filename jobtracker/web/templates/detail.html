@@ -54,26 +54,65 @@
   </div>
 
   <div>
+    <section class="panel ai" id="quick-copy">
+      <div class="panel-head"><h2>🔗 Quick copy</h2></div>
+      <p class="muted sm">One-click copy for job application forms.</p>
+      <div class="copy-list">
+        <div class="copy-row">
+          <span class="copy-label">LinkedIn</span>
+          <code class="copy-val">www.linkedin.com/in/rami-zilbershmit-4064a934</code>
+          <button class="btn sm" type="button" data-copy-text="www.linkedin.com/in/rami-zilbershmit-4064a934">Copy</button>
+        </div>
+        <div class="copy-row">
+          <span class="copy-label">Website</span>
+          <code class="copy-val">https://github.com/ramizil</code>
+          <button class="btn sm" type="button" data-copy-text="https://github.com/ramizil">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel ai" id="ai-generate">
+      <div class="panel-head"><h2>🤖 Generate with AI</h2></div>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to enable AI generation.</p>
+      {% else %}
+        <p class="muted">Tick what you want and generate it all in one click. Re-running an item overwrites the previous result.</p>
+        <form method="post" action="{{ url_for('main.generate_batch', app_id=app.id) }}" data-loading="Generating your selected items with Gemini… this can take a minute or two." class="stack">
+          <div class="gen-picks">
+            <label class="gen-pick"><input type="checkbox" name="items" value="analyze" checked>
+              <span><b>Fit analysis</b><br><span class="muted">how well your resume matches this job</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="cover">
+              <span><b>Cover letter</b><br><span class="muted">tailored to the role</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="note">
+              <span><b>Note to recruiter</b><br><span class="muted">short intro message</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="prep">
+              <span><b>Interview &amp; test prep</b><br><span class="muted">likely questions + tips</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="mock">
+              <span><b>Mock interview</b><br><span class="muted">listenable Q&amp;A simulation</span></span></label>
+          </div>
+          <input name="instructions" placeholder="optional instructions (used by cover letter / recruiter note / interview prep)">
+          <p class="muted sm" style="margin:2px 0 0">Language applies to cover letter / interview prep / mock. <b>Fit analysis</b> is always English + Hebrew; <b>Note to recruiter</b> always includes an English version.</p>
+          <div class="row">
+            <label class="lang">Language
+              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
+            </label>
+            <button class="btn primary" type="submit">Generate selected →</button>
+          </div>
+          <label class="gen-all"><input type="checkbox" id="gen-all"> select all</label>
+        </form>
+      {% endif %}
+    </section>
+
     <section class="panel ai">
       <div class="panel-head"><h2>🤖 AI fit analysis</h2></div>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> to <code>.env</code> to enable AI analysis.</p>
       {% elif not analysis %}
-        <p class="muted">Run a Gemini analysis of how well your resume fits this job.</p>
-        <form method="post" action="{{ url_for('main.analyze', app_id=app.id) }}" data-loading="Analyzing your fit with Gemini…" class="inline">
-          <label class="lang">Language
-            <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
-          </label>
-          <button class="btn primary" type="submit">Analyze fit with Gemini</button>
-        </form>
+        <p class="muted">Tick <b>Fit analysis</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
       {% else %}
         <div class="verdict">
           <span class="fit big fit-{{ (analysis.fit_level or 'maybe')|lower }}">{{ analysis.fit_level }}</span>
           <div dir="auto"><b>{{ analysis.verdict }}</b>{% if analysis.fit_score is defined %}<div class="muted">fit score {{ analysis.fit_score }}/100</div>{% endif %}</div>
-          <form method="post" action="{{ url_for('main.analyze', app_id=app.id) }}" class="reanalyze" data-loading="Re-analyzing your fit with Gemini…">
-            <select name="language" class="lang-sm"><option value="en" {{ 'selected' if analysis.language != 'he' }}>EN</option><option value="he" {{ 'selected' if analysis.language == 'he' }}>עב</option></select>
-            <button class="btn sm" type="submit">Re-run</button>
-          </form>
         </div>
 
         {% if analysis.requirements %}
@@ -126,25 +165,17 @@
       </div>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% elif not app.cover_letter %}
+        <p class="muted">Tick <b>Cover letter</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
       {% else %}
-        <form method="post" action="{{ url_for('main.cover_letter', app_id=app.id) }}" data-loading="Writing your cover letter with Gemini…" class="stack">
-          <input name="instructions" placeholder="optional: tone / points to emphasise (e.g. 'emphasise hands-on QA, keep it warm')">
-          <div class="row">
-            <label class="lang">Language
-              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
-            </label>
-            <button class="btn primary" type="submit">{{ 'Regenerate' if app.cover_letter else 'Generate' }} cover letter</button>
-          </div>
-        </form>
-        {% if app.cover_letter %}
         <form method="post" action="{{ url_for('main.cover_letter_save', app_id=app.id) }}" class="stack mt">
           <textarea name="text" rows="14" class="gen-text" dir="auto">{{ app.cover_letter }}</textarea>
           <div class="actions">
             <button class="btn" type="submit">Save edits</button>
+            <button class="btn sm" type="submit" formaction="{{ url_for('main.cover_letter_pdf', app_id=app.id) }}" formtarget="_blank">⬇ Export PDF</button>
             <button class="btn sm" type="button" data-copy="prev">Copy</button>
           </div>
         </form>
-        {% endif %}
       {% endif %}
     </section>
 
@@ -154,17 +185,9 @@
       </div>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% elif not app.recruiter_note %}
+        <p class="muted">Tick <b>Note to recruiter</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
       {% else %}
-        <form method="post" action="{{ url_for('main.recruiter_note', app_id=app.id) }}" data-loading="Writing your recruiter note with Gemini…" class="stack">
-          <input name="instructions" placeholder="optional: e.g. 'mention I'm open to relocation', 'keep it casual'">
-          <div class="row">
-            <label class="lang">Language
-              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
-            </label>
-            <button class="btn primary" type="submit">{{ 'Regenerate' if app.recruiter_note else 'Generate' }} recruiter note</button>
-          </div>
-        </form>
-        {% if app.recruiter_note %}
         <form method="post" action="{{ url_for('main.recruiter_note_save', app_id=app.id) }}" class="stack mt">
           <textarea name="text" rows="6" class="gen-text" dir="auto">{{ app.recruiter_note }}</textarea>
           <div class="actions">
@@ -172,7 +195,6 @@
             <button class="btn sm" type="button" data-copy="prev">Copy</button>
           </div>
         </form>
-        {% endif %}
       {% endif %}
     </section>
 
@@ -183,17 +205,9 @@
       <p class="muted">Likely questions, take-home/test tips and smart questions to ask — generated from this job and your resume. Handy once you reach the interview or test stage.</p>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% elif not app.interview_prep %}
+        <p class="muted">Tick <b>Interview &amp; test prep</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
       {% else %}
-        <form method="post" action="{{ url_for('main.interview_prep', app_id=app.id) }}" data-loading="Building your interview prep with Gemini…" class="stack">
-          <input name="instructions" placeholder="optional: e.g. 'focus on system design', 'it's a live coding test', 'emphasise leadership'">
-          <div class="row">
-            <label class="lang">Language
-              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
-            </label>
-            <button class="btn primary" type="submit">{{ 'Regenerate' if app.interview_prep else 'Generate' }} interview prep</button>
-          </div>
-        </form>
-        {% if app.interview_prep %}
         <div class="md mt" dir="auto">{{ app.interview_prep | md | safe }}</div>
         <details class="mt">
           <summary class="btn sm">Edit prep</summary>
@@ -205,7 +219,6 @@
             </div>
           </form>
         </details>
-        {% endif %}
       {% endif %}
     </section>
 
@@ -216,17 +229,9 @@
       <p class="muted">A natural, relaxed interview simulation built from your resume — starts with “Tell me about yourself”. You can listen to it like a recording.</p>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% elif not (mock and mock.qa) %}
+        <p class="muted">Tick <b>Mock interview</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
       {% else %}
-        <form method="post" action="{{ url_for('main.mock_interview', app_id=app.id) }}" data-loading="Running your mock interview with Gemini…" class="stack">
-          <div class="row">
-            <label class="lang">Language
-              <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
-            </label>
-            <button class="btn primary" type="submit">{{ 'Regenerate' if mock else 'Generate' }} mock interview</button>
-          </div>
-        </form>
-
-        {% if mock and mock.qa %}
         <div class="mi-player mt" data-lang="{{ 'he-IL' if mock.language == 'he' else 'en-US' }}">
           <button class="btn sm primary" type="button" id="mi-play">▶ Listen</button>
           <button class="btn sm" type="button" id="mi-pause" disabled>⏸ Pause</button>
@@ -244,7 +249,6 @@
           </div>
           {% endfor %}
         </div>
-        {% endif %}
       {% endif %}
     </section>
   </div>
@@ -257,11 +261,40 @@
 
 {% block scripts %}
 <script>
+  // "select all" toggle for the one-click Generate-with-AI panel.
+  (function () {
+    var all = document.getElementById('gen-all');
+    if (!all) return;
+    var picks = document.querySelectorAll('.gen-picks input[name="items"]');
+    function syncAll() {
+      var on = Array.prototype.every.call(picks, function (c) { return c.checked; });
+      all.checked = on;
+    }
+    all.addEventListener('change', function () {
+      picks.forEach(function (c) { c.checked = all.checked; });
+    });
+    picks.forEach(function (c) { c.addEventListener('change', syncAll); });
+    syncAll();
+  })();
+</script>
+
+<script>
   document.querySelectorAll('button[data-copy="prev"]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var ta = btn.closest('form').querySelector('textarea');
       if (!ta) return;
       navigator.clipboard.writeText(ta.value).then(function () {
+        var old = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = old; }, 1500);
+      });
+    });
+  });
+
+  // Fixed-value copy buttons (Quick copy panel).
+  document.querySelectorAll('button[data-copy-text]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      navigator.clipboard.writeText(btn.getAttribute('data-copy-text')).then(function () {
         var old = btn.textContent;
         btn.textContent = 'Copied!';
         setTimeout(function () { btn.textContent = old; }, 1500);

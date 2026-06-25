@@ -218,6 +218,24 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 .sugg{display:flex;gap:8px;align-items:flex-start;background:rgba(30,41,64,.45);border:1px solid var(--rule);border-radius:10px;padding:10px;margin:6px 0;cursor:pointer;transition:border-color .15s,background .15s}
 .sugg:hover{border-color:rgba(34,211,238,.45);background:rgba(34,211,238,.06)}
 .sugg input{margin-top:3px}
+/* one-click Generate-with-AI picks */
+.gen-picks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 2px}
+@media(max-width:560px){.gen-picks{grid-template-columns:1fr}}
+.gen-pick{display:flex;gap:8px;align-items:flex-start;background:rgba(30,41,64,.45);border:1px solid var(--rule);border-radius:10px;padding:10px;cursor:pointer;transition:border-color .15s,background .15s;font-size:13px}
+.gen-pick:hover{border-color:rgba(34,211,238,.45);background:rgba(34,211,238,.06)}
+.gen-pick input{margin-top:3px}
+.gen-pick:has(input:checked){border-color:rgba(34,211,238,.65);background:rgba(34,211,238,.10)}
+.gen-all{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer}
+/* quick-copy panel */
+.copy-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.copy-row{display:flex;align-items:center;gap:8px;background:rgba(30,41,64,.45);border:1px solid var(--rule);border-radius:10px;padding:8px 10px}
+.copy-label{flex:0 0 64px;font-size:12px;color:var(--muted);font-weight:600}
+.copy-val{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.copy-row .btn{flex:0 0 auto}
+/* dashboard column-header tooltips + legend */
+.col-help{border-bottom:1px dotted var(--muted);cursor:help}
+.legend{font-size:12px;line-height:1.6;margin:10px 2px 0}
+.legend b{color:#dbe6f5}
 .md p{margin:6px 0}.md h1,.md h2,.md h3{color:#dbe6f5}
 /* mock interview */
 .mi-player{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border:1px solid var(--rule);border-radius:12px;background:rgba(8,14,24,.4)}

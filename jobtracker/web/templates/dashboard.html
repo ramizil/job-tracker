@@ -52,7 +52,11 @@
 <section class="panel">
   <div class="panel-head"><h2>Recent applications</h2><a class="btn sm" href="{{ url_for('main.applications') }}">View all</a></div>
   <table class="grid">
-    <thead><tr><th>ID</th><th>Status</th><th>Match</th><th>Company</th><th>Title</th><th>AI</th></tr></thead>
+    <thead><tr><th>ID</th><th>Status</th>
+      <th><span class="col-help" title="Offline keyword score (0-100%): how many of your resume's skills appear in the posting. Instant, automatic, no AI — title keywords count double.">Match</span></th>
+      <th>Company</th><th>Title</th>
+      <th><span class="col-help" title="Gemini's fit verdict (YES / MAYBE / NO): reads the posting and your resume and judges real suitability. Only shows once you run the AI fit analysis.">AI</span></th>
+    </tr></thead>
     <tbody>
       {% for r in recent %}
       <tr onclick="location.href='{{ url_for('main.detail', app_id=r.id) }}'">
@@ -68,5 +72,10 @@
       {% endfor %}
     </tbody>
   </table>
+  <p class="legend muted">
+    <b>Match</b> = offline keyword overlap with your resume (instant, automatic).
+    <b>AI</b> = Gemini's considered fit verdict (YES / MAYBE / NO), shown after you run the fit analysis.
+    They're independent — a low Match can still be an AI <span class="fit fit-yes">YES</span>, and vice-versa.
+  </p>
 </section>
 {% endblock %}

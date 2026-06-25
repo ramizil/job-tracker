@@ -57,7 +57,7 @@
       var msgEl = document.getElementById('loading-msg');
       var elapsedEl = document.getElementById('loading-elapsed');
       var cancelBtn = document.getElementById('loading-cancel');
-      var MAX_MS = 180000;          // auto-cancel after 3 minutes
+      var MAX_MS = 420000;          // auto-cancel after 7 min (batch generates can be long)
       var killTimer = null, tick = null, started = 0;
 
       function reEnable() {

@@ -476,6 +476,60 @@ def cover_letter_save(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id) + "#cover")
 
 
+def _cover_letter_html(text: str, r) -> str:
+    """Wrap the cover-letter text in a clean, printable A4 letter layout
+    (RTL-aware so Hebrew letters render correctly)."""
+    paras = re.split(r"\n\s*\n", text.strip())
+    body = "\n".join(
+        "<p>" + html_lib.escape(p).replace("\n", "<br>") + "</p>"
+        for p in paras if p.strip()
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><style>
+    @page {{ size: A4; margin: 22mm 20mm; }}
+    * {{ box-sizing: border-box; }}
+    html, body {{ margin: 0; padding: 0; }}
+    body {{ font-family: 'Calibri','Segoe UI',Arial,sans-serif; color:#1a1a1a;
+            font-size: 11.5pt; line-height: 1.55; }}
+    p {{ margin: 0 0 11px; }}
+    </style></head><body dir="auto">{body}</body></html>"""
+
+
+@bp.route("/application/<int:app_id>/cover-letter/pdf", methods=["GET", "POST"])
+def cover_letter_pdf(app_id: int):
+    """Export the cover letter as a PDF. POST sends the (possibly edited)
+    textarea content; GET falls back to the saved letter."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    text = (request.form.get("text") or r["cover_letter"] or "").strip()
+    if not text:
+        flash("Generate a cover letter first.", "error")
+        return redirect(url_for("main.detail", app_id=app_id) + "#cover")
+
+    import io
+    html = _cover_letter_html(text, r)
+    name = re.sub(r"[^A-Za-z0-9]+", "_",
+                  f"cover_letter_{r['company']}_{r['title']}").strip("_")
+
+    data = _render_pdf_with_browser(html)
+    if data:
+        return send_file(io.BytesIO(data), mimetype="application/pdf",
+                         as_attachment=True, download_name=f"{name}.pdf")
+    try:
+        from xhtml2pdf import pisa
+        out = io.BytesIO()
+        result = pisa.CreatePDF(src=html, dest=out, encoding="utf-8")
+        if not result.err and out.getbuffer().nbytes > 0:
+            out.seek(0)
+            return send_file(out, mimetype="application/pdf", as_attachment=True,
+                             download_name=f"{name}.pdf")
+    except Exception:
+        pass
+    flash("Couldn't build the PDF on the server (no local browser found). "
+          "Use your browser's Print / Save as PDF instead.", "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#cover")
+
+
 @bp.route("/application/<int:app_id>/recruiter-note", methods=["POST"])
 def recruiter_note(app_id: int):
     r = tracker.get_application(app_id)
@@ -549,6 +603,74 @@ def mock_interview(app_id: int):
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#mock")
+
+
+# Items the one-click "Generate with AI" panel can produce, in display order.
+_BATCH_ITEMS = {
+    "analyze": "fit analysis",
+    "cover": "cover letter",
+    "note": "recruiter note",
+    "prep": "interview prep",
+    "mock": "mock interview",
+}
+
+
+@bp.route("/application/<int:app_id>/generate", methods=["POST"])
+def generate_batch(app_id: int):
+    """Generate several AI artefacts in one request (the checkbox panel).
+
+    Each selected item runs in turn and is saved as soon as it completes, so a
+    failure (or the user closing the tab) never loses items already finished.
+    """
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    items = request.form.getlist("items")
+    language = request.form.get("language", "en")
+    instructions = request.form.get("instructions", "").strip()
+    if not items:
+        flash("Pick at least one thing to generate.", "error")
+        return redirect(url_for("main.detail", app_id=app_id))
+
+    title, company = r["title"], r["company"]
+    location, description = r["location"] or "", r["description"] or ""
+    done: list[str] = []
+    failed: list[str] = []
+
+    for key in (k for k in _BATCH_ITEMS if k in items):
+        try:
+            if key == "analyze":
+                tracker.set_ai_analysis(app_id, ai.analyze_fit(
+                    title=title, company=company, location=location,
+                    description=description, language=language))
+            elif key == "cover":
+                tracker.set_cover_letter(app_id, ai.cover_letter(
+                    title=title, company=company, location=location,
+                    description=description, instructions=instructions,
+                    language=language))
+            elif key == "note":
+                tracker.set_recruiter_note(app_id, ai.recruiter_note(
+                    title=title, company=company, instructions=instructions,
+                    language=language))
+            elif key == "prep":
+                tracker.set_interview_prep(app_id, ai.interview_prep(
+                    title=title, company=company, location=location,
+                    description=description, instructions=instructions,
+                    language=language))
+            elif key == "mock":
+                data = ai.mock_interview(
+                    title=title, company=company, location=location,
+                    description=description, language=language)
+                tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
+            done.append(_BATCH_ITEMS[key])
+        except Exception as exc:  # keep going so one failure doesn't lose the rest
+            failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
+
+    if done:
+        flash("Generated: " + ", ".join(done) + ".", "ok")
+    if failed:
+        flash("Failed: " + "; ".join(failed) + ".", "error")
+    return redirect(url_for("main.detail", app_id=app_id))
 
 
 @bp.route("/application/<int:app_id>/tailor", methods=["POST"])
