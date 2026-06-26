@@ -422,7 +422,27 @@ def paste_job():
         description=text, salary=salary, source=source,
         status=f.get("status", "saved"), match_score=score,
     )
-    flash(f"Captured job as #{app_id}. Review and adjust the details below.", "ok")
+    flash(f"Captured job as #{app_id}.", "ok")
+
+    # Auto-run the most useful AI artefacts right after capture (opt-out via the
+    # checkbox). Company research is in Hebrew; fit analysis is bilingual.
+    if ai.is_configured() and f.get("autogen"):
+        r = tracker.get_application(app_id)
+        # (item-key, language) — order = what the user sees populate first.
+        plan = [("company", "he"), ("analyze", "en"), ("note", "en"), ("cover", "en")]
+        done: list[str] = []
+        failed: list[str] = []
+        for key, lang in plan:
+            try:
+                _generate_one(app_id, key, r, language=lang)
+                done.append(_BATCH_ITEMS[key])
+            except Exception as exc:  # keep going; never lose what already ran
+                failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
+        if done:
+            flash("Generated: " + ", ".join(done) + ".", "ok")
+        if failed:
+            flash("Failed: " + "; ".join(failed) + ".", "error")
+
     return redirect(url_for("main.detail", app_id=app_id))
 
 
@@ -655,6 +675,49 @@ _BATCH_ITEMS = {
 }
 
 
+def _generate_one(app_id, key, r, language="en", instructions=""):
+    """Generate a single AI artefact and persist it. Raises on failure.
+
+    ``company`` honours the given language (so callers can force Hebrew);
+    fit analysis is always bilingual and the recruiter note always includes an
+    English version, regardless of ``language``.
+    """
+    title, company = r["title"], r["company"]
+    location, description = r["location"] or "", r["description"] or ""
+    if key == "analyze":
+        tracker.set_ai_analysis(app_id, ai.analyze_fit(
+            title=title, company=company, location=location,
+            description=description, language=language))
+    elif key == "cover":
+        tracker.set_cover_letter(app_id, ai.cover_letter(
+            title=title, company=company, location=location,
+            description=description, instructions=instructions, language=language))
+    elif key == "note":
+        tracker.set_recruiter_note(app_id, ai.recruiter_note(
+            title=title, company=company, instructions=instructions,
+            language=language))
+    elif key == "prep":
+        tracker.set_interview_prep(app_id, ai.interview_prep(
+            title=title, company=company, location=location,
+            description=description, instructions=instructions, language=language))
+    elif key == "mock":
+        data = ai.mock_interview(
+            title=title, company=company, location=location,
+            description=description, language=language)
+        tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
+    elif key == "pitch":
+        base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
+        res = ai.tailor_pitch(
+            title=title, company=company, location=location,
+            description=description, base_pitch=base, language="he")
+        notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
+        tracker.set_pitch(app_id, res["script"], notes=notes)
+    elif key == "company":
+        tracker.set_company_brief(app_id, ai.company_research(
+            company=company, location=location, title=title,
+            description=description, language=language))
+
+
 @bp.route("/application/<int:app_id>/generate", methods=["POST"])
 def generate_batch(app_id: int):
     """Generate several AI artefacts in one request (the checkbox panel).
@@ -672,47 +735,12 @@ def generate_batch(app_id: int):
         flash("Pick at least one thing to generate.", "error")
         return redirect(url_for("main.detail", app_id=app_id))
 
-    title, company = r["title"], r["company"]
-    location, description = r["location"] or "", r["description"] or ""
     done: list[str] = []
     failed: list[str] = []
 
     for key in (k for k in _BATCH_ITEMS if k in items):
         try:
-            if key == "analyze":
-                tracker.set_ai_analysis(app_id, ai.analyze_fit(
-                    title=title, company=company, location=location,
-                    description=description, language=language))
-            elif key == "cover":
-                tracker.set_cover_letter(app_id, ai.cover_letter(
-                    title=title, company=company, location=location,
-                    description=description, instructions=instructions,
-                    language=language))
-            elif key == "note":
-                tracker.set_recruiter_note(app_id, ai.recruiter_note(
-                    title=title, company=company, instructions=instructions,
-                    language=language))
-            elif key == "prep":
-                tracker.set_interview_prep(app_id, ai.interview_prep(
-                    title=title, company=company, location=location,
-                    description=description, instructions=instructions,
-                    language=language))
-            elif key == "mock":
-                data = ai.mock_interview(
-                    title=title, company=company, location=location,
-                    description=description, language=language)
-                tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
-            elif key == "pitch":
-                base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
-                res = ai.tailor_pitch(
-                    title=title, company=company, location=location,
-                    description=description, base_pitch=base, language="he")
-                notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
-                tracker.set_pitch(app_id, res["script"], notes=notes)
-            elif key == "company":
-                tracker.set_company_brief(app_id, ai.company_research(
-                    company=company, location=location, title=title,
-                    description=description, language="en"))
+            _generate_one(app_id, key, r, language=language, instructions=instructions)
             done.append(_BATCH_ITEMS[key])
         except Exception as exc:  # keep going so one failure doesn't lose the rest
             failed.append(f"{_BATCH_ITEMS[key]} ({exc})")

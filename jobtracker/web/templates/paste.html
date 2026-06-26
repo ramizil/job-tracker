@@ -12,7 +12,7 @@
   <a href="{{ url_for('main.settings') }}">Settings</a> to auto-extract them.{% endif %}
 </p>
 
-<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"{% if ai_on %} data-loading="Reading the posting & extracting details with Gemini…"{% endif %}>
+<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"{% if ai_on %} data-loading="Capturing & generating with Gemini — company research, fit, recruiter note & cover letter. This can take a minute…"{% endif %}>
   <label class="fld">
     <span>Source URL <em>(where you copied it from)</em></span>
     <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/view/..." autofocus>
@@ -39,6 +39,16 @@
       <input name="source" placeholder="Source (auto-detected from URL, e.g. linkedin)">
     </div>
   </fieldset>
+
+  {% if ai_on %}
+  <label class="autogen-opt">
+    <input type="checkbox" name="autogen" value="1" checked>
+    <span>After capturing, also generate with AI:
+      <b>Company research</b> (Hebrew), <b>Fit analysis</b> (Hebrew + English),
+      <b>Recruiter note</b> and <b>Cover letter</b>.
+      <em class="muted">Takes ~30–60s; uncheck for a quick capture.</em></span>
+  </label>
+  {% endif %}
 
   <button class="btn primary" type="submit">
     {% if ai_on %}Capture &amp; auto-extract{% else %}Capture job{% endif %}

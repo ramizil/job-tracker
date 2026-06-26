@@ -264,6 +264,9 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 /* mock interview */
 .mi-player{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border:1px solid var(--rule);border-radius:12px;background:rgba(8,14,24,.4)}
 .tts-voice{max-width:230px}
+.autogen-opt{display:flex;gap:10px;align-items:flex-start;padding:11px 13px;margin:4px 0 2px;border:1px solid rgba(124,58,237,.35);border-radius:12px;background:rgba(124,58,237,.08);line-height:1.5}
+.autogen-opt input{margin-top:3px}
+.autogen-opt em{display:block;font-size:.85rem;margin-top:2px}
 .mock-qa{display:flex;flex-direction:column;gap:10px}
 .mi-pair{border:1px solid var(--rule);border-radius:12px;padding:11px 13px;background:rgba(30,41,64,.4);transition:border-color .2s,box-shadow .2s}
 .mi-pair.first{border-color:rgba(124,58,237,.4)}
