@@ -2,10 +2,51 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime, timezone
 from typing import Any
 
 from .db import get_connection
 from .models import ACTIVE_STATUSES, NEGATIVE_STATUSES, STATUSES
+
+
+def _age_days(ts: str | None) -> int | None:
+    """Whole days between an ISO timestamp and now (UTC). None if unparseable."""
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - dt).days
+
+
+def saved_reminders(stale_days: int = 3) -> dict[str, Any]:
+    """Saved jobs that were never applied to or rejected — a to-handle list.
+
+    ``stale`` counts the ones sitting untouched for at least ``stale_days`` days.
+    Sorted oldest-first so the most overdue bubble to the top.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id, company, title, created_at, updated_at
+               FROM applications WHERE status='saved'
+               ORDER BY COALESCE(updated_at, created_at) ASC"""
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for r in rows:
+        days = _age_days(r["updated_at"] or r["created_at"])
+        items.append({
+            "id": r["id"], "company": r["company"], "title": r["title"],
+            "days": days, "stale": days is not None and days >= stale_days,
+        })
+    return {
+        "count": len(items),
+        "stale": sum(1 for it in items if it["stale"]),
+        "stale_days": stale_days,
+        "items": items,
+    }
 
 
 def _count(sql: str, params: tuple = ()) -> list[tuple[str, int]]:

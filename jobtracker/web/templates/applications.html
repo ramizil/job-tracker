@@ -31,7 +31,7 @@
     {% for r in rows %}
     <tr onclick="location.href='{{ url_for('main.detail', app_id=r.id) }}'">
       <td>{{ r.id }}</td>
-      <td><span class="pill status-{{ r.status }}">{{ r.status }}</span></td>
+      <td><span class="pill status-{{ r.status }}">{{ r.status }}</span>{% if r.status == 'saved' %} <span class="alert-ic" title="Saved but not applied yet — handle this">⏰</span>{% endif %}</td>
       <td>{{ '%.0f'|format(r.match_score or 0) }}%</td>
       <td>{% if r.ai_fit_level %}<span class="fit fit-{{ r.ai_fit_level|lower }}">{{ r.ai_fit_level }}</span>{% endif %}</td>
       <td>{{ r.company }}</td>

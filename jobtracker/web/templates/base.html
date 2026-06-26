@@ -14,7 +14,7 @@
     <nav>
       <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">Dashboard</a>
       <a href="{{ url_for('main.board') }}" class="{{ 'active' if ep == 'main.board' }}">Board</a>
-      <a href="{{ url_for('main.applications') }}" class="{{ 'active' if ep in ['main.applications', 'main.detail'] }}">Applications</a>
+      <a href="{{ url_for('main.applications') }}" class="{{ 'active' if ep in ['main.applications', 'main.detail'] }}">Applications{% if saved_alert and saved_alert.count %}<span class="nav-badge{{ ' hot' if saved_alert.stale }}" title="{{ saved_alert.count }} saved job(s) not applied yet{% if saved_alert.stale %} — {{ saved_alert.stale }} waiting 3+ days{% endif %}">{{ saved_alert.count }}</span>{% endif %}</a>
       <a href="{{ url_for('main.search') }}" class="{{ 'active' if ep == 'main.search' }}">Search</a>
       <a href="{{ url_for('main.paste_job') }}" class="{{ 'active' if ep == 'main.paste_job' }}">📋 Paste Job</a>
       <a href="{{ url_for('main.my_pitch') }}" class="{{ 'active' if ep == 'main.my_pitch' }}">🎤 My Pitch</a>

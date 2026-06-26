@@ -23,6 +23,16 @@ from ..sources import get_sources
 
 bp = Blueprint("main", __name__)
 
+
+@bp.app_context_processor
+def inject_saved_alert():
+    """Expose a saved-jobs reminder count to every template (nav badge)."""
+    try:
+        rem = analytics.saved_reminders()
+        return {"saved_alert": {"count": rem["count"], "stale": rem["stale"]}}
+    except Exception:
+        return {"saved_alert": {"count": 0, "stale": 0}}
+
 # Columns shown on the Kanban board (drop the terminal/parked ones into a lane).
 BOARD_LANES = ["saved", "applied", "screening", "interview", "offer",
                "accepted", "rejected", "withdrawn"]
@@ -293,6 +303,7 @@ def dashboard():
         rej_reason=analytics.rejection_by_reason(),
         sources=analytics.source_stats(),
         insight=analytics.match_score_insight(),
+        reminders=analytics.saved_reminders(),
         ai_on=ai.is_configured(),
     )
 

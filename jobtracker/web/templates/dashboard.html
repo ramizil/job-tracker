@@ -7,6 +7,23 @@
 <div class="banner">Gemini AI is not configured. Add <code>GEMINI_API_KEY</code> to <code>.env</code> to enable fit analysis &amp; resume tailoring.</div>
 {% endif %}
 
+{% if reminders and reminders.count %}
+<div class="reminder{{ ' hot' if reminders.stale }}">
+  <span class="reminder-ic">⏰</span>
+  <div class="reminder-body">
+    <b>{{ reminders.count }} saved job{{ 's' if reminders.count != 1 }} waiting to be handled</b>
+    — not applied to or rejected yet{% if reminders.stale %}, including <b>{{ reminders.stale }}</b> sitting {{ reminders.stale_days }}+ days{% endif %}.
+    <div class="reminder-items">
+      {% for it in reminders['items'][:6] %}
+        <a class="reminder-chip{{ ' stale' if it.stale }}" href="{{ url_for('main.detail', app_id=it.id) }}" title="{% if it.days is not none %}saved {{ it.days }} day{{ 's' if it.days != 1 }} ago{% else %}saved{% endif %}">{{ it.company }} — {{ it.title }}{% if it.days is not none %} · {{ it.days }}d{% endif %}</a>
+      {% endfor %}
+      {% if reminders.count > 6 %}<a class="reminder-chip more" href="{{ url_for('main.applications', status='saved') }}">+{{ reminders.count - 6 }} more</a>{% endif %}
+    </div>
+  </div>
+  <a class="btn sm" href="{{ url_for('main.applications', status='saved') }}">Review all</a>
+</div>
+{% endif %}
+
 <section class="cards">
   <div class="metric"><span class="num">{{ totals.total }}</span><span class="lbl">Tracked</span></div>
   <div class="metric"><span class="num">{{ totals.applied_or_beyond }}</span><span class="lbl">Applied+</span></div>
@@ -61,7 +78,7 @@
       {% for r in recent %}
       <tr onclick="location.href='{{ url_for('main.detail', app_id=r.id) }}'">
         <td>{{ r.id }}</td>
-        <td><span class="pill status-{{ r.status }}">{{ r.status }}</span></td>
+        <td><span class="pill status-{{ r.status }}">{{ r.status }}</span>{% if r.status == 'saved' %} <span class="alert-ic" title="Saved but not applied yet — handle this">⏰</span>{% endif %}</td>
         <td>{{ '%.0f'|format(r.match_score or 0) }}%</td>
         <td>{{ r.company }}</td>
         <td>{{ r.title }}</td>
