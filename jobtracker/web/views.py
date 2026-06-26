@@ -14,7 +14,7 @@ from flask import (
     request, send_file, url_for,
 )
 
-from .. import ai, analytics, backup, config, exporter, tracker, usage
+from .. import ai, analytics, backup, config, exporter, pitch, tracker, tts, usage
 from .. import resume as resume_mod
 from ..config import TAILORED_DIR
 from ..matcher import score_job
@@ -129,6 +129,10 @@ def md_to_html(text: str) -> str:
         line = html_lib.escape(raw.rstrip())
         line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
         line = re.sub(r"`(.+?)`", r"<code>\1</code>", line)
+        # Markdown links [text](http/https url) -> safe anchors.
+        line = re.sub(
+            r"\[([^\]]+)\]\((https?://[^\s)]+)\)",
+            r'<a href="\2" target="_blank" rel="noopener">\1</a>', line)
         if re.match(r"^\s*[-*•]\s+", line):
             if not in_list:
                 out_lines.append("<ul>"); in_list = True
@@ -256,6 +260,28 @@ def help_page():
     )
 
 
+@bp.route("/pitch", methods=["GET", "POST"])
+def my_pitch():
+    """View / edit / listen to the global about-me pitch (interview script)."""
+    if request.method == "POST":
+        pitch.save_base_pitch(request.form.get("text", ""))
+        flash("Pitch saved.", "ok")
+        return redirect(url_for("main.my_pitch"))
+    return render_template("pitch.html", pitch_text=pitch.load_base_pitch(),
+                           ai_on=ai.is_configured())
+
+
+@bp.route("/pitch/draft", methods=["POST"])
+def my_pitch_draft():
+    """Draft a fresh base pitch from the resume with Gemini (Hebrew)."""
+    try:
+        pitch.save_base_pitch(ai.pitch_from_resume(language="he"))
+        flash("Drafted a new pitch from your resume.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.my_pitch"))
+
+
 @bp.route("/")
 def dashboard():
     funnel = analytics.funnel()
@@ -310,6 +336,7 @@ def detail(app_id: int):
         analysis=analysis, mock=mock, statuses=STATUSES, stages=REJECTION_STAGES,
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
         has_tailored=_tailored_path(app_id).exists(),
+        base_pitch=pitch.load_base_pitch(),
     )
 
 
@@ -612,6 +639,8 @@ _BATCH_ITEMS = {
     "note": "recruiter note",
     "prep": "interview prep",
     "mock": "mock interview",
+    "pitch": "about-me pitch",
+    "company": "company research",
 }
 
 
@@ -662,6 +691,17 @@ def generate_batch(app_id: int):
                     title=title, company=company, location=location,
                     description=description, language=language)
                 tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
+            elif key == "pitch":
+                base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
+                res = ai.tailor_pitch(
+                    title=title, company=company, location=location,
+                    description=description, base_pitch=base, language="he")
+                notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
+                tracker.set_pitch(app_id, res["script"], notes=notes)
+            elif key == "company":
+                tracker.set_company_brief(app_id, ai.company_research(
+                    company=company, location=location, title=title,
+                    description=description, language="en"))
             done.append(_BATCH_ITEMS[key])
         except Exception as exc:  # keep going so one failure doesn't lose the rest
             failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
@@ -671,6 +711,77 @@ def generate_batch(app_id: int):
     if failed:
         flash("Failed: " + "; ".join(failed) + ".", "error")
     return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/company", methods=["POST"])
+def company_research(app_id: int):
+    """AI web research about the company on this application."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    try:
+        brief = ai.company_research(
+            company=r["company"], location=r["location"] or "",
+            title=r["title"] or "", description=r["description"] or "",
+            language="en",
+        )
+        tracker.set_company_brief(app_id, brief)
+        flash("Company research complete.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#company")
+
+
+@bp.route("/tts", methods=["POST"])
+def tts_speak():
+    """Synthesize text to natural-voice MP3 (Microsoft neural voices)."""
+    text = (request.form.get("text") or "").strip()
+    voice = (request.form.get("voice") or "").strip()
+    try:
+        rate = float(request.form.get("rate") or 1.0)
+    except (TypeError, ValueError):
+        rate = 1.0
+    if not text:
+        return Response("Nothing to read.", status=400)
+    # Guard against pathologically long inputs (neural TTS is per-request).
+    text = text[:8000]
+    try:
+        audio = tts.synthesize(text, voice, rate)
+    except ValueError as exc:
+        return Response(str(exc), status=400)
+    except Exception as exc:  # network/SSL/service errors
+        return Response(f"Voice service unavailable: {exc}", status=502)
+    resp = Response(audio, mimetype="audio/mpeg")
+    resp.headers["Cache-Control"] = "private, max-age=3600"
+    return resp
+
+
+@bp.route("/application/<int:app_id>/pitch", methods=["POST"])
+def pitch_save(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    tracker.set_pitch(app_id, request.form.get("text", ""))
+    flash("Pitch saved for this job.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#pitch")
+
+
+@bp.route("/application/<int:app_id>/pitch/tailor", methods=["POST"])
+def pitch_tailor(app_id: int):
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
+    try:
+        result = ai.tailor_pitch(
+            title=r["title"], company=r["company"], location=r["location"] or "",
+            description=r["description"] or "", base_pitch=base, language="he",
+        )
+        notes = "\n".join(f"- {s}" for s in result.get("suggestions", []))
+        tracker.set_pitch(app_id, result["script"], notes=notes)
+        flash("Pitch tailored for this job.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#pitch")
 
 
 @bp.route("/application/<int:app_id>/tailor", methods=["POST"])

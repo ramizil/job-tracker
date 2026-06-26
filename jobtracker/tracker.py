@@ -237,6 +237,34 @@ def set_mock_interview(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_pitch(app_id: int, script: str, notes: str | None = None) -> bool:
+    """Persist the per-job about-me pitch. ``notes`` (AI suggestions) is only
+    updated when provided, so hand-edits to the script keep the last notes."""
+    with get_connection() as conn:
+        if notes is None:
+            cur = conn.execute(
+                "UPDATE applications SET pitch=?, pitch_at=?, updated_at=? WHERE id=?",
+                (script, now_iso(), now_iso(), app_id),
+            )
+        else:
+            cur = conn.execute(
+                """UPDATE applications
+                     SET pitch=?, pitch_notes=?, pitch_at=?, updated_at=? WHERE id=?""",
+                (script, notes, now_iso(), now_iso(), app_id),
+            )
+        return cur.rowcount > 0
+
+
+def set_company_brief(app_id: int, markdown: str) -> bool:
+    """Persist AI web-research about the company (Markdown)."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET company_brief=?, company_brief_at=?, updated_at=? WHERE id=?",
+            (markdown, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def mark_tailored(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute(

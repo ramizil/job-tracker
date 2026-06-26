@@ -17,6 +17,7 @@
       <a href="{{ url_for('main.applications') }}" class="{{ 'active' if ep in ['main.applications', 'main.detail'] }}">Applications</a>
       <a href="{{ url_for('main.search') }}" class="{{ 'active' if ep == 'main.search' }}">Search</a>
       <a href="{{ url_for('main.paste_job') }}" class="{{ 'active' if ep == 'main.paste_job' }}">📋 Paste Job</a>
+      <a href="{{ url_for('main.my_pitch') }}" class="{{ 'active' if ep == 'main.my_pitch' }}">🎤 My Pitch</a>
       <span class="sep"></span>
       <a href="{{ url_for('main.export_csv') }}">CSV</a>
       <a href="{{ url_for('main.export_xlsx') }}">Excel</a>
@@ -121,6 +122,158 @@
         if (!document.hidden) beat();
       });
     })();
+  </script>
+
+  <script>
+  // Reusable text-to-speech player. Markup:
+  //   <div class="tts-player" data-lang="he-IL" data-target="#sel">
+  //     <button data-tts="play">…</button> <button data-tts="pause">…</button>
+  //     <button data-tts="stop">…</button> <select data-tts="rate">…</select>
+  //     <span data-tts="status"></span>
+  //   </div>
+  (function () {
+    var synth = window.speechSynthesis;
+    var TTS_URL = '{{ url_for('main.tts_speak') }}';
+    // Natural Microsoft neural voices (synthesised server-side via edge-tts).
+    var NATURAL = {
+      he: [ { id: 'he-IL-HilaNeural', label: 'Hila — Hebrew, female (natural)' },
+            { id: 'he-IL-AvriNeural', label: 'Avri — Hebrew, male (natural)' } ],
+      en: [ { id: 'en-US-AriaNeural', label: 'Aria — US English, female (natural)' },
+            { id: 'en-US-GuyNeural', label: 'Guy — US English, male (natural)' },
+            { id: 'en-GB-SoniaNeural', label: 'Sonia — UK English, female (natural)' },
+            { id: 'en-GB-RyanNeural', label: 'Ryan — UK English, male (natural)' } ]
+    };
+
+    document.querySelectorAll('.tts-player').forEach(function (player) {
+      var lang = player.getAttribute('data-lang') || 'en-US';
+      var base = lang.split('-')[0].toLowerCase();
+      var targetSel = player.getAttribute('data-target');
+      var playBtn = player.querySelector('[data-tts="play"]');
+      var pauseBtn = player.querySelector('[data-tts="pause"]');
+      var stopBtn = player.querySelector('[data-tts="stop"]');
+      var rateSel = player.querySelector('[data-tts="rate"]');
+      var status = player.querySelector('[data-tts="status"]');
+
+      // Build a voice picker: natural neural voices first, browser voice last.
+      var voiceSel = document.createElement('select');
+      voiceSel.setAttribute('data-tts', 'voice');
+      voiceSel.className = 'tts-voice';
+      (NATURAL[base] || NATURAL.en).forEach(function (v) {
+        var o = document.createElement('option');
+        o.value = v.id; o.textContent = v.label; voiceSel.appendChild(o);
+      });
+      var bOpt = document.createElement('option');
+      bOpt.value = 'browser'; bOpt.textContent = 'Browser voice (offline)';
+      voiceSel.appendChild(bOpt);
+      if (rateSel && rateSel.parentNode) rateSel.parentNode.insertBefore(voiceSel, rateSel);
+      else player.insertBefore(voiceSel, status || null);
+      // No browser speech available? Drop that option (natural stays default).
+      if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+        voiceSel.removeChild(bOpt);
+      }
+
+      var audio = new Audio();
+      var objUrl = null, loading = false;
+      function freeUrl() { if (objUrl) { URL.revokeObjectURL(objUrl); objUrl = null; } }
+      function getText() {
+        var el = targetSel ? document.querySelector(targetSel) : null;
+        if (!el) return '';
+        return ('value' in el && el.value !== undefined) ? el.value : el.textContent;
+      }
+      function rate() { return rateSel ? (parseFloat(rateSel.value) || 1) : 1; }
+      function setBusy(on) {
+        if (pauseBtn) pauseBtn.disabled = !on;
+        if (stopBtn) stopBtn.disabled = !on;
+        if (playBtn) playBtn.textContent = on ? '▶ Restart' : '▶ Listen';
+      }
+      function isBrowser() { return voiceSel.value === 'browser'; }
+      function stopAll() { if (synth) synth.cancel(); audio.pause(); }
+
+      // ---- Natural (server) playback ----
+      function playServer() {
+        var text = (getText() || '').trim();
+        if (!text) { if (status) status.textContent = 'Nothing to read yet.'; return; }
+        if (loading) return;
+        freeUrl(); audio.pause(); audio.currentTime = 0;
+        loading = true;
+        if (status) status.textContent = 'Generating natural audio…';
+        var body = new URLSearchParams();
+        body.set('text', text); body.set('voice', voiceSel.value); body.set('rate', String(rate()));
+        fetch(TTS_URL, { method: 'POST', body: body })
+          .then(function (r) {
+            if (!r.ok) return r.text().then(function (t) { throw new Error(t || ('HTTP ' + r.status)); });
+            return r.blob();
+          })
+          .then(function (blob) {
+            objUrl = URL.createObjectURL(blob); audio.src = objUrl;
+            audio.playbackRate = 1; audio.play();
+            if (status) status.textContent = '';
+            setBusy(true); if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+          })
+          .catch(function (e) {
+            if (status) status.textContent = 'Could not generate audio (' + (e.message || e) + '). Try “Browser voice”.';
+            setBusy(false);
+          })
+          .then(function () { loading = false; });
+      }
+      function pauseServer() {
+        if (audio.paused) { audio.play(); if (pauseBtn) pauseBtn.textContent = '⏸ Pause'; }
+        else { audio.pause(); if (pauseBtn) pauseBtn.textContent = '▶ Resume'; }
+      }
+      function stopServer() { audio.pause(); audio.currentTime = 0; setBusy(false); }
+      audio.addEventListener('ended', function () { setBusy(false); });
+
+      // ---- Web Speech (browser) fallback ----
+      function pickVoice() {
+        var voices = (synth && synth.getVoices()) || [];
+        var exact = voices.filter(function (v) { return (v.lang || '').toLowerCase() === lang.toLowerCase(); });
+        var loose = voices.filter(function (v) { return (v.lang || '').toLowerCase().indexOf(base) === 0; });
+        return (exact[0] || loose[0] || null);
+      }
+      function chunk(text) {
+        var out = [];
+        (text || '').split(/\n+/).forEach(function (line) {
+          line = line.trim();
+          if (!line) return;
+          if (line.length <= 220) { out.push(line); return; }
+          var buf = '';
+          line.split(/(?<=[.!?\u05be])\s+/).forEach(function (s) {
+            if ((buf + ' ' + s).trim().length > 220) { if (buf) out.push(buf.trim()); buf = s; }
+            else { buf = (buf + ' ' + s).trim(); }
+          });
+          if (buf) out.push(buf.trim());
+        });
+        return out;
+      }
+      function playBrowser() {
+        synth.cancel();
+        var parts = chunk(getText());
+        if (!parts.length) { if (status) status.textContent = 'Nothing to read yet.'; return; }
+        var voice = pickVoice();
+        if (status) status.textContent = voice ? '' :
+          ('No ' + lang + ' voice installed — using the default. Pick a natural voice instead.');
+        var r = rate();
+        parts.forEach(function (p, i) {
+          var u = new SpeechSynthesisUtterance(p);
+          u.lang = lang; if (voice) u.voice = voice; u.rate = r;
+          if (i === parts.length - 1) u.onend = function () { setBusy(false); };
+          synth.speak(u);
+        });
+        setBusy(true); if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+      }
+      function pauseBrowser() {
+        if (synth.paused) { synth.resume(); pauseBtn.textContent = '⏸ Pause'; }
+        else { synth.pause(); pauseBtn.textContent = '▶ Resume'; }
+      }
+      function stopBrowser() { synth.cancel(); setBusy(false); }
+
+      if (playBtn) playBtn.addEventListener('click', function () { stopAll(); isBrowser() ? playBrowser() : playServer(); });
+      if (pauseBtn) pauseBtn.addEventListener('click', function () { isBrowser() ? pauseBrowser() : pauseServer(); });
+      if (stopBtn) stopBtn.addEventListener('click', function () { isBrowser() ? stopBrowser() : stopServer(); });
+      voiceSel.addEventListener('change', function () { stopAll(); setBusy(false); if (status) status.textContent = ''; });
+    });
+    if (synth) window.addEventListener('beforeunload', function () { synth.cancel(); });
+  })();
   </script>
 
   <script src="{{ url_for('static', filename='fx.js') }}"></script>

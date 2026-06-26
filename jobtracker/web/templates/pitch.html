@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}My Pitch · Job Tracker{% endblock %}
+{% block content %}
+<h1>🎤 My Pitch</h1>
+<p class="sub">Your personal "about me" interview script — edit it, listen to it, and memorize it.
+  Tailor it per job from each application's page.</p>
+
+<section class="panel">
+  <div class="tts-player mi-player" data-lang="he-IL" data-target="#pitch-text">
+    <button class="btn sm primary" type="button" data-tts="play">▶ Listen</button>
+    <button class="btn sm" type="button" data-tts="pause" disabled>⏸ Pause</button>
+    <button class="btn sm" type="button" data-tts="stop" disabled>⏹ Stop</button>
+    <label class="lang">Speed
+      <select data-tts="rate"><option value="0.8">0.8×</option><option value="0.9">0.9×</option><option value="1" selected>1×</option><option value="1.1">1.1×</option><option value="1.25">1.25×</option></select>
+    </label>
+    <span class="muted sm" data-tts="status"></span>
+  </div>
+
+  <form method="post" action="{{ url_for('main.my_pitch') }}" class="stack mt">
+    <textarea id="pitch-text" name="text" rows="26" class="gen-text" dir="auto">{{ pitch_text }}</textarea>
+    <div class="actions">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn sm" type="button" data-copy="prev">Copy</button>
+    </div>
+  </form>
+
+  {% if ai_on %}
+  <form method="post" action="{{ url_for('main.my_pitch_draft') }}" data-loading="Drafting your pitch from your resume…" class="mt"
+        onsubmit="return confirm('Replace the current pitch with a fresh AI draft from your resume?')">
+    <button class="btn" type="submit">✨ Draft from my resume (AI)</button>
+    <span class="muted sm">Generates a new Hebrew pitch from your resume — overwrites the text above.</span>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('button[data-copy="prev"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ta = btn.closest('form').querySelector('textarea');
+      if (!ta) return;
+      navigator.clipboard.writeText(ta.value).then(function () {
+        var old = btn.textContent; btn.textContent = 'Copied!';
+        setTimeout(function () { btn.textContent = old; }, 1500);
+      });
+    });
+  });
+</script>
+{% endblock %}

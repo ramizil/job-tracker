@@ -232,6 +232,10 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 .copy-label{flex:0 0 64px;font-size:12px;color:var(--muted);font-weight:600}
 .copy-val{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .copy-row .btn{flex:0 0 auto}
+/* per-job pitch suggestions */
+.pitch-notes{background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.35);border-radius:10px;padding:10px 12px;margin-top:6px;font-size:13px}
+.pitch-notes .md{margin-top:4px}
+.pitch-notes .md ul{margin:4px 0;padding-inline-start:18px}
 /* dashboard column-header tooltips + legend */
 .col-help{border-bottom:1px dotted var(--muted);cursor:help}
 .legend{font-size:12px;line-height:1.6;margin:10px 2px 0}
@@ -239,6 +243,7 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 .md p{margin:6px 0}.md h1,.md h2,.md h3{color:#dbe6f5}
 /* mock interview */
 .mi-player{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px;border:1px solid var(--rule);border-radius:12px;background:rgba(8,14,24,.4)}
+.tts-voice{max-width:230px}
 .mock-qa{display:flex;flex-direction:column;gap:10px}
 .mi-pair{border:1px solid var(--rule);border-radius:12px;padding:11px 13px;background:rgba(30,41,64,.4);transition:border-color .2s,box-shadow .2s}
 .mi-pair.first{border-color:rgba(124,58,237,.4)}

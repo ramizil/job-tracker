@@ -554,6 +554,102 @@ def mock_interview(*, title: str, company: str, location: str = "",
 
 
 # --------------------------------------------------------------------------- #
+_PITCH_DRAFT_PROMPT = """You are an interview coach. Write a natural, SPOKEN
+"about me" interview pitch for the candidate, grounded ONLY in the facts in
+their resume — never invent employers, dates, numbers or skills. Make it easy
+to memorize and say aloud.
+
+Structure it as clear "stations" (use short headers), in this spirit:
+- Opener: who I am + years of experience + main arena.
+- Day-to-day engineering work: what I actually build/do.
+- Innovation & impact: 1-2 standout things I built, with concrete time/effort
+  saved (use real numbers only if present in the resume).
+- A personal passion hook (why I love this craft).
+- Closing: what I'm looking for next.
+Then add a short "how to remember it" summary (one line per station).
+
+Conversational and warm, first-person, ~250-400 words. Write everything in
+{lang} (natural, native-sounding {lang}). Output plain text only, no markdown
+fences.
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def pitch_from_resume(*, resume: str | None = None, language: str = "he") -> str:
+    """Draft a spoken 'about me' interview pitch from the resume (plain text)."""
+    prompt = _PITCH_DRAFT_PROMPT.format(
+        lang=_lang_name(language),
+        resume=(resume or resume_text())[:9000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```\w*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text
+
+
+_PITCH_TAILOR_PROMPT = """You are an interview coach. The candidate has a
+personal "about me" pitch — a memorized spoken introduction, structured in
+"stations". Adapt it for the SPECIFIC job below so it lands as well as possible,
+WITHOUT inventing anything: ground every claim ONLY in the candidate's existing
+pitch and resume. Keep the spoken, station-based structure and a similar length.
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "suggestions": [
+    "short, concrete bullet on what to emphasise / add / trim for THIS job"
+  ],
+  "script": "the full tailored pitch, ready to memorize and say aloud"
+}}
+
+Write BOTH the suggestions and the script in {lang} (natural, native {lang}).
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+
+CANDIDATE'S CURRENT PITCH:
+{base_pitch}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def tailor_pitch(*, title: str, company: str, location: str = "",
+                 description: str = "", base_pitch: str = "",
+                 resume: str | None = None, language: str = "he") -> dict[str, Any]:
+    """Tailor the about-me pitch for a specific job.
+
+    Returns {"suggestions": [...], "script": "...", "language": "..."}.
+    """
+    prompt = _PITCH_TAILOR_PROMPT.format(
+        lang=_lang_name(language),
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:7000],
+        base_pitch=(base_pitch or "")[:6000],
+        resume=(resume or resume_text())[:7000],
+    )
+    raw = _generate(prompt, as_json=True)
+    data = _parse_json(raw)
+    if not isinstance(data, dict):
+        raise AIError("Gemini returned an unexpected pitch format. Please try again.")
+    suggestions = data.get("suggestions") or []
+    if isinstance(suggestions, str):
+        suggestions = [suggestions]
+    suggestions = [str(s).strip() for s in suggestions if str(s).strip()]
+    script = str(data.get("script", "")).strip()
+    if not script:
+        raise AIError("Gemini didn't return a tailored pitch. Please try again.")
+    return {"suggestions": suggestions, "script": script,
+            "language": (language or "he").lower()}
+
+
+# --------------------------------------------------------------------------- #
 _TAILOR_PROMPT = """You are an expert resume writer. Rewrite the candidate's
 HTML resume so it is optimally positioned for the SPECIFIC job below, applying
 the TAILORING INSTRUCTIONS. Hard rules:
@@ -592,3 +688,134 @@ def tailor_resume(*, title: str, company: str, description: str,
     html = re.sub(r"^```(?:html)?\s*", "", html)
     html = re.sub(r"\s*```$", "", html)
     return html
+
+
+# --------------------------------------------------------------------------- #
+def _grounding_sources(resp) -> list[dict[str, str]]:
+    """Extract web sources (title + uri) from Gemini grounding metadata."""
+    out: list[dict[str, str]] = []
+    try:
+        cand = resp.candidates[0]
+        gm = getattr(cand, "grounding_metadata", None)
+        for ch in (getattr(gm, "grounding_chunks", None) or []):
+            web = getattr(ch, "web", None)
+            uri = getattr(web, "uri", None) if web else None
+            if uri:
+                out.append({"title": getattr(web, "title", "") or uri, "uri": uri})
+    except Exception:
+        pass
+    seen: set[str] = set()
+    uniq: list[dict[str, str]] = []
+    for s in out:
+        if s["uri"] not in seen:
+            seen.add(s["uri"])
+            uniq.append(s)
+    return uniq[:8]
+
+
+def _generate_grounded(prompt: str) -> tuple[str, list[dict[str, str]]]:
+    """Generate text grounded in live Google Search results.
+
+    Returns (text, sources). Raises AIError if no model could produce a
+    grounded answer (the caller may then fall back to an ungrounded call).
+    """
+    import time
+
+    client = _client()
+    from google.genai import types  # type: ignore
+
+    def _search_tool():
+        try:
+            return types.Tool(google_search=types.GoogleSearch())
+        except Exception:
+            try:
+                return types.Tool(google_search_retrieval=types.GoogleSearchRetrieval())
+            except Exception:
+                return None
+
+    tool = _search_tool()
+    if tool is None:
+        raise AIError("This google-genai version has no web-search tool.")
+
+    deadline = time.monotonic() + AI_TIMEOUT_S
+    last_exc: Exception | None = None
+    for model in _model_candidates():
+        if time.monotonic() >= deadline:
+            break
+        try:
+            cfg = types.GenerateContentConfig(
+                tools=[tool], temperature=0.3, max_output_tokens=4096)
+            resp = client.models.generate_content(
+                model=model, contents=prompt, config=cfg)
+            text = getattr(resp, "text", None)
+            if not text:
+                raise AIError("Gemini returned an empty response.")
+            return text, _grounding_sources(resp)
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise AIError(f"grounded generation unavailable: {last_exc}")
+
+
+_COMPANY_PROMPT = """You are a job-search assistant researching a company for a
+candidate who is considering applying. Using up-to-date information from the web,
+write a concise, factual briefing about the company below. If you cannot verify
+something, say so plainly rather than guessing. Prefer recent, reputable sources.
+
+Use these ## sections with short bullets:
+## What they do
+- Industry/sector, main products or services, and who their customers are.
+## Size & status
+- Approx headcount, public or private, HQ and main locations, funding stage or
+  stock ticker if public, and whether they appear to be growing or contracting.
+## History & growth
+- Founded when, key milestones, notable funding/acquisitions, and the trajectory
+  over the last 1-2 years.
+## Recent news
+- 2-4 recent, DATED developments from roughly the last 12 months, if available.
+## Angles for your application
+- 3-5 specific talking points the candidate can use, plus 2-3 smart questions to
+  ask the interviewer, tied to what this company actually does.
+
+Keep it tight and skimmable. Write in {lang}.
+
+COMPANY: {company}
+{context}
+"""
+
+
+def company_research(*, company: str, location: str = "", title: str = "",
+                     description: str = "", language: str = "en") -> str:
+    """Research a company on the web and return a Markdown briefing.
+
+    Uses Gemini with Google Search grounding when available; otherwise falls
+    back to the model's own knowledge (clearly flagged) so it never hard-fails.
+    """
+    ctx_lines = []
+    if location:
+        ctx_lines.append(f"Likely location: {location}")
+    if title:
+        ctx_lines.append(f"Role being considered: {title}")
+    if description:
+        ctx_lines.append("Context from the job posting (to disambiguate the "
+                         f"company):\n{description[:1500]}")
+    context = "\n".join(ctx_lines)
+    prompt = _COMPANY_PROMPT.format(
+        lang=_lang_name(language), company=company or "", context=context)
+
+    grounded = True
+    try:
+        text, sources = _generate_grounded(prompt)
+    except AIError:
+        grounded = False
+        text, sources = _generate(prompt, as_json=False), []
+
+    text = re.sub(r"^```\w*\s*", "", text.strip())
+    text = re.sub(r"\s*```$", "", text)
+    if sources:
+        text += "\n\n## Sources\n" + "\n".join(
+            f"- [{s['title']}]({s['uri']})" for s in sources)
+    if not grounded:
+        text += ("\n\n_Note: live web search wasn't available, so this is from "
+                 "the model's general knowledge and may be out of date._")
+    return text
