@@ -33,7 +33,9 @@ fallback) that already index LinkedIn/Indeed/Glassdoor listings.
   server-side PDF as a fallback).
 - **CSV / Excel export** of all applications.
 
-## Setup (Windows / PowerShell)
+## Setup
+
+### Windows (PowerShell)
 ```powershell
 cd C:\GIT\RAMI
 python -m venv .venv
@@ -45,6 +47,24 @@ copy .env.example .env        # then edit .env (resume path + API keys)
 python -m jobtracker init
 python -m jobtracker profile --rebuild
 ```
+
+### macOS / Linux (bash/zsh)
+```bash
+cd ~/GIT/job-tracker
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Configure
+cp .env.example .env          # then edit .env (resume path + API keys)
+python -m jobtracker init
+python -m jobtracker profile --rebuild
+```
+
+> Requires **Python 3.10+**. For the standalone app window and high-fidelity
+> PDF export, install **Google Chrome**, **Microsoft Edge**, **Brave** or
+> **Chromium** (any one). Without a Chromium browser the app still works and
+> opens in your default browser; PDF export falls back to the built-in renderer.
 
 ## Configuration — two ways
 1. **From the UI (easiest):** start the app and open **⚙ Settings**. Paste your
@@ -71,6 +91,8 @@ show up in **Search**. You can also add any single LinkedIn job by hand on the
 > other available Gemini models.
 
 ## Launch (double-click)
+
+### Windows
 - **`start.bat`** — double-click to start. On first run it creates the venv and
   installs dependencies, then opens the dashboard in a **standalone, maximized
   app window** (Edge/Chrome app mode — no tabs/address bar). A console window
@@ -81,6 +103,18 @@ show up in **Search**. You can also add any single LinkedIn job by hand on the
 > Tip: right-click `start.bat` → *Send to → Desktop (create shortcut)* for a
 > one-click desktop launcher. You can change its icon in the shortcut's
 > Properties.
+
+### macOS / Linux
+- **`start.command`** — double-click in Finder to start (macOS). On first run it
+  creates the venv and installs dependencies, then opens the dashboard in a
+  **standalone app window** (Chrome/Edge app mode). A Terminal window stays
+  open; press `Ctrl+C` there (or click **⏻ Quit** in the app) to stop.
+  - If macOS blocks it the first time, right-click → **Open**, or run
+    `chmod +x start.command` once in Terminal.
+  - On Linux you can run it from a shell: `./start.command`.
+
+> Tip (macOS): drag `start.command` to the Dock, or use *Finder → File → Make
+> Alias* and put the alias on your Desktop for a one-click launcher.
 
 ## Web dashboard
 ```powershell

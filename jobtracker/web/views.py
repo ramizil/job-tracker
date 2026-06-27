@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from flask import (
@@ -42,12 +43,29 @@ def _tailored_path(app_id: int):
     return TAILORED_DIR / f"{app_id}.html"
 
 
-_BROWSER_CANDIDATES = [
-    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-]
+def _browser_candidates() -> list[str]:
+    """Per-OS locations of Chromium-based browsers for headless PDF rendering."""
+    if sys.platform == "darwin":
+        return [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+    if os.name == "nt":
+        return [
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+    return [
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/microsoft-edge",
+        "/snap/bin/chromium",
+    ]
 
 
 def _find_browser() -> str | None:
@@ -55,10 +73,12 @@ def _find_browser() -> str | None:
     env = os.environ.get("JOBTRACKER_BROWSER")
     if env and os.path.exists(env):
         return env
-    for p in _BROWSER_CANDIDATES:
+    for p in _browser_candidates():
         if os.path.exists(p):
             return p
-    for name in ("msedge", "chrome", "chromium", "brave"):
+    for name in ("msedge", "microsoft-edge", "google-chrome",
+                 "google-chrome-stable", "chrome", "chromium",
+                 "chromium-browser", "brave-browser", "brave"):
         found = shutil.which(name)
         if found:
             return found

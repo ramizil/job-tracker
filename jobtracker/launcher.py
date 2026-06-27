@@ -1,28 +1,60 @@
 """Open the dashboard in a standalone app window (Edge/Chrome 'app mode').
 
 Falls back to the default browser if neither Edge nor Chrome is found.
+Works on Windows, macOS and Linux.
 """
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
+import sys
 import webbrowser
+
+
+def _candidate_paths() -> list[str]:
+    """Per-OS locations of Chromium-based browsers (for --app window mode)."""
+    # Names resolvable on PATH (Linux, and Windows/macOS when on PATH).
+    names = ["msedge", "microsoft-edge", "google-chrome", "google-chrome-stable",
+             "chrome", "chromium", "chromium-browser", "brave-browser"]
+    by_name = [shutil.which(n) for n in names]
+
+    if sys.platform == "darwin":
+        fixed = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+        # Also check per-user installs under ~/Applications.
+        home = os.path.expanduser("~")
+        fixed += [home + p for p in (
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        )]
+    elif os.name == "nt":
+        fixed = [
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]
+    else:  # Linux / other
+        fixed = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/microsoft-edge",
+            "/snap/bin/chromium",
+        ]
+    return [p for p in (*by_name, *fixed) if p]
 
 
 def _find_browser() -> str | None:
     # Prefer a Chromium browser so we can use --app (chromeless window).
-    candidates = [
-        shutil.which("msedge"),
-        shutil.which("chrome"),
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
-    ]
-    for path in candidates:
-        if path and os.path.exists(path):
+    for path in _candidate_paths():
+        if os.path.exists(path):
             return path
     return None
 

@@ -7,6 +7,7 @@ changes take effect without restarting the server.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -33,11 +34,26 @@ DEFAULT_RESUME = BASE_DIR / "sample_resume.html"
 
 
 def _default_backup_dir() -> Path:
-    """Prefer a OneDrive folder (auto-synced + private), else a local folder."""
+    """Prefer a cloud-synced folder (auto-synced + private), else a local folder.
+
+    Windows: OneDrive. macOS: iCloud Drive or a OneDrive folder under the home
+    directory. Falls back to a local ``backups/`` folder if none are found.
+    """
     for var in ("OneDriveCommercial", "OneDrive", "OneDriveConsumer"):
         root = os.getenv(var)
         if root and Path(root).exists():
             return Path(root) / "JobTrackerBackups"
+
+    if sys.platform == "darwin":
+        home = Path.home()
+        candidates = [
+            home / "Library" / "Mobile Documents" / "com~apple~CloudDocs",  # iCloud Drive
+            home / "OneDrive",
+        ]
+        for root in candidates:
+            if root.exists():
+                return root / "JobTrackerBackups"
+
     return BASE_DIR / "backups"
 
 # Keys that the Settings UI manages (editable). Maps env var -> description.
