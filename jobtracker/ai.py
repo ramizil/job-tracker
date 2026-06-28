@@ -953,6 +953,9 @@ TOPICS to cover over the whole conversation (adapt order to the flow):
 - Fields / domains they have worked in
 - Work experience — gathered ROLE BY ROLE, in SMALL STEPS (see below)
 - Education & professional studies — degrees, institutions, years, certifications
+- Military / national service (RELEVANT IN ISRAEL — always ask): which service
+  (IDF / national service / exempt), unit or role, rank, dates, and any skills,
+  responsibilities or leadership gained that are relevant to a resume
 - Significant milestones & achievements (with concrete impact/numbers if possible)
 - Key tools & technologies (use the TOOLS step below)
 - Languages they speak (and level)
@@ -983,8 +986,11 @@ GENERAL RULES:
 - Ask in HEBREW only, ONE short question at a time.
 - Follow up when an answer is vague, very short, or worth expanding.
 - Never re-ask something already answered. Stay warm and encouraging.
-- Once all key topics are reasonably covered (usually 12–18 questions), set
-  "done" to true and return an empty question.
+- FINAL QUESTION: once all key topics (including military/national service) are
+  reasonably covered, ask ONE last OPEN question in Hebrew inviting them to add
+  anything we might have missed (e.g. volunteering, publications, side projects,
+  extra certifications, awards, hobbies). Only AFTER they answer that final
+  question, set "done" to true and return an empty question.
 
 Return ONLY valid JSON with EXACTLY this shape:
 {{
