@@ -68,7 +68,17 @@
 
 <section class="panel">
   <div class="panel-head"><h2>Recent applications</h2><a class="btn sm" href="{{ url_for('main.applications') }}">View all</a></div>
-  <table class="grid">
+  <div class="tablebar" data-table-filter="#recent-table">
+    <input type="search" data-tf="search" class="tf-search" placeholder="🔎 Filter recent…">
+    <label class="tf-field">Status
+      <select data-tf="col" data-tf-col="1"><option value="">all</option></select>
+    </label>
+    <label class="tf-field">AI
+      <select data-tf="col" data-tf-col="5"><option value="">all</option></select>
+    </label>
+    <span class="muted sm tf-count" data-tf="count"></span>
+  </div>
+  <table id="recent-table" class="grid">
     <thead><tr><th>ID</th><th>Status</th>
       <th><span class="col-help" title="Offline keyword score (0-100%): how many of your resume's skills appear in the posting. Instant, automatic, no AI — title keywords count double.">Match</span></th>
       <th>Company</th><th>Title</th>

@@ -310,6 +310,14 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 #src-panel summary::-webkit-details-marker{display:none}
 .searchbar{display:flex;gap:8px;margin:12px 0}
 .searchbar input:first-child{flex:1}
+/* client-side table filter toolbar */
+.tablebar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:10px 0}
+.tablebar .tf-search{flex:1;min-width:220px;padding:8px 11px}
+.tablebar .tf-field{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;white-space:nowrap}
+.tablebar .tf-field select,.tablebar .tf-min{padding:6px 9px;font-size:13px}
+.tablebar .tf-min{width:62px}
+.tablebar .tf-count{margin-left:auto}
+@media(max-width:760px){.tablebar .tf-search{min-width:140px}.tablebar .tf-count{margin-left:0}}
 .kbd{display:inline-block;background:rgba(8,14,24,.8);border:1px solid var(--rule);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-family:Consolas,monospace;font-size:12px}
 .setting{margin:12px 0}
 .setting label{display:block;font-weight:600;margin-bottom:5px;font-size:13px}
