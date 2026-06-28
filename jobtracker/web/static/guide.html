@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Tracker — Features & Install Guide / מדריך התקנה ויכולות</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #181818; color: #E4E4E4EB;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px; line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 44px 52px 80px; }
+  h1 { font-size: 32px; font-weight: 700; margin: 0 0 6px; }
+  h2 { font-size: 20px; font-weight: 700; margin: 40px 0 14px; }
+  h3 { font-size: 17px; font-weight: 700; margin: 22px 0 10px; }
+  p  { margin: 8px 0; }
+  .he { direction: rtl; unicode-bidi: isolate; }
+  .sub { color: #E4E4E48D; font-size: 15px; }
+  .muted { color: #E4E4E45E; }
+  a { color: #599CE7; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .lead {
+    border: 1px solid #E4E4E41F; background: #E4E4E40A;
+    border-radius: 8px; padding: 18px 22px; margin: 22px 0 8px;
+  }
+  .pill {
+    display:inline-block; font-size:12px; font-weight:700;
+    padding:3px 11px; border-radius:10px; margin: 0 6px 6px 0;
+    border:1px solid #E4E4E41F;
+  }
+  .pill.g { color:#1F8A65E8; border-color:#1F8A6555; }
+  .pill.b { color:#599CE7; border-color:#599CE755; }
+  .pill.a { color:#F0A040E0; border-color:#F0A04055; }
+  table { width:100%; border-collapse: collapse; font-size: 15px; margin: 8px 0 4px; }
+  th {
+    text-align:left; padding:9px 12px; font-size:12px; text-transform:uppercase;
+    letter-spacing:.04em; color:#E4E4E48D; border-bottom:1px solid #E4E4E41F;
+  }
+  td { padding:11px 12px; border-bottom:1px solid #E4E4E41F; vertical-align: top; }
+  td.he { text-align: right; color:#E4E4E4D0; }
+  tr:hover td { background:#E4E4E406; }
+  .ico { width: 1.4em; display:inline-block; }
+  pre {
+    background:#141414; border:1px solid #E4E4E41F; border-radius:5px;
+    padding:12px 16px; font-size:13px; overflow-x:auto; line-height:1.7;
+    color:#E4E4E4D0;
+  }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  .card {
+    border:1px solid #E4E4E41F; background:#E4E4E40A;
+    border-radius:8px; padding:18px 22px;
+  }
+  .card h3 { margin-top: 0; }
+  ol { margin: 8px 0; padding-left: 20px; }
+  ol li { margin: 7px 0; }
+  .he ol { padding-left: 0; padding-right: 20px; }
+  hr { border:none; border-top:1px solid #E4E4E41F; margin: 40px 0; }
+  .note {
+    border-left:3px solid #1F8A65E8; background:#1F8A6510;
+    border-radius:0 6px 6px 0; padding:12px 16px; margin:14px 0; font-size:15px;
+  }
+  .warn {
+    border-left:3px solid #F0A040E0; background:#F0A04010;
+    border-radius:0 6px 6px 0; padding:12px 16px; margin:14px 0; font-size:15px;
+  }
+  code { background:#E4E4E410; padding:1px 6px; border-radius:4px; font-size:13px; }
+  @media (max-width: 760px){ .cols{ grid-template-columns:1fr; } .wrap{ padding:28px 22px 60px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🎯 Job Tracker</h1>
+  <p class="sub">A private, local AI job-search assistant — try it out!<br>
+    <span class="he">עוזר חכם ופרטי לחיפוש עבודה שרץ על המחשב שלך — בואו לנסות!</span></p>
+
+  <div class="lead">
+    <p><b>What is it?</b> &nbsp;Track every job you apply to and let AI do the heavy lifting:
+    analyze your fit, write cover letters &amp; recruiter notes, tailor your resume,
+    research the company, prep you for interviews, and more. Everything runs on your
+    own computer — your data never leaves your machine.</p>
+    <p class="he"><b>מה זה?</b> &nbsp;כלי לניהול חיפוש העבודה שלך, עם AI שעושה את העבודה הקשה:
+    מנתח התאמה למשרה, כותב מכתבים מקדימים והודעות למגייסים, מתאים את קורות החיים,
+    חוקר את החברה, מכין אותך לראיונות ועוד. הכול רץ על המחשב שלך — המידע לא יוצא החוצה.</p>
+  </div>
+
+  <p>
+    <span class="pill g">100% local &amp; private · מקומי ופרטי</span>
+    <span class="pill b">Windows &amp; macOS</span>
+    <span class="pill a">Free AI tier (Gemini) · שכבת AI חינמית</span>
+  </p>
+
+  <h2>✨ What it can do &nbsp;·&nbsp; <span class="he">מה הכלי יודע לעשות</span></h2>
+  <table>
+    <thead><tr><th style="width:50%">English</th><th class="he" style="width:50%">עברית</th></tr></thead>
+    <tbody>
+      <tr><td><span class="ico">📊</span> <b>Dashboard &amp; funnel</b> — see your whole pipeline, response/interview rates and rejection breakdowns at a glance.</td>
+          <td class="he"><b>לוח מחוונים ומשפך גיוס</b> — מבט-על על כל התהליך: שיעורי מענה, ראיונות ופילוח דחיות.</td></tr>
+      <tr><td><span class="ico">🗂️</span> <b>Application tracker</b> — every job with full status history (saved → applied → interview → offer…).</td>
+          <td class="he"><b>מעקב מועמדויות</b> — כל משרה עם היסטוריית סטטוס מלאה (שמור → הוגש → ראיון → הצעה…).</td></tr>
+      <tr><td><span class="ico">📋</span> <b>Paste a job → auto-magic</b> — paste a job ad and it auto-extracts the details and generates company research, fit analysis, a recruiter note and a cover letter.</td>
+          <td class="he"><b>הדבקת משרה → קסם אוטומטי</b> — מדביקים מודעת דרושים, והכלי מחלץ פרטים ומייצר אוטומטית מחקר על החברה, ניתוח התאמה, הודעה למגייס ומכתב מקדים.</td></tr>
+      <tr><td><span class="ico">🎯</span> <b>Resume match score</b> — every job scored 0–100% against your CV.</td>
+          <td class="he"><b>ציון התאמה לקורות החיים</b> — כל משרה מקבלת ציון 0–100% מול ה-CV שלך.</td></tr>
+      <tr><td><span class="ico">🤖</span> <b>AI fit analysis (bilingual)</b> — recruiter-style YES/MAYBE/NO verdict, requirement-by-requirement match, risks and concrete CV fixes, in English <i>and</i> Hebrew.</td>
+          <td class="he"><b>ניתוח התאמה ב-AI (דו-לשוני)</b> — חוות דעת בסגנון מגייס (כן/אולי/לא), התאמה לפי דרישות, סיכונים ותיקונים מומלצים ל-CV — באנגלית ובעברית.</td></tr>
+      <tr><td><span class="ico">📝</span> <b>Cover letter + recruiter note</b> — generated for the specific job, with one-click <b>PDF export</b>.</td>
+          <td class="he"><b>מכתב מקדים + הודעה למגייס</b> — נכתבים במיוחד למשרה, עם <b>ייצוא ל-PDF</b> בלחיצה.</td></tr>
+      <tr><td><span class="ico">📄</span> <b>Tailored resume</b> — pick the AI suggestions and generate a tailored CV (same styling), edit it, export to PDF.</td>
+          <td class="he"><b>קורות חיים מותאמים</b> — בוחרים את הצעות ה-AI ומקבלים CV מותאם למשרה (באותו עיצוב), עורכים ומייצאים ל-PDF.</td></tr>
+      <tr><td><span class="ico">🎤</span> <b>“My Pitch”</b> — a personal “about me” script you can edit, hear read aloud in a natural Hebrew voice, and have AI tailor per job.</td>
+          <td class="he"><b>"הפיץ' שלי"</b> — תסריט הצגה עצמית שניתן לערוך, לשמוע בקול עברי טבעי, ולהתאים בעזרת AI לכל משרה.</td></tr>
+      <tr><td><span class="ico">🗣️</span> <b>Interview prep &amp; mock interview</b> — practice questions and a spoken mock interview with natural voices.</td>
+          <td class="he"><b>הכנה לראיון וסימולציית ראיון</b> — שאלות תרגול וראיון מדומה מוקרא בקול טבעי.</td></tr>
+      <tr><td><span class="ico">🔎</span> <b>Company web research</b> — what they do, size, growth history and recent news, with smart angles for your application.</td>
+          <td class="he"><b>מחקר על החברה מהאינטרנט</b> — תחום העיסוק, גודל, היסטוריית צמיחה וחדשות אחרונות, עם זוויות חכמות למועמדות.</td></tr>
+      <tr><td><span class="ico">🙏</span> <b>Rejection feedback letter</b> — got a “no”? Generate a polite note asking for feedback so you improve.</td>
+          <td class="he"><b>מכתב בקשת משוב אחרי דחייה</b> — קיבלת "לא"? צור מכתב מנומס לבקשת משוב כדי להשתפר.</td></tr>
+      <tr><td><span class="ico">🔍</span> <b>Job search</b> — search real job boards (incl. LinkedIn postings via JSearch) ranked by match to your CV.</td>
+          <td class="he"><b>חיפוש משרות</b> — חיפוש במאגרי דרושים אמיתיים (כולל משרות לינקדאין דרך JSearch), מדורג לפי התאמה ל-CV.</td></tr>
+      <tr><td><span class="ico">⏰</span> <b>Smart reminders</b> — alerts for saved jobs you haven’t applied to yet.</td>
+          <td class="he"><b>תזכורות חכמות</b> — התראות על משרות ששמרת ועדיין לא הגשת אליהן.</td></tr>
+      <tr><td><span class="ico">🔗</span> <b>Quick-copy links</b> — one-click copy of your LinkedIn / GitHub when filling forms.</td>
+          <td class="he"><b>העתקה מהירה של קישורים</b> — העתקת LinkedIn / GitHub בלחיצה בזמן מילוי טפסים.</td></tr>
+      <tr><td><span class="ico">🧠</span> <b>Choose your AI</b> — works with Google Gemini, OpenAI (GPT) or Anthropic (Claude).</td>
+          <td class="he"><b>בחירת ספק AI</b> — עובד עם Google Gemini, ‏OpenAI ‏(GPT) או Anthropic ‏(Claude).</td></tr>
+      <tr><td><span class="ico">💾</span> <b>Export &amp; backup</b> — CSV / Excel export, plus one-click backup &amp; restore.</td>
+          <td class="he"><b>ייצוא וגיבוי</b> — ייצוא ל-CSV / Excel, וגיבוי ושחזור בלחיצה.</td></tr>
+      <tr><td><span class="ico">🔒</span> <b>Local &amp; private</b> — all data stays in a local database on your PC.</td>
+          <td class="he"><b>מקומי ופרטי</b> — כל המידע נשמר במסד נתונים מקומי על המחשב שלך.</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2>⚙️ How to install &nbsp;·&nbsp; <span class="he">איך מתקינים</span></h2>
+
+  <h3>Before you start &nbsp;·&nbsp; <span class="he">לפני שמתחילים</span></h3>
+  <table>
+    <tbody>
+      <tr><td style="width:50%">Install <b><a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.10 or newer</a></b>. On Windows, tick <b>“Add Python to PATH”</b> during install.</td>
+          <td class="he" style="width:50%">התקינו <b><a href="https://www.python.org/downloads/" target="_blank" rel="noopener">Python 3.10 ומעלה</a></b>. ב-Windows סמנו <b>"Add Python to PATH"</b> בזמן ההתקנה.</td></tr>
+      <tr><td>(Recommended) Have <b>Chrome</b> or <b>Edge</b> installed for a clean app window &amp; perfect PDFs — most PCs already do.</td>
+          <td class="he">(מומלץ) שיהיה מותקן <b>Chrome</b> או <b>Edge</b> לחלון אפליקציה נקי ול-PDF מושלם — לרוב כבר מותקן.</td></tr>
+      <tr><td>Get the app folder from Rami (a zip), or clone the repo if you were granted access.</td>
+          <td class="he">קבלו מ-רמי את תיקיית האפליקציה (קובץ zip), או בצעו clone למאגר אם קיבלתם הרשאה.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="cols">
+    <div class="card">
+      <h3>🪟 Windows</h3>
+      <ol>
+        <li>Unzip the <code>job-tracker</code> folder somewhere (e.g. Documents).<br><span class="muted he">פתחו את התיקייה <code>job-tracker</code> (למשל ב-Documents).</span></li>
+        <li>Double-click <b><code>start.bat</code></b>.<br><span class="muted he">לחצו פעמיים על <b><code>start.bat</code></b>.</span></li>
+        <li>First run installs everything automatically, then the app window opens.<br><span class="muted he">בהרצה הראשונה הכול מותקן אוטומטית, ואז נפתח חלון האפליקציה.</span></li>
+        <li>To stop: click <b>⏻ Quit</b> in the app, or press <code>Ctrl+C</code> in the console.<br><span class="muted he">לעצירה: <b>⏻ Quit</b> באפליקציה, או <code>Ctrl+C</code> בחלון הקונסול.</span></li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>🍎 macOS</h3>
+      <ol>
+        <li>Unzip the <code>job-tracker</code> folder.<br><span class="muted he">פתחו את התיקייה <code>job-tracker</code>.</span></li>
+        <li>Double-click <b><code>start.command</code></b>.<br><span class="muted he">לחצו פעמיים על <b><code>start.command</code></b>.</span></li>
+        <li>If macOS blocks it: right-click → <b>Open</b> (once), or run <code>chmod +x start.command</code> in Terminal.<br><span class="muted he">אם macOS חוסם: קליק-ימני → <b>Open</b> (פעם אחת), או <code>chmod +x start.command</code> בטרמינל.</span></li>
+        <li>To stop: click <b>⏻ Quit</b>, or <code>Ctrl+C</code> in Terminal.<br><span class="muted he">לעצירה: <b>⏻ Quit</b>, או <code>Ctrl+C</code> בטרמינל.</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>One last step — add an AI key &nbsp;·&nbsp; <span class="he">צעד אחרון — הוספת מפתח AI</span></h3>
+  <table>
+    <tbody>
+      <tr><td style="width:50%">In the app, open <b>⚙ Settings</b>, choose a provider and paste an API key. The easiest free option is <b>Google Gemini</b> — get a key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>. Click <b>Save</b> (no restart needed).</td>
+          <td class="he" style="width:50%">באפליקציה, פתחו <b>⚙ Settings</b>, בחרו ספק והדביקו מפתח API. האפשרות החינמית הקלה ביותר היא <b>Google Gemini</b> — מפתח מקבלים ב-<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>. לחצו <b>Save</b> (אין צורך באתחול).</td></tr>
+      <tr><td><i>Optional:</i> for job search, add a free <b>JSearch (RapidAPI)</b> key in Settings.</td>
+          <td class="he"><i>רשות:</i> לחיפוש משרות, הוסיפו מפתח חינמי של <b>JSearch (RapidAPI)</b> בהגדרות.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <b>That’s it!</b> The app opens at <code>http://127.0.0.1:5000</code>. Start by clicking
+    <b>📋 Paste Job</b> and pasting any job ad.<br>
+    <span class="he"><b>זהו!</b> האפליקציה נפתחת בכתובת <code>http://127.0.0.1:5000</code>. התחילו בלחיצה על
+    <b>📋 Paste Job</b> והדביקו מודעת דרושים כלשהי.</span>
+  </div>
+
+  <div class="warn">
+    <b>Tip:</b> Set your own resume in <b>⚙ Settings → Resume HTML path</b> so the match
+    score and AI features use <i>your</i> CV.<br>
+    <span class="he"><b>טיפ:</b> הגדירו את קורות החיים שלכם ב-<b>⚙ Settings → Resume HTML path</b>
+    כדי שציון ההתאמה ויכולות ה-AI ישתמשו ב-CV שלכם.</span>
+  </div>
+
+  <hr>
+  <p class="muted">Built by Rami Zilbershmit · Local-first &amp; private · נבנה על-ידי רמי זילברשמיט · מקומי ופרטי</p>
+
+</div>
+</body>
+</html>

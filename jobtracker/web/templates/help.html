@@ -4,6 +4,22 @@
 <h1>❓ Help &amp; how to use it</h1>
 
 <section class="panel">
+  <h2>🎬 Watch the guided demo</h2>
+  <p class="muted">A narrated, 18-scene walkthrough of every feature — press
+    <b>▶ Start demo</b> inside it for voice narration, or step through with the
+    arrows / sidebar. Plays entirely in your browser.</p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px;">
+    <a class="btn primary" href="{{ url_for('static', filename='demo.html') }}" target="_blank" rel="noopener">▶ Open the demo (full screen)</a>
+    <a class="btn" href="{{ url_for('static', filename='guide.html') }}" target="_blank" rel="noopener">📖 Printable guide (English + עברית)</a>
+  </div>
+  <div style="position:relative;width:100%;aspect-ratio:16/9;border:1px solid var(--border,#233060);border-radius:10px;overflow:hidden;background:#04060f;">
+    <iframe src="{{ url_for('static', filename='demo.html') }}" title="Job Tracker demo"
+            style="position:absolute;inset:0;width:100%;height:100%;border:0;"
+            loading="lazy" allow="autoplay"></iframe>
+  </div>
+</section>
+
+<section class="panel">
   <h2>🚀 Step-by-step: from zero to tailored CV</h2>
   <ol class="steps">
     <li><b>Configure your keys (one time).</b> Open

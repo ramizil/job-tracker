@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job Tracker — a guided tour</title>
+<style>
+:root {
+  --bg:        #0b1020;
+  --bg-2:      #0f1530;
+  --border:    #233060;
+  --text:      #e6ecff;
+  --text-dim:  #94a3c4;
+  --text-mute: #6b7aa7;
+  --accent:    #58e1c4;
+  --accent-2:  #7c9bff;
+  --warn:      #f6b95b;
+  --ok:        #58e1c4;
+  --sans:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono:      "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+
+  --crm-bg:        #f5f7fb;
+  --crm-card:      #ffffff;
+  --crm-text:      #1f2937;
+  --crm-dim:       #6b7280;
+  --crm-mute:      #9ca3af;
+  --crm-border:    #e5e7eb;
+  --crm-primary:   #2563eb;
+  --crm-primary-d: #1e40af;
+  --crm-success:   #16a34a;
+  --crm-warn:      #d97706;
+  --crm-danger:    #dc2626;
+  --crm-tag-bg:    #eff6ff;
+  --crm-tag-fg:    #1d4ed8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #04060f; color: var(--text); font-family: var(--sans); overflow: hidden; }
+.viewport { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; padding: 14px;
+  background: radial-gradient(ellipse at top, #0c1230, #04060f 70%); }
+.player-bar { display: flex; flex-direction: column; gap: 10px; padding: 10px 16px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; }
+.player-bar .row1 { display: flex; justify-content: space-between; align-items: center; }
+.scrubber { display: flex; align-items: center; gap: 12px; }
+.scrubber .label { font-family: var(--mono); font-size: 10.5px; color: var(--text-mute); min-width: 58px; white-space: nowrap; }
+.scrubber .label.right { flex: 0 0 auto; min-width: 0; max-width: 280px; overflow: hidden; text-overflow: ellipsis; text-align: right; color: var(--text-dim); }
+.scrubber .track { flex: 1; position: relative; height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; cursor: pointer; border: 1px solid rgba(255,255,255,0.06); }
+.scrubber .track:hover .thumb { transform: translate(-50%, -50%) scale(1.2); }
+.scrubber .fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 3px; transition: width 0.3s; }
+.scrubber .markers { position: absolute; top: -3px; left: 0; right: 0; height: 14px; pointer-events: none; }
+.scrubber .marker { position: absolute; width: 2px; height: 14px; background: rgba(255,255,255,0.18); border-radius: 1px; transform: translateX(-50%); }
+.scrubber .marker.act { background: rgba(246,185,91,0.85); width: 3px; height: 16px; top: -4px; }
+.scrubber .thumb { position: absolute; top: 50%; width: 16px; height: 16px; background: #fff; border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(88,225,196,0.4), 0 1px 3px rgba(0,0,0,0.4); transform: translate(-50%, -50%); transition: left 0.3s, transform 0.15s; pointer-events: none; left: 0%; }
+.controls .nav-btn { padding: 6px 9px; font-size: 13px; min-width: 32px; text-align: center; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0b1020; font-weight: 800; font-size: 15px; display: grid; place-items: center; }
+.brand h1 { font-size: 14px; font-weight: 700; }
+.brand .sub { font-size: 11.5px; color: var(--text-dim); }
+.controls { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.controls button, .controls select { appearance: none; background: rgba(255,255,255,0.04); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+.controls button:hover, .controls select:hover { background: rgba(255,255,255,0.08); border-color: var(--accent-2); }
+.controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.controls .start { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0b1020; font-weight: 700; border-color: transparent; padding: 7px 18px; }
+.progress { color: var(--text-dim); min-width: 78px; text-align: right; font-family: var(--mono); font-size: 11.5px; }
+.stage-wrap { position: relative; overflow: hidden; }
+.stage { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(var(--scale, 1)); width: 1280px; height: 720px;
+  background: radial-gradient(ellipse at top left, #15204a 0%, var(--bg) 60%); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.scene { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.6s; }
+.scene.show { opacity: 1; pointer-events: auto; }
+.hook, .outro { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 80px; text-align: center; }
+.hook .badge, .outro .badge { font-size: 11px; color: var(--accent); background: rgba(88,225,196,0.08); border: 1px solid rgba(88,225,196,0.4); padding: 5px 12px; border-radius: 999px; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 28px; opacity: 0; transition: opacity 0.6s 0.15s; }
+.hook.show .badge, .outro.show .badge { opacity: 1; }
+.hook h1, .outro h1 { font-size: 60px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 18px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; opacity: 0; transform: translateY(12px); transition: opacity 0.7s 0.4s, transform 0.7s 0.4s; }
+.hook.show h1, .outro.show h1 { opacity: 1; transform: translateY(0); }
+.hook .tag, .outro .tag { font-size: 20px; color: var(--text-dim); max-width: 880px; line-height: 1.5; margin-bottom: 32px; opacity: 0; transition: opacity 0.7s 0.9s; }
+.hook.show .tag, .outro.show .tag { opacity: 1; }
+.hook .persona { display: flex; gap: 18px; align-items: center; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 12px; padding: 16px 22px; opacity: 0; transition: opacity 0.7s 1.3s; }
+.hook.show .persona { opacity: 1; }
+.hook .avatar { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #58e1c4, #7c9bff); display: grid; place-items: center; font-size: 28px; font-weight: 700; color: #0b1020; }
+.hook .persona-info { text-align: left; }
+.hook .persona-info .name { font-size: 18px; font-weight: 700; }
+.hook .persona-info .role { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+.hook .persona-info .case { font-size: 12px; color: var(--accent); margin-top: 6px; font-family: var(--mono); }
+.outro .moto { font-size: 50px; font-weight: 800; letter-spacing: -1px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 22px; opacity: 0; transform: translateY(12px); transition: opacity 0.7s 0.2s, transform 0.7s 0.2s; }
+.outro.show .moto { opacity: 1; transform: translateY(0); }
+.outro .insert-card { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 18px 26px; font-size: 15px; color: var(--text); opacity: 0; transition: opacity 0.7s 1.4s; max-width: 760px; line-height: 1.6; }
+.outro.show .insert-card { opacity: 1; }
+.outro .insert-card .lbl { color: var(--accent); font-weight: 700; }
+.crm-scene { padding: 22px 24px; }
+.monitor { background: var(--crm-bg); border-radius: 12px; overflow: hidden; height: 100%; display: grid; grid-template-rows: 36px auto 1fr 28px; color: var(--crm-text); font-size: 13px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+.win-chrome { display: flex; align-items: center; gap: 6px; padding: 0 14px; background: #e5e7eb; border-bottom: 1px solid var(--crm-border); }
+.win-chrome .dot { width: 12px; height: 12px; border-radius: 50%; }
+.win-chrome .red { background: #ef4444; } .win-chrome .yellow { background: #f59e0b; } .win-chrome .green { background: #22c55e; }
+.win-chrome .url { margin-left: 18px; background: var(--crm-card); border: 1px solid var(--crm-border); border-radius: 5px; padding: 4px 12px; font-family: var(--mono); font-size: 11.5px; color: var(--crm-dim); flex: 1; max-width: 580px; }
+.crm-header { background: #141a30; color: #fff; padding: 10px 18px; display: flex; align-items: center; gap: 24px; }
+.crm-header .logo-tcm { font-weight: 800; font-size: 14px; letter-spacing: 0.4px; }
+.crm-header .logo-tcm span { color: #58e1c4; }
+.crm-header nav { display: flex; gap: 4px; }
+.crm-header nav a { font-size: 12px; padding: 5px 12px; border-radius: 5px; color: rgba(255,255,255,0.65); }
+.crm-header nav a.active { background: rgba(124,155,255,0.25); color: #fff; }
+.crm-header .me { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+.crm-header .me .av { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #58e1c4, #7c9bff); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #0b1020; }
+.crm-header .me .info { font-size: 11.5px; line-height: 1.3; }
+.crm-header .me .info b { display: block; }
+.crm-header .me .info span { color: rgba(255,255,255,0.7); font-size: 10.5px; }
+.crm-body { display: grid; grid-template-columns: 240px 1fr; height: 100%; overflow: hidden; }
+.sidebar { background: #eef2f7; border-right: 1px solid var(--crm-border); padding: 12px 8px 12px 12px; overflow-y: auto; }
+.sidebar .sb-title { font-size: 10.5px; color: var(--crm-dim); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; margin-bottom: 8px; padding-left: 10px; }
+.sidebar ol { list-style: none; display: flex; flex-direction: column; gap: 1px; }
+.sidebar li { display: grid; grid-template-columns: 24px 1fr; gap: 6px; padding: 5px 8px; border-radius: 5px; font-size: 11.5px; color: var(--crm-dim); align-items: center; cursor: pointer; transition: background 0.15s; }
+.sidebar li:hover { background: rgba(37,99,235,0.08); color: var(--crm-primary-d); }
+.sidebar li .num { width: 18px; height: 18px; border-radius: 50%; background: var(--crm-card); border: 1px solid var(--crm-border); font-size: 10px; font-weight: 700; display: grid; place-items: center; color: var(--crm-dim); }
+.sidebar li.done .num { background: var(--crm-success); border-color: var(--crm-success); color: #fff; }
+.sidebar li.done .num::before { content: "✓"; }
+.sidebar li.done .num span { display: none; }
+.sidebar li.active { background: var(--crm-tag-bg); color: var(--crm-primary-d); font-weight: 600; }
+.sidebar li.active .num { background: var(--crm-primary); border-color: var(--crm-primary); color: #fff; }
+.main { background: var(--crm-bg); padding: 18px 24px 6px; overflow: hidden; position: relative; }
+.main .breadcrumb { font-size: 11px; color: var(--crm-mute); margin-bottom: 8px; letter-spacing: 0.3px; }
+.main .breadcrumb span { color: var(--crm-text); font-weight: 600; }
+.main h2 { font-size: 18px; color: var(--crm-text); margin-bottom: 14px; }
+.main h2 small { font-weight: 400; color: var(--crm-dim); font-size: 12.5px; margin-left: 8px; }
+.screen { display: none; }
+.screen.show { display: block; animation: fadein 0.35s ease; }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.card { background: var(--crm-card); border: 1px solid var(--crm-border); border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; }
+.card-row { display: grid; grid-template-columns: 170px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--crm-border); font-size: 12.5px; }
+.card-row:last-child { border-bottom: none; }
+.card-row .lbl { color: var(--crm-dim); font-size: 11.5px; }
+.card-row .val { color: var(--crm-text); font-size: 12.5px; }
+.card-row .val.id { color: var(--crm-primary); font-weight: 600; font-family: var(--mono); }
+.card-row .val.green { color: var(--crm-success); font-weight: 600; }
+.he { direction: rtl; unicode-bidi: isolate; text-align: right; }
+.table { width: 100%; font-size: 12px; border-collapse: collapse; background: var(--crm-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--crm-border); }
+.table th { text-align: left; padding: 8px 12px; background: #f3f4f6; font-size: 10.5px; color: var(--crm-dim); text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--crm-border); }
+.table td { padding: 7px 12px; border-bottom: 1px solid var(--crm-border); }
+.table tr:last-child td { border-bottom: none; }
+.table tr.sel { background: #fef3c7; }
+.table tr.sel td { color: var(--crm-text); font-weight: 600; }
+.btn { display: inline-block; background: var(--crm-primary); color: #fff; border-radius: 5px; padding: 6px 14px; font-size: 12px; font-weight: 600; border: none; }
+.btn.ghost { background: #fff; color: var(--crm-text); border: 1px solid var(--crm-border); }
+.btn.success { background: var(--crm-success); }
+.btn.warn { background: var(--crm-warn); }
+.btn.lg { padding: 8px 18px; font-size: 13px; }
+.input-wrap { background: var(--crm-card); border: 1px solid var(--crm-border); border-radius: 5px; padding: 6px 10px; font-size: 12px; color: var(--crm-text); display: block; margin-bottom: 8px; }
+.input-wrap.empty { color: var(--crm-mute); font-style: italic; }
+.input-wrap.big { min-height: 84px; line-height: 1.5; white-space: pre-wrap; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.field { margin-bottom: 10px; }
+.field-lbl { font-size: 10.5px; color: var(--crm-dim); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 3px; }
+.status-pill { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.status-pill.green { background: #dcfce7; color: var(--crm-success); }
+.status-pill.amber { background: #fef3c7; color: var(--crm-warn); }
+.status-pill.blue  { background: var(--crm-tag-bg); color: var(--crm-tag-fg); }
+.status-pill.red   { background: #fee2e2; color: var(--crm-danger); }
+.status-pill.orange{ background: #ffedd5; color: #c2410c; }
+.notice { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 7px; padding: 10px 14px; font-size: 12.5px; display: flex; align-items: center; gap: 8px; }
+.notice.warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.notice.info { background: #eff6ff; border-color: #bfdbfe; color: var(--crm-tag-fg); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile { background: var(--crm-card); border: 1px solid var(--crm-border); border-radius: 7px; padding: 12px; position: relative; }
+.tile.sel { border-color: var(--crm-primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.18); }
+.tile h4 { font-size: 13px; margin-bottom: 4px; }
+.tile p { font-size: 11.5px; color: var(--crm-dim); }
+.tile .price { font-size: 14px; color: var(--crm-primary); font-weight: 700; margin-top: 6px; }
+.tile .added { position: absolute; top: 8px; right: 8px; background: var(--crm-success); color: #fff; border-radius: 999px; width: 18px; height: 18px; display: grid; place-items: center; font-size: 11px; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--crm-border); border-top-color: var(--crm-primary); border-radius: 50%; animation: spin 0.9s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.poll { font-size: 11.5px; color: var(--crm-dim); border-left: 2px solid var(--crm-primary); padding: 4px 0 4px 10px; margin: 4px 0; }
+.poll.done { color: var(--crm-success); border-color: var(--crm-success); }
+.kpis { display:grid; grid-template-columns: repeat(4,1fr); gap:10px; margin-bottom:10px; }
+.kpi { background: var(--crm-card); border:1px solid var(--crm-border); border-radius:8px; padding:12px 14px; }
+.kpi .v { font-size:22px; font-weight:800; color: var(--crm-primary); }
+.kpi .l { font-size:10.5px; color: var(--crm-dim); text-transform:uppercase; letter-spacing:.4px; margin-top:2px; }
+.funnel { display:flex; flex-direction:column; gap:6px; }
+.fbar { display:grid; grid-template-columns:120px 1fr 46px; gap:10px; align-items:center; font-size:12px; }
+.fbar .track { height:18px; background:#eef2f7; border-radius:5px; overflow:hidden; }
+.fbar .f { height:100%; background:linear-gradient(90deg,#2563eb,#7c9bff); }
+.api-tag { background: #141a30; color: #cdd6f4; font-family: var(--mono); font-size: 11px; display: flex; align-items: center; padding: 0 18px; gap: 12px; }
+.api-tag .pill { background: rgba(124,155,255,0.2); color: #cdd6f4; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 10px; text-transform: uppercase; }
+.caption-bar { padding: 14px 22px; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 10px; min-height: 64px; display: flex; align-items: center; }
+.caption-bar .caption { flex: 1; font-size: 16px; color: var(--text); line-height: 1.5; }
+.caption-bar .caption.dim { color: var(--text-dim); font-style: italic; }
+.caption-bar .scene-tag { margin-left: 16px; color: var(--text-mute); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="viewport">
+
+  <div class="player-bar">
+    <div class="row1">
+      <div class="brand">
+        <div class="logo">🎯</div>
+        <div>
+          <h1>Job Tracker — a guided tour</h1>
+          <div class="sub">Your private, local AI job-search co-pilot · narrated walkthrough</div>
+        </div>
+      </div>
+      <div class="controls">
+        <button id="btn-prev" class="nav-btn" title="Previous scene (←)">◀</button>
+        <button id="btn-play" class="start">▶ Start demo</button>
+        <button id="btn-next" class="nav-btn" title="Next scene (→)">▶</button>
+        <button id="btn-pause" disabled title="Pause / resume (Space)">⏸ Pause</button>
+        <button id="btn-restart" disabled title="Restart from beginning (Home)">↻ Replay</button>
+        <select id="speed" title="Playback speed">
+          <option value="0.85">0.85×</option>
+          <option value="1.00" selected>1.00×</option>
+          <option value="1.15">1.15×</option>
+          <option value="1.30">1.30×</option>
+        </select>
+        <select id="voice" title="Voice"></select>
+        <span id="progress" class="progress">— / 18</span>
+      </div>
+    </div>
+    <div class="scrubber">
+      <span class="label" id="scrub-label-left">00 / 18</span>
+      <div class="track" id="scrub-track" title="Click to jump to a scene">
+        <div class="fill" id="scrub-fill"></div>
+        <div class="markers" id="scrub-markers"></div>
+        <div class="thumb" id="scrub-thumb"></div>
+      </div>
+      <span class="label right" id="scrub-label-right">Click ▶ to begin</span>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+
+      <!-- Hook -->
+      <div class="scene hook" id="scene-hook">
+        <div class="badge">A private AI job-search assistant</div>
+        <h1>Apply smarter, not harder.</h1>
+        <div class="tag">Paste a job once and Job Tracker researches the company, scores your fit, writes your cover letter and recruiter note, prepares you for the interview — and keeps your whole pipeline in one place. Everything runs locally on your own machine.</div>
+        <div class="persona">
+          <div class="avatar">🎯</div>
+          <div class="persona-info">
+            <div class="name">Job Tracker</div>
+            <div class="role">Runs at http://127.0.0.1:5000 · 100% local &amp; private</div>
+            <div class="case">16 features · Gemini / OpenAI / Claude</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- App scene -->
+      <div class="scene crm-scene" id="scene-crm">
+        <div class="monitor">
+          <div class="win-chrome">
+            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+            <span class="url" id="addr">🔒 127.0.0.1:5000/</span>
+          </div>
+
+          <div class="crm-header">
+            <div class="logo-tcm">🎯 Job<span>Tracker</span></div>
+            <nav>
+              <a id="nav-dash">Dashboard</a>
+              <a id="nav-apps">Applications</a>
+              <a id="nav-search">Search</a>
+              <a id="nav-paste">📋 Paste Job</a>
+              <a id="nav-pitch">🎤 My Pitch</a>
+              <a id="nav-set">⚙ Settings</a>
+            </nav>
+            <div class="me">
+              <div class="av">R</div>
+              <div class="info"><b>Rami</b><span>local user</span></div>
+            </div>
+          </div>
+
+          <div class="crm-body">
+            <div class="sidebar">
+              <div class="sb-title">Guided tour</div>
+              <ol id="sidebar-list">
+                <li data-step="1"><span class="num"><span>1</span></span>Paste a job</li>
+                <li data-step="2"><span class="num"><span>2</span></span>Auto-generate (AI)</li>
+                <li data-step="3"><span class="num"><span>3</span></span>Dashboard &amp; funnel</li>
+                <li data-step="4"><span class="num"><span>4</span></span>Application detail</li>
+                <li data-step="5"><span class="num"><span>5</span></span>AI fit (EN + HE)</li>
+                <li data-step="6"><span class="num"><span>6</span></span>Cover letter + PDF</li>
+                <li data-step="7"><span class="num"><span>7</span></span>Recruiter note</li>
+                <li data-step="8"><span class="num"><span>8</span></span>Tailored resume</li>
+                <li data-step="9"><span class="num"><span>9</span></span>Company insight</li>
+                <li data-step="10"><span class="num"><span>10</span></span>My Pitch + voice</li>
+                <li data-step="11"><span class="num"><span>11</span></span>Mock interview</li>
+                <li data-step="12"><span class="num"><span>12</span></span>Rejection feedback</li>
+                <li data-step="13"><span class="num"><span>13</span></span>Smart reminders</li>
+                <li data-step="14"><span class="num"><span>14</span></span>Job search</li>
+                <li data-step="15"><span class="num"><span>15</span></span>Choose your AI</li>
+                <li data-step="16"><span class="num"><span>16</span></span>Export &amp; backup</li>
+              </ol>
+            </div>
+
+            <div class="main">
+
+              <!-- 1 — Paste a job -->
+              <div class="screen" data-screen="1">
+                <div class="breadcrumb">📋 <span>Paste Job</span></div>
+                <h2>Paste a job ad <small>title, company &amp; description in one box</small></h2>
+                <div class="card">
+                  <div class="field-lbl">Paste the full job posting</div>
+                  <div class="input-wrap big">Senior Performance Engineer — Acme Cloud
+We're hiring a performance/NFT engineer to own load testing for our SaaS platform: LoadRunner, JMeter, CI pipelines, observability (Grafana/Dynatrace), and tuning under load…</div>
+                  <label style="font-size:11.5px;color:var(--crm-dim);"><input type="checkbox" checked disabled> Auto-generate AI artifacts after capture</label>
+                  <div style="margin-top:10px;"><button class="btn lg">📋 Capture &amp; auto-extract</button></div>
+                </div>
+                <div class="notice info">Tip: pasting the full description is what powers match scoring and every AI feature.</div>
+              </div>
+
+              <!-- 2 — Auto-generate -->
+              <div class="screen" data-screen="2">
+                <div class="breadcrumb">📋 Paste Job › <span>Generating…</span></div>
+                <h2>One paste → four AI artifacts <small>running automatically</small></h2>
+                <div class="card">
+                  <div class="poll done">✓ Job captured · Acme Cloud · Senior Performance Engineer</div>
+                  <div class="poll done">✓ Company research (web) — done</div>
+                  <div class="poll done">✓ Fit analysis (English + Hebrew) — done</div>
+                  <div class="poll done">✓ Recruiter note — done</div>
+                  <div class="poll"><span class="spinner"></span> Cover letter — generating…</div>
+                </div>
+                <div class="notice">No buttons to hunt for — capture once and the AI fills everything in.</div>
+              </div>
+
+              <!-- 3 — Dashboard -->
+              <div class="screen" data-screen="3">
+                <div class="breadcrumb">Dashboard</div>
+                <h2>Your pipeline at a glance</h2>
+                <div class="kpis">
+                  <div class="kpi"><div class="v">42</div><div class="l">Total apps</div></div>
+                  <div class="kpi"><div class="v">31%</div><div class="l">Response rate</div></div>
+                  <div class="kpi"><div class="v">12%</div><div class="l">Interview rate</div></div>
+                  <div class="kpi"><div class="v">5</div><div class="l">Saved · to do</div></div>
+                </div>
+                <div class="card">
+                  <div class="funnel">
+                    <div class="fbar"><span>Saved</span><div class="track"><div class="f" style="width:100%"></div></div><span>42</span></div>
+                    <div class="fbar"><span>Applied</span><div class="track"><div class="f" style="width:74%"></div></div><span>31</span></div>
+                    <div class="fbar"><span>Interview</span><div class="track"><div class="f" style="width:24%"></div></div><span>10</span></div>
+                    <div class="fbar"><span>Offer</span><div class="track"><div class="f" style="width:7%"></div></div><span>3</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 4 — Application detail -->
+              <div class="screen" data-screen="4">
+                <div class="breadcrumb">Applications › <span>Acme Cloud — Senior Performance Engineer</span></div>
+                <h2>Application detail <small>everything for one job in one place</small></h2>
+                <div class="card">
+                  <div class="card-row"><div class="lbl">Company</div><div class="val">Acme Cloud</div></div>
+                  <div class="card-row"><div class="lbl">Match score</div><div class="val"><span class="status-pill blue">87% match</span></div></div>
+                  <div class="card-row"><div class="lbl">AI fit</div><div class="val"><span class="status-pill green">YES</span></div></div>
+                  <div class="card-row"><div class="lbl">Status</div><div class="val"><span class="status-pill amber">Applied</span></div></div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <span class="status-pill blue">🤖 Generate with AI</span>
+                  <span class="status-pill blue">📄 Cover letter</span>
+                  <span class="status-pill blue">🔎 Company insight</span>
+                  <span class="status-pill blue">🎤 My pitch</span>
+                  <span class="status-pill blue">🔗 Quick copy</span>
+                </div>
+              </div>
+
+              <!-- 5 — AI fit -->
+              <div class="screen" data-screen="5">
+                <div class="breadcrumb">Acme Cloud › <span>AI fit analysis</span></div>
+                <h2>Fit analysis — bilingual <small>recruiter-style verdict</small></h2>
+                <div class="card">
+                  <div class="card-row"><div class="lbl">Verdict</div><div class="val">Strong match — 87% · <span class="he">התאמה חזקה</span></div></div>
+                  <div class="card-row"><div class="lbl">LoadRunner / JMeter</div><div class="val green">✓ Strong — 6+ yrs · <span class="he">ניסיון רב</span></div></div>
+                  <div class="card-row"><div class="lbl">Cloud SaaS at scale</div><div class="val" style="color:var(--crm-warn)">~ Partial · <span class="he">חלקי</span></div></div>
+                  <div class="card-row"><div class="lbl">Fix to make</div><div class="val">Add a line on AWS load tests · <span class="he">הוסף שורה על בדיקות עומס ב-AWS</span></div></div>
+                </div>
+                <div class="notice">Every value is written in English <b>and</b> Hebrew, side by side.</div>
+              </div>
+
+              <!-- 6 — Cover letter -->
+              <div class="screen" data-screen="6">
+                <div class="breadcrumb">Acme Cloud › <span>Cover letter</span></div>
+                <h2>Cover letter <small>tailored to this exact job</small></h2>
+                <div class="card">
+                  <div class="input-wrap big">Dear Acme Cloud Hiring Team,
+
+I was excited to see your Senior Performance Engineer role. Over the last six years I've owned load testing with LoadRunner and JMeter, built CI performance gates, and tuned systems under load using Grafana and Dynatrace…</div>
+                  <button class="btn">💾 Save</button>
+                  <button class="btn ghost">⬇ Export PDF</button>
+                </div>
+                <div class="notice info">One click turns it into a clean, ready-to-send PDF.</div>
+              </div>
+
+              <!-- 7 — Recruiter note -->
+              <div class="screen" data-screen="7">
+                <div class="breadcrumb">Acme Cloud › <span>Note to recruiter</span></div>
+                <h2>Short note to the recruiter <small>always includes an English version</small></h2>
+                <div class="card">
+                  <div class="input-wrap big">Hi — I just applied for the Senior Performance Engineer role. With 6+ years in performance/NFT engineering (LoadRunner, JMeter, CI gates, Grafana/Dynatrace) I think I'm a strong fit and would love a quick chat. Thanks!</div>
+                  <button class="btn ghost">📋 Copy</button>
+                </div>
+                <div class="notice">Perfect for the LinkedIn "message the recruiter" box.</div>
+              </div>
+
+              <!-- 8 — Tailored resume -->
+              <div class="screen" data-screen="8">
+                <div class="breadcrumb">Acme Cloud › <span>Tailored resume</span></div>
+                <h2>Generate a tailored CV <small>from the AI's suggested fixes</small></h2>
+                <div class="card">
+                  <div class="card-row"><div class="lbl"><input type="checkbox" checked disabled> Summary</div><div class="val">Lead with cloud performance testing</div></div>
+                  <div class="card-row"><div class="lbl"><input type="checkbox" checked disabled> Skills</div><div class="val">Surface AWS, k6, observability</div></div>
+                  <div class="card-row"><div class="lbl"><input type="checkbox" disabled> Title</div><div class="val" style="color:var(--crm-mute)">Optional rename</div></div>
+                </div>
+                <button class="btn">✨ Generate tailored resume</button>
+                <button class="btn ghost">🖨 Print / Save as PDF</button>
+              </div>
+
+              <!-- 9 — Company insight -->
+              <div class="screen" data-screen="9">
+                <div class="breadcrumb">Acme Cloud › <span>Company insight</span></div>
+                <h2>Company research — from the web</h2>
+                <div class="card">
+                  <div class="card-row"><div class="lbl">What they do</div><div class="val">Cloud cost-optimization SaaS for mid-market</div></div>
+                  <div class="card-row"><div class="lbl">Size &amp; status</div><div class="val">~300 staff · Series C · growing</div></div>
+                  <div class="card-row"><div class="lbl">Recent news</div><div class="val">Launched EU region · new APM integration</div></div>
+                  <div class="card-row"><div class="lbl">Your angle</div><div class="val">Tie your tuning wins to their cost story</div></div>
+                </div>
+                <div class="notice info">Includes source links so you can verify before the interview.</div>
+              </div>
+
+              <!-- 10 — My pitch -->
+              <div class="screen" data-screen="10">
+                <div class="breadcrumb">🎤 <span>My Pitch</span></div>
+                <h2>Your "about me" script <small>with a natural Hebrew voice</small></h2>
+                <div class="card">
+                  <div class="input-wrap big he">שלום, קוראים לי רמי. התחלתי בבדיקות, צמחתי לאוטומציה, והיום אני בונה ומשתמש ב-AI בעבודה היומיומית. אני מתמחה בבדיקות ביצועים ועומסים…</div>
+                  <button class="btn">🔊 Listen (Hebrew)</button>
+                  <button class="btn ghost">✨ Tailor to this job (AI)</button>
+                </div>
+                <div class="notice">Edit it once, hear it read aloud, and let AI adapt it per job.</div>
+              </div>
+
+              <!-- 11 — Mock interview -->
+              <div class="screen" data-screen="11">
+                <div class="breadcrumb">Acme Cloud › <span>Mock interview</span></div>
+                <h2>Practice the interview <small>questions + a spoken mock</small></h2>
+                <div class="card">
+                  <div class="card-row"><div class="lbl">Q1</div><div class="val">Walk me through a load test you designed end to end.</div></div>
+                  <div class="card-row"><div class="lbl">Q2</div><div class="val">How do you find a bottleneck under load?</div></div>
+                  <div class="card-row"><div class="lbl">Q3</div><div class="val">Tell me about a tough production performance issue.</div></div>
+                </div>
+                <button class="btn">🔊 Play mock interview</button>
+              </div>
+
+              <!-- 12 — Rejection feedback -->
+              <div class="screen" data-screen="12">
+                <div class="breadcrumb">Acme Cloud › <span>Ask why I was rejected</span></div>
+                <h2>Got a "no"? Ask politely for feedback</h2>
+                <div class="card">
+                  <div class="input-wrap big">Thank you for letting me know. I completely respect the decision. If you have a moment, I'd be grateful for any feedback on where I fell short — it would genuinely help me improve. Wishing the team continued success.</div>
+                  <button class="btn ghost">📋 Copy</button>
+                </div>
+                <div class="notice">Turns a rejection into a chance to learn and keep the door open.</div>
+              </div>
+
+              <!-- 13 — Reminders -->
+              <div class="screen" data-screen="13">
+                <div class="breadcrumb">Dashboard › <span>Reminders</span></div>
+                <h2>Don't let saved jobs go stale</h2>
+                <div class="card">
+                  <div class="notice warn">⏰ 5 saved jobs not applied yet — 2 waiting 3+ days.</div>
+                  <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                    <span class="status-pill orange">⏰ Acme Cloud — Perf Engineer</span>
+                    <span class="status-pill orange">⏰ Globex — SDET</span>
+                    <span class="status-pill orange">⏰ Initech — QA Lead</span>
+                  </div>
+                </div>
+                <div class="notice">A badge in the nav bar keeps the count in front of you.</div>
+              </div>
+
+              <!-- 14 — Job search -->
+              <div class="screen" data-screen="14">
+                <div class="breadcrumb">Search</div>
+                <h2>Find roles ranked by your CV <small>LinkedIn postings via JSearch</small></h2>
+                <table class="table">
+                  <thead><tr><th>Role</th><th>Company</th><th>Match</th><th></th></tr></thead>
+                  <tbody>
+                    <tr class="sel"><td>Senior Performance Engineer</td><td>Acme Cloud</td><td><span class="status-pill blue">87%</span></td><td><button class="btn ghost">Save</button></td></tr>
+                    <tr><td>NFT / Load Test Lead</td><td>Globex</td><td><span class="status-pill blue">81%</span></td><td><button class="btn ghost">Save</button></td></tr>
+                    <tr><td>SDET — Performance</td><td>Initech</td><td><span class="status-pill blue">76%</span></td><td><button class="btn ghost">Save</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- 15 — Choose your AI -->
+              <div class="screen" data-screen="15">
+                <div class="breadcrumb">⚙ Settings › <span>AI provider</span></div>
+                <h2>Choose your AI <small>Gemini, OpenAI or Claude</small></h2>
+                <div class="tiles">
+                  <div class="tile sel"><h4>Google Gemini</h4><p>Free tier · web research</p><div class="added">✓</div></div>
+                  <div class="tile"><h4>OpenAI (GPT)</h4><p>Bring your own key</p></div>
+                  <div class="tile"><h4>Anthropic (Claude)</h4><p>Bring your own key</p></div>
+                </div>
+                <div class="notice info">Pick a provider, paste the API key, Save — it applies instantly, no restart.</div>
+              </div>
+
+              <!-- 16 — Export & backup -->
+              <div class="screen" data-screen="16">
+                <div class="breadcrumb">⚙ Settings › <span>Backup &amp; export</span></div>
+                <h2>Your data, your control</h2>
+                <div class="card">
+                  <div class="card-row"><div class="lbl">Export</div><div class="val">CSV · Excel</div></div>
+                  <div class="card-row"><div class="lbl">Backup</div><div class="val">One-click → OneDrive folder</div></div>
+                  <div class="card-row"><div class="lbl">Stored at</div><div class="val id">data/jobtracker.db (local)</div></div>
+                </div>
+                <div class="notice">Everything stays on your machine — nothing is uploaded anywhere.</div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="api-tag">
+            <span class="pill">Page</span>
+            <span id="api-name">—</span>
+            <span style="margin-left:auto;color:#94a3c4;">Job Tracker · local &amp; private</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outro -->
+      <div class="scene outro" id="scene-outro">
+        <div class="badge">ready when you are</div>
+        <div class="moto">Paste a job. The rest is done.</div>
+        <div class="insert-card">
+          <span class="lbl">To try it:</span> double-click <b>start.bat</b> (Windows) or <b>start.command</b> (macOS).
+          On first run it installs everything and opens the app. Then open <b>⚙ Settings</b>, paste a free
+          <b>Gemini</b> key, and start applying smarter. <span class="lbl">Your data never leaves your computer.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="caption-bar">
+    <div class="caption dim" id="caption">Click ▶ Start demo to begin. Narration plays through your browser's voice — pick another from the dropdown if you like.</div>
+    <div class="scene-tag" id="scene-tag">— / 18</div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function fitStage() {
+  const wrap = document.querySelector(".stage-wrap");
+  const stage = document.getElementById("stage");
+  stage.style.setProperty("--scale", Math.min(wrap.clientWidth / 1280, wrap.clientHeight / 720));
+}
+window.addEventListener("resize", fitStage);
+setTimeout(fitStage, 50);
+
+const voiceSel = $("#voice");
+let chosenVoice = null;
+const PREFERRED_VOICE = "Microsoft Andrew Online (Natural)";
+function classify(v) {
+  if (/Natural|Online|Neural|Premium|Enhanced/i.test(v.name)) return "natural";
+  if (/Microsoft (David|Zira|Mark) Desktop/i.test(v.name))     return "robotic";
+  return "standard";
+}
+function score(v) {
+  let s = 0;
+  if (/Natural|Online|Neural/i.test(v.name)) s += 50;
+  if (/Premium|Enhanced/i.test(v.name))      s += 20;
+  if (/Microsoft/i.test(v.name))             s += 8;
+  if (/Andrew|Aria|Guy|Jenny|Ava|Emma/i.test(v.name)) s += 8;
+  if (/Sara|Olivia|Libby|Michelle|Ryan|Brian|Christopher|Eric|Brandon/i.test(v.name)) s += 5;
+  if (/^en-US/i.test(v.lang)) s += 5;
+  if (/^en-GB/i.test(v.lang)) s += 4;
+  if (/^en-AU|^en-IE/i.test(v.lang)) s += 3;
+  if (/Desktop$/i.test(v.name)) s -= 25;
+  return s;
+}
+function loadVoices() {
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return;
+  const en     = voices.filter((v) =>  /^en/i.test(v.lang));
+  const others = voices.filter((v) => !/^en/i.test(v.lang));
+  const groups = { natural: [], standard: [], robotic: [] };
+  for (const v of en) groups[classify(v)].push(v);
+  for (const k of Object.keys(groups)) groups[k].sort((a, b) => score(b) - score(a));
+  others.sort((a, b) => a.lang.localeCompare(b.lang) || a.name.localeCompare(b.name));
+  voiceSel.innerHTML = "";
+  const cats = [
+    { key: "natural",  label: "★ Natural / Neural (best quality)" },
+    { key: "standard", label: "○ Standard" },
+    { key: "robotic",  label: "✗ Legacy (robotic)" },
+  ];
+  for (const { key, label } of cats) {
+    if (!groups[key].length) continue;
+    const og = document.createElement("optgroup");
+    og.label = label;
+    for (const v of groups[key]) {
+      const opt = document.createElement("option");
+      opt.value = v.name; opt.textContent = `${v.name} (${v.lang})`;
+      og.appendChild(opt);
+    }
+    voiceSel.appendChild(og);
+  }
+  if (others.length) {
+    const og = document.createElement("optgroup");
+    og.label = "Other languages";
+    for (const v of others) {
+      const opt = document.createElement("option");
+      opt.value = v.name; opt.textContent = `${v.name} (${v.lang})`;
+      og.appendChild(opt);
+    }
+    voiceSel.appendChild(og);
+  }
+  const preferred = voices.find((v) => v.name.includes(PREFERRED_VOICE));
+  const fallback  = groups.natural[0] || groups.standard[0] || groups.robotic[0] || voices[0];
+  chosenVoice = preferred || fallback;
+  if (chosenVoice) voiceSel.value = chosenVoice.name;
+}
+speechSynthesis.onvoiceschanged = loadVoices; loadVoices();
+voiceSel.addEventListener("change", () => {
+  chosenVoice = speechSynthesis.getVoices().find((v) => v.name === voiceSel.value) || chosenVoice;
+});
+
+const STEPS = [
+  { kind: "hook", title: "Welcome",
+    text: "Welcome to Job Tracker — a private, local job-search assistant. Paste a job once and it researches the company, scores your fit, writes your cover letter and recruiter note, prepares you for interviews, and keeps your whole pipeline organized. Let's take a quick tour." },
+
+  { kind: "crm", n: 1, page: "/paste", nav: "Paste Job",
+    title: "Paste a job",
+    text: "It starts here. You paste a full job posting into one box and click Capture. Pasting the whole description is what powers the match score and every AI feature." },
+
+  { kind: "crm", n: 2, page: "/paste", nav: "Paste Job",
+    title: "Auto-generate with AI",
+    text: "The moment a job is captured, Job Tracker automatically runs four things in the background — company research, a bilingual fit analysis, a recruiter note, and a cover letter. No buttons to hunt for." },
+
+  { kind: "crm", n: 3, page: "/", nav: "Dashboard",
+    title: "Dashboard and funnel",
+    text: "The dashboard shows your whole pipeline at a glance — total applications, response and interview rates, and a funnel from saved, to applied, to interview, to offer." },
+
+  { kind: "crm", n: 4, page: "/application/42", nav: "Applications",
+    title: "Application detail",
+    text: "Open any application and everything for that job lives in one place — the match score, the AI verdict, the status, and one-click panels for cover letter, company insight, your pitch, and quick-copy links." },
+
+  { kind: "crm", n: 5, page: "/application/42", nav: "Applications",
+    title: "Bilingual fit analysis",
+    text: "The AI fit analysis gives a recruiter-style verdict — yes, maybe, or no — a requirement-by-requirement match, the risks, and concrete fixes for your CV. Every line is written in English and Hebrew, side by side." },
+
+  { kind: "crm", n: 6, page: "/application/42", nav: "Applications",
+    title: "Cover letter + PDF",
+    text: "Your cover letter is written specifically for this job. Edit it if you like, then export it to a clean PDF with a single click." },
+
+  { kind: "crm", n: 7, page: "/application/42", nav: "Applications",
+    title: "Recruiter note",
+    text: "There's also a short note to the recruiter — perfect for the message box on LinkedIn — and it always includes an English version, whatever language you choose." },
+
+  { kind: "crm", n: 8, page: "/application/42", nav: "Applications",
+    title: "Tailored resume",
+    text: "Tick the suggestions you like and generate a tailored version of your resume in the same styling. Review it, then print or save it as a PDF." },
+
+  { kind: "crm", n: 9, page: "/application/42", nav: "Applications",
+    title: "Company insight",
+    text: "Company research pulls from the web — what they do, their size and status, recent news, and smart angles for your application — with source links so you can verify before the interview." },
+
+  { kind: "crm", n: 10, page: "/pitch", nav: "My Pitch",
+    title: "My Pitch with voice",
+    text: "My Pitch is your personal about-me script. Edit it once, hear it read aloud in a natural Hebrew voice, and let the AI tailor it to each specific job." },
+
+  { kind: "crm", n: 11, page: "/application/42", nav: "Applications",
+    title: "Mock interview",
+    text: "Practice with likely interview questions, and play a spoken mock interview in a natural voice so you can rehearse out loud before the real thing." },
+
+  { kind: "crm", n: 12, page: "/application/42", nav: "Applications",
+    title: "Rejection feedback",
+    text: "If a job says no, Job Tracker drafts a polite note asking for feedback — turning a rejection into a chance to learn and keeping the door open for next time." },
+
+  { kind: "crm", n: 13, page: "/", nav: "Dashboard",
+    title: "Smart reminders",
+    text: "Saved jobs you haven't applied to yet get a reminder on the dashboard and a badge in the navigation bar, so nothing quietly slips through the cracks." },
+
+  { kind: "crm", n: 14, page: "/search", nav: "Search",
+    title: "Job search",
+    text: "You can also search real job boards — including LinkedIn postings through JSearch — ranked by how well each role matches your resume. Save the good ones into your tracker in one click." },
+
+  { kind: "crm", n: 15, page: "/settings", nav: "Settings",
+    title: "Choose your AI",
+    text: "Job Tracker works with three AI providers — Google Gemini, OpenAI, or Anthropic's Claude. Pick one, paste your key, and save. Gemini has a free tier and is the easiest place to start." },
+
+  { kind: "crm", n: 16, page: "/settings", nav: "Settings",
+    title: "Export and backup",
+    text: "Finally, it's your data. Export everything to C-S-V or Excel, back it up to a OneDrive folder in one click, and rest easy — the database lives locally on your machine and nothing is uploaded anywhere." },
+
+  { kind: "outro", title: "Try it",
+    text: "That's the tour. To try it yourself, double-click start dot bat on Windows or start dot command on Mac. It installs everything on first run, then opens the app. Add a free Gemini key in Settings, paste a job, and you're off. Good luck with the search!" },
+];
+
+const captionEl = $("#caption");
+const sceneTagEl = $("#scene-tag");
+const progressEl = $("#progress");
+const btnPlay = $("#btn-play");
+const btnPause = $("#btn-pause");
+const btnRestart = $("#btn-restart");
+const btnPrev = $("#btn-prev");
+const btnNext = $("#btn-next");
+const speedSel = $("#speed");
+const scrubTrack = $("#scrub-track");
+const scrubFill = $("#scrub-fill");
+const scrubThumb = $("#scrub-thumb");
+const scrubMarkers = $("#scrub-markers");
+const scrubLabelL = $("#scrub-label-left");
+const scrubLabelR = $("#scrub-label-right");
+
+let playing = false, paused = false;
+let currentIdx = 0;
+let abortCurrent = false;
+
+function showHook()  { $("#scene-hook").classList.add("show"); $("#scene-crm").classList.remove("show"); $("#scene-outro").classList.remove("show"); }
+function showCrm()   { $("#scene-hook").classList.remove("show"); $("#scene-crm").classList.add("show"); $("#scene-outro").classList.remove("show"); }
+function showOutro() { $("#scene-hook").classList.remove("show"); $("#scene-crm").classList.remove("show"); $("#scene-outro").classList.add("show"); }
+
+function showScreen(n) {
+  $$(".screen").forEach((s) => s.classList.remove("show"));
+  const el = document.querySelector(`.screen[data-screen="${n}"]`);
+  if (el) el.classList.add("show");
+}
+function setSidebar(n) {
+  $$("#sidebar-list li").forEach((li) => {
+    const step = parseInt(li.dataset.step, 10);
+    li.classList.remove("active", "done");
+    if (step < n)        li.classList.add("done");
+    else if (step === n) li.classList.add("active");
+  });
+  const active = $("#sidebar-list li.active");
+  if (active) active.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function setNav(name) {
+  $$(".crm-header nav a").forEach((a) => a.classList.remove("active"));
+  const map = {
+    "Dashboard": "#nav-dash",
+    "Applications": "#nav-apps",
+    "Search": "#nav-search",
+    "Paste Job": "#nav-paste",
+    "My Pitch": "#nav-pitch",
+    "Settings": "#nav-set",
+  };
+  if (map[name]) $(map[name]).classList.add("active");
+}
+function setApi(name) { $("#api-name").textContent = name || "—"; }
+function setAddr(page) { $("#addr").textContent = "🔒 127.0.0.1:5000" + (page || "/"); }
+
+function updateScrubber(i) {
+  const pct = STEPS.length <= 1 ? 0 : (i / (STEPS.length - 1)) * 100;
+  scrubFill.style.width = pct + "%";
+  scrubThumb.style.left = pct + "%";
+  const total = String(STEPS.length).padStart(2, "0");
+  const cur   = String(i + 1).padStart(2, "0");
+  scrubLabelL.textContent = `${cur} / ${total}`;
+  scrubLabelR.textContent = STEPS[i].title;
+}
+function updateProgress(i) {
+  progressEl.textContent = `${i + 1} / ${STEPS.length}`;
+  sceneTagEl.textContent = `${i + 1} / ${STEPS.length} · ${STEPS[i].title}`;
+}
+function renderScene(i) {
+  currentIdx = i;
+  const s = STEPS[i];
+  updateProgress(i);
+  updateScrubber(i);
+  captionEl.classList.remove("dim");
+  captionEl.textContent = s.text;
+  if (s.kind === "hook")  showHook();
+  if (s.kind === "outro") showOutro();
+  if (s.kind === "crm") {
+    showCrm();
+    setSidebar(s.n);
+    setNav(s.nav);
+    showScreen(s.n);
+    setApi(s.page);
+    setAddr(s.page);
+  }
+}
+function speak(text) {
+  return new Promise((resolve) => {
+    if (!("speechSynthesis" in window)) { setTimeout(resolve, Math.max(3500, text.length * 55)); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = parseFloat(speedSel.value || "1.0");
+    u.pitch = 1.0; u.volume = 1.0;
+    if (chosenVoice) u.voice = chosenVoice;
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    speechSynthesis.speak(u);
+  });
+}
+async function runFrom(idx) {
+  playing = true; paused = false;
+  btnPlay.disabled = true; btnPause.disabled = false; btnRestart.disabled = false;
+  btnPlay.textContent = "▶ Playing…";
+  btnPause.textContent = "⏸ Pause";
+  for (let i = idx; i < STEPS.length; i++) {
+    if (!playing || abortCurrent) return;
+    renderScene(i);
+    const s = STEPS[i];
+    await speak(s.text);
+    if (!playing || abortCurrent) return;
+    await wait(s.kind === "hook" || s.kind === "outro" ? 600 : 250);
+  }
+  playing = false;
+  btnPlay.disabled = false; btnPlay.textContent = "▶ Play again";
+  btnPause.disabled = true;
+}
+function goTo(idx, opts) {
+  opts = opts || {};
+  idx = Math.max(0, Math.min(STEPS.length - 1, idx));
+  const wasPlaying = playing;
+  const autoplay = (opts.autoplay !== undefined) ? opts.autoplay : wasPlaying;
+  speechSynthesis.cancel();
+  abortCurrent = true;
+  playing = false;
+  paused = false;
+  btnPause.textContent = "⏸ Pause";
+  setTimeout(() => {
+    abortCurrent = false;
+    if (autoplay) {
+      runFrom(idx);
+    } else {
+      renderScene(idx);
+      btnPlay.disabled = false;
+      btnPlay.textContent = (idx === 0) ? "▶ Start demo" : "▶ Resume from here";
+      btnPause.disabled = true;
+      btnRestart.disabled = (idx === 0);
+    }
+  }, 90);
+}
+btnPlay.addEventListener("click", () => {
+  if (playing && paused) {
+    speechSynthesis.resume(); paused = false;
+    btnPlay.disabled = true; btnPause.disabled = false;
+    btnPause.textContent = "⏸ Pause";
+    return;
+  }
+  if (playing) return;
+  runFrom(currentIdx);
+});
+btnPause.addEventListener("click", () => {
+  if (!playing) return;
+  if (paused) { speechSynthesis.resume(); paused = false; btnPause.textContent = "⏸ Pause"; }
+  else        { speechSynthesis.pause();  paused = true;  btnPause.textContent = "▶ Resume"; }
+});
+btnRestart.addEventListener("click", () => { goTo(0, { autoplay: true }); });
+btnPrev.addEventListener("click", () => { goTo(currentIdx - 1); });
+btnNext.addEventListener("click", () => { goTo(currentIdx + 1); });
+scrubTrack.addEventListener("click", (e) => {
+  const rect = scrubTrack.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const idx = Math.round(pct * (STEPS.length - 1));
+  goTo(idx);
+});
+$$("#sidebar-list li").forEach((li) => {
+  li.addEventListener("click", () => {
+    const step = parseInt(li.dataset.step, 10);
+    const target = STEPS.findIndex((s) => s.kind === "crm" && s.n === step);
+    if (target >= 0) goTo(target);
+  });
+});
+window.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, textarea, select")) return;
+  if (e.key === "ArrowLeft")  { e.preventDefault(); goTo(currentIdx - 1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); goTo(currentIdx + 1); }
+  else if (e.key === " ")     { e.preventDefault(); playing ? btnPause.click() : btnPlay.click(); }
+  else if (e.key === "Home")  { e.preventDefault(); goTo(0); }
+  else if (e.key === "End")   { e.preventDefault(); goTo(STEPS.length - 1); }
+});
+function buildMarkers() {
+  scrubMarkers.innerHTML = "";
+  for (let i = 0; i < STEPS.length; i++) {
+    const m = document.createElement("div");
+    m.className = "marker";
+    if (i > 0 && STEPS[i].kind !== STEPS[i - 1].kind) m.classList.add("act");
+    const pct = STEPS.length <= 1 ? 0 : (i / (STEPS.length - 1)) * 100;
+    m.style.left = pct + "%";
+    scrubMarkers.appendChild(m);
+  }
+}
+buildMarkers();
+window.addEventListener("beforeunload", () => speechSynthesis.cancel());
+showHook();
+updateProgress(0);
+updateScrubber(0);
+captionEl.textContent = "Click ▶ Start demo to begin — or use ◀ ▶ to step through, click the sidebar to jump, or click the progress bar. Keyboard: ← → space Home End.";
+captionEl.classList.add("dim");
+</script>
+
+</body>
+</html>
