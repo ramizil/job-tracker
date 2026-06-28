@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from flask import (
@@ -494,7 +495,9 @@ def paste_job():
         plan = [("company", "he"), ("analyze", "en"), ("note", "en"), ("cover", "en")]
         done: list[str] = []
         failed: list[str] = []
-        for key, lang in plan:
+        for idx, (key, lang) in enumerate(plan):
+            if idx:
+                time.sleep(_AUTOGEN_GAP_S)  # ease off the per-minute rate limit
             try:
                 _generate_one(app_id, key, r, language=lang)
                 done.append(_BATCH_ITEMS[key])
@@ -766,6 +769,10 @@ _BATCH_ITEMS = {
     "company": "company research",
 }
 
+# Small pause between back-to-back AI calls so a burst of auto-gen requests
+# doesn't trip the provider's per-minute rate limit (e.g. Gemini free tier).
+_AUTOGEN_GAP_S = 1.0
+
 
 def _generate_one(app_id, key, r, language="en", instructions=""):
     """Generate a single AI artefact and persist it. Raises on failure.
@@ -830,7 +837,10 @@ def generate_batch(app_id: int):
     done: list[str] = []
     failed: list[str] = []
 
-    for key in (k for k in _BATCH_ITEMS if k in items):
+    selected = [k for k in _BATCH_ITEMS if k in items]
+    for idx, key in enumerate(selected):
+        if idx:
+            time.sleep(_AUTOGEN_GAP_S)  # ease off the per-minute rate limit
         try:
             _generate_one(app_id, key, r, language=language, instructions=instructions)
             done.append(_BATCH_ITEMS[key])

@@ -186,6 +186,30 @@ def _parse_json(raw: str) -> Any:
     )
 
 
+def _parse_retry_delay(msg: str) -> float | None:
+    """Best-effort parse of Gemini's suggested retry delay (in seconds) from a
+    429 error, e.g. "retryDelay': '5s'" or "Please retry in 5.0953s."."""
+    if not msg:
+        return None
+    m = re.search(r"retryDelay['\"]?\s*[:=]\s*['\"]?(\d+(?:\.\d+)?)\s*s", msg)
+    if not m:
+        m = re.search(r"retry in (\d+(?:\.\d+)?)\s*s", msg, re.IGNORECASE)
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+_QUOTA_MSG = (
+    "You've hit your Gemini quota (free-tier limit reached). Wait a minute and "
+    "try again, pick a lighter model in Settings (e.g. gemini-2.5-flash or "
+    "gemini-flash-lite-latest), generate fewer items at once, or enable billing "
+    "to raise the limit. Details: https://ai.google.dev/gemini-api/docs/rate-limits"
+)
+
+
 def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
     """Generate text using the currently selected AI provider."""
     provider = active_provider()
@@ -224,6 +248,7 @@ def _generate_gemini(prompt: str, *, as_json: bool = False, attempts: int = 2) -
 
     deadline = time.monotonic() + AI_TIMEOUT_S
     last_exc: Exception | None = None
+    quota_hit = False
     for model in _model_candidates():
         if time.monotonic() >= deadline:
             break
@@ -243,11 +268,26 @@ def _generate_gemini(prompt: str, *, as_json: bool = False, attempts: int = 2) -
                 last_exc = exc
                 msg = str(exc)
                 overloaded = "503" in msg or "UNAVAILABLE" in msg or "overloaded" in msg
+                is_quota = "429" in msg or "RESOURCE_EXHAUSTED" in msg
+                if is_quota:
+                    quota_hit = True
+                    # Respect Google's suggested retry delay for transient
+                    # per-minute throttling; back off and retry the same model
+                    # if it fits the deadline. A daily cap or a long delay
+                    # falls through to the next candidate model instead.
+                    delay = _parse_retry_delay(msg)
+                    if (delay is not None and delay <= 45 and i < attempts - 1
+                            and time.monotonic() + delay + 0.3 < deadline):
+                        time.sleep(delay + 0.3)
+                        continue
+                    break  # try the next candidate model
                 # Retry same model once on transient overload, then fall back.
                 if overloaded and i < attempts - 1 and time.monotonic() < deadline:
                     time.sleep(1.2)
                     continue
                 break  # move to next candidate model
+    if quota_hit:
+        raise AIError(_QUOTA_MSG)
     if last_exc and ("timeout" in str(last_exc).lower() or time.monotonic() >= deadline):
         raise AIError(
             f"Gemini didn't respond within {AI_TIMEOUT_S // 60} minutes "
