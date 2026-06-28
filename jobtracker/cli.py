@@ -255,6 +255,28 @@ def match(app_id: int = typer.Argument(...)):
     console.print(f"  [red]missing[/red]: {', '.join(m.missing) or '-'}")
 
 
+def _hide_dev_server_warning() -> None:
+    """Drop only Werkzeug's "development server" banner line from its log.
+
+    Werkzeug prints that warning together with the "Running on …" line in one
+    record, so we strip just the warning line and keep everything else
+    (including the per-request access logs). This is a local, single-user tool,
+    so the production warning is noise here.
+    """
+    import logging
+
+    def _strip(record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        if "This is a development server" in msg:
+            kept = [ln for ln in msg.splitlines()
+                    if "This is a development server" not in ln]
+            record.msg = "\n".join(kept).strip("\n")
+            record.args = None
+        return True
+
+    logging.getLogger("werkzeug").addFilter(_strip)
+
+
 @app.command()
 def web(host: str = typer.Option("127.0.0.1", "--host"),
         port: int = typer.Option(5000, "--port", "-p"),
@@ -271,6 +293,7 @@ def web(host: str = typer.Option("127.0.0.1", "--host"),
             help="Seconds with no open tab before auto-shutdown.")):
     """Launch the Flask web dashboard (funnel, applications, AI, export)."""
     from .web import create_app
+    _hide_dev_server_warning()
     disp = "127.0.0.1" if host in ("0.0.0.0", "") else host
     url = f"http://{disp}:{port}/"
     console.print(f"[green]Dashboard:[/green] {url}")
