@@ -934,9 +934,11 @@ def tailor_resume(*, title: str, company: str, description: str,
 # Resume Builder: a spoken Hebrew interview that produces an English resume.
 
 # Opening question is fixed (no AI call needed); follow-ups are AI-generated.
+# The UI renders it as an "areas" multi-select picker (see the template).
 RESUME_BUILDER_FIRST_QUESTION = (
     "שלום! אני אעזור לך לבנות קורות חיים מקצועיים, צעד אחר צעד. "
-    "נתחיל מהבסיס — באילו תחומים עבדת עד היום?"
+    "נתחיל מהבסיס — באילו תחומים עבדת עד היום? בחר/י מהרשימה את כל מה שרלוונטי "
+    "(ואפשר להוסיף תחומים משלך)."
 )
 
 

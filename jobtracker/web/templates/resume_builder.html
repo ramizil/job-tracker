@@ -52,10 +52,10 @@
         placeholder="הקלט/י את התשובה, או הקלד/י אותה כאן בעברית…"></textarea>
 
       <div class="rb-tools" id="rb-tools" hidden>
-        <p class="muted sm">סמן/י את הכלים שאת/ה מכיר/ה ודרג/י את רמת הידע — Tick what you know &amp; rate your level.</p>
+        <p class="muted sm" id="rb-tools-hint"></p>
         <div class="rb-tools-grid" id="rb-tools-grid"></div>
-        <label class="rb-other">כלים נוספים (הפרד/י בפסיקים):
-          <input type="text" id="rb-tools-other" dir="rtl" placeholder="GraphQL, Redis, Terraform…">
+        <label class="rb-other"><span id="rb-other-label">More (comma-separated):</span>
+          <input type="text" id="rb-tools-other" dir="rtl" placeholder="…">
         </label>
       </div>
 
@@ -108,6 +108,8 @@
   var toolsBox = document.getElementById('rb-tools');
   var toolsGrid = document.getElementById('rb-tools-grid');
   var toolsOther = document.getElementById('rb-tools-other');
+  var toolsHint = document.getElementById('rb-tools-hint');
+  var otherLabel = document.getElementById('rb-other-label');
   var logEl = document.getElementById('rb-log');
   var logPanel = document.getElementById('rb-log-panel');
   var statusEl = document.getElementById('rb-status');
@@ -145,6 +147,34 @@
     { v: 'Advanced', t: 'מתקדם' }, { v: 'Expert', t: 'מומחה' }
   ];
 
+  // Common professional domains for the opening "areas" step (value = English
+  // for the resume, label = Hebrew for the UI). Users can add their own too.
+  var AREAS = [
+    { v: 'Backend Development', t: 'פיתוח Backend' },
+    { v: 'Frontend Development', t: 'פיתוח Frontend' },
+    { v: 'Full-Stack Development', t: 'פיתוח Full-Stack' },
+    { v: 'Mobile Development', t: 'פיתוח מובייל' },
+    { v: 'DevOps & Cloud', t: 'DevOps וענן' },
+    { v: 'Data Engineering', t: 'הנדסת דאטה' },
+    { v: 'Data Science & Analytics', t: 'מדע הנתונים ואנליטיקה' },
+    { v: 'AI / Machine Learning', t: 'בינה מלאכותית ולמידת מכונה' },
+    { v: 'QA & Automation', t: 'QA ואוטומציה' },
+    { v: 'Cybersecurity', t: 'אבטחת מידע' },
+    { v: 'IT & System Administration', t: 'IT וניהול מערכות' },
+    { v: 'Networking', t: 'תקשורת ורשתות' },
+    { v: 'Database Administration', t: 'ניהול בסיסי נתונים' },
+    { v: 'Embedded / Hardware', t: 'מערכות משובצות וחומרה' },
+    { v: 'Product Management', t: 'ניהול מוצר' },
+    { v: 'Project / Program Management', t: 'ניהול פרויקטים ותוכניות' },
+    { v: 'UX/UI Design', t: 'עיצוב UX/UI' },
+    { v: 'Technical Support', t: 'תמיכה טכנית' },
+    { v: 'Sales & Business Development', t: 'מכירות ופיתוח עסקי' },
+    { v: 'Marketing', t: 'שיווק' },
+    { v: 'Finance', t: 'כספים' },
+    { v: 'Human Resources', t: 'משאבי אנוש' },
+    { v: 'Operations', t: 'תפעול' }
+  ];
+
   function setStatus(msg) { statusEl.textContent = msg || ''; }
   function renderQuestion() {
     qEl.textContent = currentQuestion || '';
@@ -162,44 +192,60 @@
     buildBtn.disabled = conversation.length === 0;
   }
 
-  // ---- Tools picker step ----
-  function renderTools(tools) {
+  // ---- Multi-select picker step (used for "areas" and "tools") ----
+  function renderPicker(items, withLevel) {
     toolsGrid.innerHTML = '';
     toolsOther.value = '';
-    (tools || []).forEach(function (name) {
+    (items || []).forEach(function (it) {
       var row = document.createElement('label'); row.className = 'rb-tool';
-      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = name;
-      var span = document.createElement('span'); span.className = 'rb-tool-name'; span.textContent = name;
-      var sel = document.createElement('select'); sel.className = 'rb-tool-lvl'; sel.disabled = true;
-      LEVELS.forEach(function (l) {
-        var o = document.createElement('option'); o.value = l.v; o.textContent = l.t;
-        if (l.v === 'Intermediate') o.selected = true;
-        sel.appendChild(o);
-      });
-      cb.addEventListener('change', function () { sel.disabled = !cb.checked; });
-      row.appendChild(cb); row.appendChild(span); row.appendChild(sel);
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = it.value;
+      var span = document.createElement('span'); span.className = 'rb-tool-name';
+      span.textContent = it.label; span.title = it.label;
+      row.appendChild(cb); row.appendChild(span);
+      if (withLevel) {
+        var sel = document.createElement('select'); sel.className = 'rb-tool-lvl'; sel.disabled = true;
+        LEVELS.forEach(function (l) {
+          var o = document.createElement('option'); o.value = l.v; o.textContent = l.t;
+          if (l.v === 'Intermediate') o.selected = true;
+          sel.appendChild(o);
+        });
+        cb.addEventListener('change', function () { sel.disabled = !cb.checked; });
+        row.appendChild(sel);
+      }
       toolsGrid.appendChild(row);
     });
   }
-  function toolsAnswer() {
+  function pickerAnswer(withLevel, prefix) {
     var picked = [];
     toolsGrid.querySelectorAll('.rb-tool').forEach(function (row) {
       var cb = row.querySelector('input[type=checkbox]');
-      if (cb && cb.checked) picked.push(cb.value + ' (' + row.querySelector('select').value + ')');
+      if (!cb || !cb.checked) return;
+      if (withLevel) picked.push(cb.value + ' (' + row.querySelector('select').value + ')');
+      else picked.push(cb.value);
     });
     var other = (toolsOther.value || '').trim();
     var parts = [];
-    if (picked.length) parts.push('Tools I know: ' + picked.join(', '));
-    if (other) parts.push('Other tools: ' + other);
+    if (picked.length) parts.push(prefix + ': ' + picked.join(', '));
+    if (other) parts.push('Other: ' + other);
     return parts.join('. ');
   }
-  function applyKind(kind, tools) {
-    currentKind = kind === 'tools' ? 'tools' : 'text';
-    if (currentKind === 'tools') {
-      recRow.hidden = true; textEl.hidden = true; toolsBox.hidden = false;
-      renderTools(tools);
-    } else {
+  function applyKind(kind, items) {
+    currentKind = (kind === 'tools' || kind === 'areas') ? kind : 'text';
+    if (currentKind === 'text') {
       toolsBox.hidden = true; textEl.hidden = false; recRow.hidden = false;
+      return;
+    }
+    recRow.hidden = true; textEl.hidden = true; toolsBox.hidden = false;
+    if (currentKind === 'tools') {
+      toolsHint.textContent = 'סמן/י את הכלים שאת/ה מכיר/ה ודרג/י את רמת הידע — Tick what you know & rate your level.';
+      otherLabel.textContent = 'כלים נוספים (הפרד/י בפסיקים):';
+      toolsOther.placeholder = 'GraphQL, Redis, Terraform…';
+      renderPicker((items || []).map(function (s) { return { value: s, label: s }; }), true);
+    } else {
+      toolsHint.textContent = 'בחר/י את כל התחומים הרלוונטיים — Select all areas that apply.';
+      otherLabel.textContent = 'תחומים נוספים (הפרד/י בפסיקים):';
+      toolsOther.placeholder = 'למשל: Game Development, Robotics…';
+      renderPicker(AREAS, false);
     }
   }
 
@@ -367,7 +413,9 @@
   }
 
   function currentAnswer() {
-    return currentKind === 'tools' ? toolsAnswer() : (textEl.value || '').trim();
+    if (currentKind === 'tools') return pickerAnswer(true, 'Tools I know');
+    if (currentKind === 'areas') return pickerAnswer(false, "Areas I've worked in");
+    return (textEl.value || '').trim();
   }
 
   nextBtn.addEventListener('click', function () {
@@ -375,7 +423,9 @@
     if (!ans) {
       setStatus(currentKind === 'tools'
         ? 'Tick at least one tool (or add your own), then continue.'
-        : 'Record or type an answer first (or use “Build my resume” to finish).');
+        : currentKind === 'areas'
+          ? 'Select at least one area (or add your own), then continue.'
+          : 'Record or type an answer first (or use “Build my resume” to finish).');
       return;
     }
     conversation.push({ q: currentQuestion, a: ans });
@@ -407,8 +457,9 @@
       .catch(function () { hideOverlay(); setStatus('Build failed — try again.'); buildBtn.disabled = false; });
   });
 
-  // Init
-  applyKind('text');
+  // Init — the opening step is the "areas" multi-select picker (no AI call).
+  currentKind = 'areas';
+  applyKind('areas');
   renderQuestion();
   refreshLog();
 })();
