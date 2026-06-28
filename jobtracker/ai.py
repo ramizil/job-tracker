@@ -326,6 +326,54 @@ def _generate_anthropic(prompt: str, *, as_json: bool = False) -> str:
     return text
 
 
+def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav",
+                     language: str = "he") -> str:
+    """Transcribe spoken audio to text using Gemini (multimodal).
+
+    Gemini-only: speech-to-text isn't exposed through the OpenAI/Anthropic text
+    paths here, so the caller should fall back to typing when the provider isn't
+    Gemini. Returns the plain transcript (may be empty for silent audio).
+    """
+    if not audio_bytes:
+        raise AIError("No audio was received to transcribe.")
+    if active_provider() != "gemini" or not config.GEMINI_API_KEY:
+        raise AIError(
+            "Voice transcription needs a Gemini API key (set the AI provider to "
+            "Gemini in Settings). You can type your answer instead.")
+
+    import time
+
+    client = _client()
+    from google.genai import types  # type: ignore
+
+    ln = _lang_name(language)
+    instruction = (
+        f"Transcribe this {ln} audio recording exactly as spoken. "
+        f"Return ONLY the transcript text in {ln} — no commentary, no speaker "
+        "labels, no quotation marks. If the audio is silent or unintelligible, "
+        "return an empty string.")
+
+    deadline = time.monotonic() + AI_TIMEOUT_S
+    last_exc: Exception | None = None
+    for model in _model_candidates():
+        if time.monotonic() >= deadline:
+            break
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=[
+                    types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                    instruction,
+                ],
+            )
+            return (getattr(resp, "text", None) or "").strip()
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise AIError(f"Could not transcribe the audio (last error: {last_exc}). "
+                  "Please try again or type your answer.")
+
+
 def resume_text(resume_path: Path | None = None) -> str:
     from . import resume as _resume
     path = Path(resume_path) if resume_path else config.RESUME_PATH
@@ -877,6 +925,128 @@ def tailor_resume(*, title: str, company: str, description: str,
     )
     html = _generate(prompt, as_json=False).strip()
     # Strip accidental markdown fences.
+    html = re.sub(r"^```(?:html)?\s*", "", html)
+    html = re.sub(r"\s*```$", "", html)
+    return html
+
+
+# --------------------------------------------------------------------------- #
+# Resume Builder: a spoken Hebrew interview that produces an English resume.
+
+# Opening question is fixed (no AI call needed); follow-ups are AI-generated.
+RESUME_BUILDER_FIRST_QUESTION = (
+    "שלום! אני אעזור לך לבנות קורות חיים. בוא נתחיל — "
+    "באילו תחומים עבדת עד היום, ומה התפקיד הנוכחי או האחרון שלך?"
+)
+
+
+_INTERVIEW_BUILDER_PROMPT = """You are a warm, professional career interviewer
+helping someone build their resume through a SPOKEN conversation IN HEBREW. You
+ask ONE question at a time, in natural, friendly Hebrew (you may use casual "אתה/את").
+
+Over the whole conversation you must gather enough to write a strong English
+resume. Make sure these topics get covered (adapt the order to the flow):
+- Full name and contact details (email, phone, city, LinkedIn/GitHub if any)
+- Fields / domains they have worked in
+- Work experience: for each role — company, job title, dates (from–to), what they
+  did, main responsibilities and the technologies/tools used
+- Education & professional studies — degrees, institutions, years, certifications
+- Significant milestones & achievements (with concrete impact/numbers if possible)
+- Key skills, tools and technologies
+- Languages they speak (and level)
+- What kind of role they're looking for next (optional)
+
+Rules:
+- Ask in HEBREW only, ONE short question at a time.
+- If the previous answer is vague, very short, or mentions something worth
+  expanding (a notable project, missing dates, an unclear gap), ask a relevant
+  FOLLOW-UP question before moving on.
+- Never repeat a topic that's already been answered. Keep it conversational and
+  encouraging, not an interrogation.
+- Once all the key topics are reasonably covered (usually after 10–16 questions),
+  set "done" to true and return an empty question.
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "question": "the next question in Hebrew (empty string when done)",
+  "topic": "short english tag, e.g. 'contact' | 'experience' | 'education' | 'skills' | 'milestones'",
+  "done": true | false
+}}
+
+CONVERSATION SO FAR (Q = interviewer question, A = the person's spoken answer):
+{conversation}
+"""
+
+
+def _format_conversation(conversation: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for c in conversation or []:
+        q = str((c or {}).get("q", "")).strip()
+        a = str((c or {}).get("a", "")).strip()
+        if q:
+            lines.append(f"Q: {q}")
+        if a:
+            lines.append(f"A: {a}")
+    return "\n".join(lines).strip() or "(no questions asked yet)"
+
+
+def interview_question(conversation: list[dict[str, Any]]) -> dict[str, Any]:
+    """Pick the next Hebrew interview question (or signal the interview is done).
+
+    Returns {"question": str, "topic": str, "done": bool}.
+    """
+    prompt = _INTERVIEW_BUILDER_PROMPT.format(
+        conversation=_format_conversation(conversation)[:12000])
+    raw = _generate(prompt, as_json=True)
+    data = _parse_json(raw)
+    if not isinstance(data, dict):
+        raise AIError("AI returned an unexpected question format. Please try again.")
+    question = str(data.get("question", "")).strip()
+    done = bool(data.get("done")) or not question
+    return {"question": question, "topic": str(data.get("topic", "")).strip(),
+            "done": done}
+
+
+_RESUME_BUILD_PROMPT = """You are an expert resume writer. Below is the transcript
+of a spoken interview (questions and answers IN HEBREW) with a job candidate, plus
+a TEMPLATE resume in HTML. Write a complete, polished resume IN ENGLISH for this
+candidate.
+
+Hard rules:
+- Output a COMPLETE, valid HTML document.
+- REUSE the TEMPLATE's <style>/CSS, structure and overall visual design — produce
+  the SAME look and feel, only populated with THIS candidate's content. Keep a
+  similar section ordering (header/contact, summary, experience, education,
+  skills, languages, etc.).
+- Translate everything into natural, professional ENGLISH (the interview is in
+  Hebrew). Keep proper nouns sensible (transliterate names/companies if needed).
+- Use ONLY facts present in the interview. Do NOT invent employers, dates,
+  numbers, titles or skills. If a detail is missing, omit it gracefully — never
+  output placeholders like [Name] or "N/A".
+- Write concise, achievement-oriented bullet points. Order experience newest
+  first when dates are known.
+- Return ONLY the HTML, no markdown fences, no commentary.
+
+INTERVIEW TRANSCRIPT:
+{conversation}
+
+TEMPLATE RESUME HTML (reuse its style and layout):
+{template_html}
+"""
+
+
+def build_resume_from_interview(conversation: list[dict[str, Any]],
+                                template_html: str | None = None) -> str:
+    """Generate a full English resume (HTML) from the Hebrew interview transcript,
+    styled after the template resume. Raises AIError on failure."""
+    convo = _format_conversation(conversation)
+    if convo == "(no questions asked yet)" or not any(
+            str((c or {}).get("a", "")).strip() for c in (conversation or [])):
+        raise AIError("There's no interview content yet to build a resume from.")
+    tpl = template_html if template_html is not None else resume_html()
+    prompt = _RESUME_BUILD_PROMPT.format(
+        conversation=convo[:14000], template_html=(tpl or "")[:30000])
+    html = _generate(prompt, as_json=False).strip()
     html = re.sub(r"^```(?:html)?\s*", "", html)
     html = re.sub(r"\s*```$", "", html)
     return html

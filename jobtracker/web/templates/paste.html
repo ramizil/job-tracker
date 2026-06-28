@@ -5,6 +5,24 @@
 
 {% include "_setup_banner.html" %}
 
+{% if duplicates %}
+<div class="dup-warning" role="alert">
+  <div class="dw-head">⚠ You already captured this job</div>
+  <p class="dw-sub">An application for <b>{{ form.get('title','') }}</b> at
+    <b>{{ form.get('company','') }}</b> already exists:</p>
+  <ul class="dw-list">
+    {% for d in duplicates %}
+    <li>
+      <a href="{{ url_for('main.detail', app_id=d['id']) }}">#{{ d['id'] }} — {{ d['title'] }} @ {{ d['company'] }}</a>
+      <span class="muted sm">· status: {{ d['status'] }}{% if d['date_applied'] %} · applied {{ d['date_applied'][:10] }}{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="dw-sub">You can still add it again (e.g. you're re-applying or it's a
+    different posting) — just press <b>Proceed anyway</b> below.</p>
+</div>
+{% endif %}
+
 <p class="muted" style="max-width:760px">
   Copy a posting from <b>LinkedIn, AllJobs, Drushim, JobMaster, Glassdoor</b> —
   Hebrew or English — and paste it below with the page URL.
@@ -15,36 +33,37 @@
 </p>
 
 <form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"{% if ai_on %} data-loading="Capturing & generating with Gemini — company research, fit, recruiter note & cover letter. This can take a minute…"{% endif %}>
+  {% if duplicates %}<input type="hidden" name="confirm_duplicate" value="1">{% endif %}
   <label class="fld">
     <span>Source URL <em>(where you copied it from)</em></span>
-    <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/view/..." autofocus>
+    <input name="url" type="url" placeholder="https://www.linkedin.com/jobs/view/..." value="{{ form.get('url','') }}"{% if not form.get('url') %} autofocus{% endif %}>
   </label>
 
   <label class="fld">
     <span>Job posting text *</span>
     <textarea name="description" rows="16" required
-      placeholder="Paste the full job description here (title, company, requirements, everything)…"></textarea>
+      placeholder="Paste the full job description here (title, company, requirements, everything)…">{{ form.get('description','') }}</textarea>
   </label>
 
   <fieldset class="paste-meta">
     <legend>Details {% if ai_on %}<em>— optional, auto-filled by AI when blank</em>{% else %}<em>— title &amp; company recommended</em>{% endif %}</legend>
     <div class="row">
-      <input name="title" placeholder="Title{{ '' if ai_on else ' *' }}">
-      <input name="company" placeholder="Company{{ '' if ai_on else ' *' }}">
+      <input name="title" placeholder="Title{{ '' if ai_on else ' *' }}" value="{{ form.get('title','') }}">
+      <input name="company" placeholder="Company{{ '' if ai_on else ' *' }}" value="{{ form.get('company','') }}">
     </div>
     <div class="row">
-      <input name="location" placeholder="Location">
-      <input name="salary" placeholder="Salary">
+      <input name="location" placeholder="Location" value="{{ form.get('location','') }}">
+      <input name="salary" placeholder="Salary" value="{{ form.get('salary','') }}">
     </div>
     <div class="row">
-      <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s=='saved' }}>{{ s }}</option>{% endfor %}</select>
-      <input name="source" placeholder="Source (auto-detected from URL, e.g. linkedin)">
+      <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == (form.get('status') or 'saved') }}>{{ s }}</option>{% endfor %}</select>
+      <input name="source" placeholder="Source (auto-detected from URL, e.g. linkedin)" value="{{ form.get('source','') }}">
     </div>
   </fieldset>
 
   {% if ai_on %}
   <label class="autogen-opt">
-    <input type="checkbox" name="autogen" value="1" checked>
+    <input type="checkbox" name="autogen" value="1" {{ 'checked' if (form.get('autogen', True)) }}>
     <span>After capturing, also generate with AI:
       <b>Company research</b> (Hebrew), <b>Fit analysis</b> (Hebrew + English),
       <b>Recruiter note</b> and <b>Cover letter</b>.
@@ -53,7 +72,7 @@
   {% endif %}
 
   <button class="btn primary" type="submit">
-    {% if ai_on %}Capture &amp; auto-extract{% else %}Capture job{% endif %}
+    {% if duplicates %}Proceed anyway →{% elif ai_on %}Capture &amp; auto-extract{% else %}Capture job{% endif %}
   </button>
 </form>
 {% endblock %}

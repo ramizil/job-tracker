@@ -26,6 +26,9 @@ PROFILE_PATH = DATA_DIR / "profile.yaml"
 # Personal "about me" pitch / interview script (the global base version).
 PITCH_PATH = DATA_DIR / "pitch.md"
 
+# Resume built by the conversational Resume Builder (AI-generated, English).
+BUILT_RESUME_PATH = DATA_DIR / "built_resume.html"
+
 # Tailored resumes (AI-generated) are written here.
 TAILORED_DIR = DATA_DIR / "tailored"
 TAILORED_DIR.mkdir(exist_ok=True)

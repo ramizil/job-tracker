@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% block title %}Resume Builder · Job Tracker{% endblock %}
+{% block content %}
+<h1>🗣️ Resume Builder</h1>
+<p class="sub">Have a short conversation <b>in Hebrew</b> — answer by voice or by typing — and
+  the AI writes a polished <b>English</b> resume in your CV's style. ראיון קצר בעברית → קורות חיים באנגלית.</p>
+
+{% include "_setup_banner.html" %}
+
+{% if not is_gemini %}
+<div class="setup-banner" role="note">
+  <div class="sb-head">🎙️ Voice transcription needs Gemini</div>
+  <ul class="sb-list">
+    <li>Your AI provider isn't set to Gemini, so the microphone can't transcribe here.
+      You can still <b>type</b> every answer in Hebrew, and the resume will be built normally.
+      To enable voice, set the provider to Gemini in Settings.</li>
+  </ul>
+  <a class="btn sm" href="{{ url_for('main.settings') }}">⚙ Open Settings</a>
+</div>
+{% endif %}
+
+{% if has_built %}
+<p class="muted">You already have a built resume.
+  <a href="{{ url_for('main.resume_builder_review') }}">Open it →</a>
+  (or start a new interview below to replace it).</p>
+{% endif %}
+
+<div class="rb" id="rb" {% if not ready.ready %}hidden{% endif %}
+     data-first="{{ first_question }}"
+     data-gemini="{{ '1' if is_gemini else '0' }}"
+     data-tts="{{ url_for('main.tts_speak') }}"
+     data-next="{{ url_for('main.resume_builder_next') }}"
+     data-transcribe="{{ url_for('main.resume_builder_transcribe') }}"
+     data-build="{{ url_for('main.resume_builder_build') }}">
+
+  <section class="panel rb-current">
+    <div class="rb-qrow">
+      <div class="rb-qnum"><span id="rb-step">1</span></div>
+      <div class="rb-q" id="rb-question" dir="rtl">…</div>
+      <button class="btn sm" type="button" id="rb-speak" title="Listen to the question">🔊</button>
+    </div>
+
+    <div class="rb-answer">
+      <div class="rb-rec">
+        <button class="btn primary" type="button" id="rb-record">🎙️ Record answer</button>
+        <button class="btn" type="button" id="rb-stop" disabled>⏹ Stop</button>
+        <button class="btn primary" type="button" id="rb-filebtn" hidden>🎙️ Record / upload audio</button>
+        <input type="file" id="rb-file" accept="audio/*" capture="microphone" hidden>
+        <span class="muted sm" id="rb-recstatus"></span>
+      </div>
+      <textarea id="rb-text" rows="5" dir="rtl"
+        placeholder="הקלט/י את התשובה, או הקלד/י אותה כאן בעברית…"></textarea>
+      <div class="actions">
+        <button class="btn primary" type="button" id="rb-next">Save answer &amp; next ›</button>
+        <button class="btn" type="button" id="rb-build" disabled>✅ Build my resume</button>
+        <span class="muted sm" id="rb-status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel rb-log-panel" id="rb-log-panel" hidden>
+    <h2>📝 Conversation so far</h2>
+    <ol class="rb-log" id="rb-log"></ol>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var root = document.getElementById('rb');
+  if (!root) return;
+
+  var URLS = {
+    tts: root.dataset.tts,
+    next: root.dataset.next,
+    transcribe: root.dataset.transcribe,
+    build: root.dataset.build
+  };
+  var GEMINI = root.dataset.gemini === '1';
+
+  var conversation = [];              // [{q, a}]
+  var currentQuestion = root.dataset.first;
+  var done = false;
+
+  var qEl = document.getElementById('rb-question');
+  var stepEl = document.getElementById('rb-step');
+  var textEl = document.getElementById('rb-text');
+  var logEl = document.getElementById('rb-log');
+  var logPanel = document.getElementById('rb-log-panel');
+  var statusEl = document.getElementById('rb-status');
+  var recStatus = document.getElementById('rb-recstatus');
+  var recBtn = document.getElementById('rb-record');
+  var stopBtn = document.getElementById('rb-stop');
+  var fileBtn = document.getElementById('rb-filebtn');
+  var fileInput = document.getElementById('rb-file');
+  var nextBtn = document.getElementById('rb-next');
+  var buildBtn = document.getElementById('rb-build');
+  var speakBtn = document.getElementById('rb-speak');
+
+  function setStatus(msg) { statusEl.textContent = msg || ''; }
+  function renderQuestion() {
+    qEl.textContent = currentQuestion || '';
+    stepEl.textContent = String(conversation.length + 1);
+  }
+  function refreshLog() {
+    logEl.innerHTML = '';
+    conversation.forEach(function (c, i) {
+      var li = document.createElement('li');
+      var q = document.createElement('div'); q.className = 'rb-lq'; q.dir = 'rtl'; q.textContent = c.q;
+      var a = document.createElement('div'); a.className = 'rb-la'; a.dir = 'rtl'; a.textContent = c.a || '—';
+      li.appendChild(q); li.appendChild(a); logEl.appendChild(li);
+    });
+    logPanel.hidden = conversation.length === 0;
+    buildBtn.disabled = conversation.length === 0;
+  }
+
+  // ---- Speak the question aloud (Hebrew neural voice via /tts) ----
+  var qAudio = new Audio();
+  function speak(text) {
+    if (!text) return;
+    try { qAudio.pause(); } catch (e) {}
+    var body = new URLSearchParams();
+    body.set('text', text); body.set('voice', 'he-IL-HilaNeural'); body.set('rate', '1');
+    speakBtn.disabled = true;
+    fetch(URLS.tts, { method: 'POST', body: body })
+      .then(function (r) { if (!r.ok) throw new Error(); return r.blob(); })
+      .then(function (b) { qAudio.src = URL.createObjectURL(b); qAudio.play(); })
+      .catch(function () {})
+      .then(function () { speakBtn.disabled = false; });
+  }
+  speakBtn.addEventListener('click', function () { speak(currentQuestion); });
+
+  // ---- Recording: capture PCM and encode 16 kHz mono WAV (Gemini-friendly) ----
+  var media = { ctx: null, stream: null, proc: null, src: null, buffers: [], length: 0, rate: 44100, on: false };
+
+  function floatTo16BitWav(samples, sampleRate) {
+    var buffer = new ArrayBuffer(44 + samples.length * 2);
+    var view = new DataView(buffer);
+    function wr(off, s) { for (var i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); }
+    wr(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); wr(8, 'WAVE');
+    wr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true); wr(36, 'data'); view.setUint32(40, samples.length * 2, true);
+    var off = 44;
+    for (var i = 0; i < samples.length; i++, off += 2) {
+      var s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+  }
+  function downsample(buffer, inRate, outRate) {
+    if (outRate >= inRate) return buffer;
+    var ratio = inRate / outRate, outLen = Math.round(buffer.length / ratio);
+    var result = new Float32Array(outLen), oi = 0, ii = 0;
+    while (oi < outLen) {
+      var next = Math.round((oi + 1) * ratio), sum = 0, n = 0;
+      for (; ii < next && ii < buffer.length; ii++) { sum += buffer[ii]; n++; }
+      result[oi++] = n ? sum / n : 0;
+    }
+    return result;
+  }
+
+  function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      media.stream = stream;
+      media.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      media.rate = media.ctx.sampleRate;
+      media.src = media.ctx.createMediaStreamSource(stream);
+      media.proc = media.ctx.createScriptProcessor(4096, 1, 1);
+      media.buffers = []; media.length = 0; media.on = true;
+      media.proc.onaudioprocess = function (e) {
+        if (!media.on) return;
+        var ch = e.inputBuffer.getChannelData(0);
+        media.buffers.push(new Float32Array(ch)); media.length += ch.length;
+      };
+      media.src.connect(media.proc); media.proc.connect(media.ctx.destination);
+      recBtn.disabled = true; stopBtn.disabled = false;
+      recStatus.textContent = '● Recording… speak in Hebrew';
+    }).catch(function () {
+      recStatus.textContent = 'No microphone access — type your answer instead.';
+    });
+  }
+
+  function stopRecording() {
+    if (!media.on) return;
+    media.on = false;
+    stopBtn.disabled = true; recBtn.disabled = false;
+    try { media.proc.disconnect(); media.src.disconnect(); } catch (e) {}
+    try { media.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+
+    var merged = new Float32Array(media.length), off = 0;
+    media.buffers.forEach(function (b) { merged.set(b, off); off += b.length; });
+    try { media.ctx.close(); } catch (e) {}
+
+    var ds = downsample(merged, media.rate, 16000);
+    var wav = floatTo16BitWav(ds, 16000);
+    uploadForTranscription(wav, 'answer.wav');
+  }
+
+  // Shared: send any audio blob/file to the server for transcription.
+  function uploadForTranscription(blob, filename) {
+    if (!GEMINI) {
+      recStatus.textContent = 'Recorded — but voice transcription needs Gemini. Type your answer.';
+      return;
+    }
+    recStatus.textContent = 'Transcribing…';
+    var fd = new FormData();
+    fd.append('audio', blob, filename || 'answer');
+    fetch(URLS.transcribe, { method: 'POST', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { recStatus.textContent = (res.j && res.j.error) || 'Transcription failed.'; return; }
+        var t = (res.j.text || '').trim();
+        textEl.value = textEl.value ? (textEl.value.trim() + ' ' + t) : t;
+        recStatus.textContent = t ? '✓ Transcribed — edit if needed.' : 'Heard nothing — try again or type.';
+        textEl.focus();
+      })
+      .catch(function () { recStatus.textContent = 'Transcription failed — type your answer.'; });
+  }
+
+  // Choose the recording method that works in this context:
+  //  • Live mic (getUserMedia) needs a secure context (localhost or HTTPS).
+  //    On a phone hitting the app over the LAN (http://…) it's blocked, so we
+  //    fall back to the device's NATIVE recorder via a file-capture input.
+  var canLiveRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+                      && window.isSecureContext;
+
+  if (!GEMINI) {
+    // No transcription available → typing only; hide all voice controls.
+    recBtn.hidden = true; stopBtn.hidden = true; fileBtn.hidden = true;
+  } else if (canLiveRecord) {
+    recBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+  } else {
+    // Mobile / non-secure context: use the native recorder via file input.
+    recBtn.hidden = true; stopBtn.hidden = true; fileBtn.hidden = false;
+    fileBtn.addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      uploadForTranscription(f, f.name || 'answer');
+      fileInput.value = '';
+    });
+  }
+
+  // ---- Advance the interview ----
+  function askNext() {
+    setStatus('Thinking of the next question…');
+    nextBtn.disabled = true;
+    fetch(URLS.next, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation: conversation })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        nextBtn.disabled = false;
+        if (!res.ok) { setStatus((res.j && res.j.error) || 'Could not get the next question.'); return; }
+        if (res.j.done) {
+          done = true;
+          currentQuestion = '';
+          qEl.textContent = '🎉 תודה! יש לנו מספיק מידע. אפשר לבנות את קורות החיים.';
+          stepEl.textContent = '✓';
+          textEl.value = ''; recStatus.textContent = '';
+          nextBtn.disabled = true; recBtn.disabled = true;
+          setStatus('Interview complete — click “Build my resume”.');
+          return;
+        }
+        currentQuestion = res.j.question;
+        textEl.value = ''; recStatus.textContent = '';
+        renderQuestion(); setStatus(''); speak(currentQuestion);
+      })
+      .catch(function () { nextBtn.disabled = false; setStatus('Network error — try again.'); });
+  }
+
+  nextBtn.addEventListener('click', function () {
+    var ans = (textEl.value || '').trim();
+    if (!ans) { setStatus('Record or type an answer first (or use “Build my resume” to finish).'); return; }
+    conversation.push({ q: currentQuestion, a: ans });
+    refreshLog();
+    askNext();
+  });
+
+  buildBtn.addEventListener('click', function () {
+    // Capture any answer typed but not yet saved for the current question.
+    var pending = (textEl.value || '').trim();
+    if (pending && currentQuestion && !done) {
+      conversation.push({ q: currentQuestion, a: pending });
+      refreshLog();
+    }
+    if (!conversation.length) { setStatus('Answer at least one question first.'); return; }
+    setStatus('Building your English resume… this takes ~30–60s.');
+    buildBtn.disabled = true; nextBtn.disabled = true;
+    fetch(URLS.build, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversation: conversation })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { setStatus((res.j && res.j.error) || 'Build failed.'); buildBtn.disabled = false; return; }
+        window.location.href = res.j.url;
+      })
+      .catch(function () { setStatus('Build failed — try again.'); buildBtn.disabled = false; });
+  });
+
+  // Init
+  renderQuestion();
+  refreshLog();
+})();
+</script>
+{% endblock %}

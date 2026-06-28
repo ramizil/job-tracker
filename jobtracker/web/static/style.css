@@ -92,6 +92,11 @@ h3{font-size:12px;margin:14px 0 6px;color:#94a8c4;text-transform:uppercase;lette
 .setup-banner .sb-head{font-weight:800;margin-bottom:6px;color:#ffd877}
 .setup-banner .sb-list{margin:0 0 12px;padding-left:20px;line-height:1.55}
 .setup-banner .sb-list li{margin:2px 0}
+.dup-warning{background:rgba(52,40,16,.6);border:1px solid rgba(251,191,36,.55);color:#ffe9b8;padding:14px 16px;border-radius:12px;margin-bottom:18px;backdrop-filter:blur(8px);box-shadow:0 0 24px -8px rgba(251,191,36,.45)}
+.dup-warning .dw-head{font-weight:800;margin-bottom:6px;color:#ffd877}
+.dup-warning .dw-sub{margin:6px 0}
+.dup-warning .dw-list{margin:8px 0;padding-left:20px;line-height:1.6}
+.dup-warning .dw-list li{margin:3px 0}
 
 /* saved-jobs reminder */
 .reminder{display:flex;align-items:center;gap:13px;padding:12px 15px;border-radius:13px;margin-bottom:16px;
@@ -315,6 +320,48 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .steps>li{counter-increment:step;position:relative;padding:12px 0 12px 46px;border-bottom:1px solid var(--rule)}
 .steps>li::before{content:counter(step);position:absolute;left:0;top:11px;width:30px;height:30px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;box-shadow:0 6px 16px -6px rgba(124,58,237,.8)}
 .steps b{color:#dbe6f5}
+
+/* resume builder (spoken interview) */
+.rb{display:flex;flex-direction:column;gap:14px}
+.rb-qrow{display:flex;align-items:flex-start;gap:12px}
+.rb-qnum{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;box-shadow:0 6px 16px -6px rgba(124,58,237,.8)}
+.rb-q{flex:1;font-size:18px;font-weight:600;line-height:1.5;color:#eaf2ff;padding-top:3px}
+.rb-answer{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.rb-rec{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rb-answer textarea{width:100%;min-height:96px;font-size:15px;line-height:1.5}
+.rb-log-panel h2{margin-top:0}
+.rb-log{list-style:none;counter-reset:rbq;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+.rb-log>li{counter-increment:rbq;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:rgba(8,14,24,.4)}
+.rb-log .rb-lq{font-weight:600;color:#dbe6f5}
+.rb-log .rb-lq::before{content:counter(rbq) ". "}
+.rb-log .rb-la{margin-top:4px;color:var(--muted)}
+
+/* --- mobile / small screens --- */
+@media(max-width:760px){
+  .topbar{gap:10px;padding:10px 12px;flex-wrap:wrap}
+  .topbar nav{gap:13px;max-width:100%;overflow-x:auto;flex-wrap:nowrap;
+    -webkit-overflow-scrolling:touch;padding-bottom:3px;scrollbar-width:none}
+  .topbar nav::-webkit-scrollbar{display:none}
+  .topbar nav a{white-space:nowrap;flex:0 0 auto}
+  .container{padding:16px 13px 64px}
+  h1{font-size:20px}
+  .panel-head{flex-direction:column;align-items:stretch}
+  .panel-head .actions{margin:0}
+  .btn{padding:11px 14px}           /* bigger touch targets */
+  .btn.sm{padding:7px 12px;font-size:12px}
+  .frame-wrap{height:70vh;min-width:0;resize:vertical}
+  .review.wide .frame-wrap{height:72vh}
+}
+/* resume builder on mobile */
+@media(max-width:760px){
+  .rb-q{font-size:16px}
+  .rb-qnum{width:30px;height:30px}
+  .rb-rec{width:100%}
+  .rb-rec .btn{flex:1 1 auto}
+  .rb-answer textarea{min-height:130px;font-size:16px}  /* 16px avoids iOS zoom */
+  .rb-answer .actions{margin-bottom:0}
+  .rb-answer .actions .btn{flex:1 1 auto}
+}
 
 @media(prefers-reduced-motion:reduce){
   body::before{animation:none}

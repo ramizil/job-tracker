@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Your resume · Job Tracker{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.resume_builder') }}">&larr; Back to Resume Builder</a>
+<div class="panel-head">
+  <h1>📄 Your resume</h1>
+  <div class="actions">
+    <button class="btn" onclick="document.getElementById('rframe').contentWindow.print()">🖨 Print / Save as PDF</button>
+    <a class="btn" href="{{ url_for('main.resume_builder_pdf') }}">⬇ Download PDF</a>
+    <a class="btn sm" href="{{ url_for('main.resume_builder_view') }}" target="_blank">Open in tab</a>
+  </div>
+</div>
+<p class="muted">Click straight into the resume to edit the text, then <b>Save changes</b>.
+  Print gives the highest-fidelity PDF.</p>
+
+<div class="review wide">
+  <div class="preview">
+    <div class="rtoolbar">
+      <span class="muted sm" id="edit-hint">✏️ Loading editable preview…</span>
+      <span>
+        <button class="btn sm" type="button" id="reset-frame">Discard</button>
+        <button class="btn sm primary" type="button" id="save-wysiwyg">💾 Save changes</button>
+      </span>
+    </div>
+    <div class="frame-wrap" id="frame-wrap">
+      <iframe id="rframe" src="{{ url_for('main.resume_builder_view') }}"></iframe>
+    </div>
+    <span class="muted sm frame-tip">Drag the bottom-right corner to resize the document.</span>
+  </div>
+</div>
+
+<details class="panel mt" id="src-panel">
+  <summary><b>&lt;/&gt; Edit HTML source</b> <span class="muted sm">(advanced)</span></summary>
+  <form method="post" action="{{ url_for('main.resume_builder_save') }}" class="stack mt">
+    <textarea name="html" class="code" spellcheck="false">{{ built_html }}</textarea>
+    <button class="btn" type="submit">Save HTML</button>
+  </form>
+</details>
+
+<form id="wysiwyg-form" method="post" action="{{ url_for('main.resume_builder_save') }}" hidden>
+  <textarea name="html" id="wysiwyg-html"></textarea>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var frame = document.getElementById('rframe');
+  var hint = document.getElementById('edit-hint');
+  var saveBtn = document.getElementById('save-wysiwyg');
+  var dirty = false;
+
+  function makeEditable() {
+    try {
+      var doc = frame.contentDocument;
+      if (!doc || !doc.body) return;
+      doc.body.contentEditable = 'true';
+      doc.body.style.outline = 'none';
+      doc.body.addEventListener('input', function () {
+        dirty = true;
+        hint.textContent = '● Unsaved edits — click Save changes';
+        hint.style.color = '#fbbf24';
+      });
+      hint.textContent = '✏️ Click anywhere in the resume to edit text.';
+    } catch (e) {
+      hint.textContent = 'Preview not editable here — use Edit HTML source below.';
+    }
+  }
+  frame.addEventListener('load', makeEditable);
+
+  saveBtn.addEventListener('click', function () {
+    try {
+      var doc = frame.contentDocument;
+      doc.body.removeAttribute('contenteditable');
+      var html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+      document.getElementById('wysiwyg-html').value = html;
+      document.getElementById('wysiwyg-form').submit();
+    } catch (e) {
+      alert('Could not read the edited resume: ' + e.message);
+    }
+  });
+
+  document.getElementById('reset-frame').addEventListener('click', function () {
+    if (!dirty || confirm('Discard your unsaved in-page edits?')) {
+      frame.contentWindow.location.reload();
+    }
+  });
+
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+})();
+</script>
+{% endblock %}

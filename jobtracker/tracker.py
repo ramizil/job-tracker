@@ -76,6 +76,22 @@ def import_job_result(job: JobResult, match_score: float | None = None,
     )
 
 
+def find_duplicates(title: str, company: str) -> list[sqlite3.Row]:
+    """Existing applications with the same title AND company (case-insensitive,
+    whitespace-trimmed). Used to warn when capturing a job you already have."""
+    t = (title or "").strip().lower()
+    c = (company or "").strip().lower()
+    if not t or not c:
+        return []
+    with get_connection() as conn:
+        return conn.execute(
+            """SELECT * FROM applications
+                 WHERE lower(trim(title)) = ? AND lower(trim(company)) = ?
+                 ORDER BY updated_at DESC""",
+            (t, c),
+        ).fetchall()
+
+
 def get_application(app_id: int) -> sqlite3.Row | None:
     with get_connection() as conn:
         return conn.execute(

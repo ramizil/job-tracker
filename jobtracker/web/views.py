@@ -417,7 +417,8 @@ def paste_job():
     rd = _readiness()
     if request.method == "GET":
         return render_template("paste.html", statuses=STATUSES,
-                               ai_on=ai.is_configured(), ready=rd)
+                               ai_on=ai.is_configured(), ready=rd,
+                               form={}, duplicates=None)
 
     if not rd["ready"]:
         for msg in rd["issues"]:
@@ -452,6 +453,24 @@ def paste_job():
         title = text.splitlines()[0][:120] if text else "(untitled)"
     if not company:
         company = "(unknown)"
+
+    # Warn if an application with the same title + company already exists, but
+    # let the user proceed (re-applying, or a genuinely different posting). The
+    # "Proceed anyway" submit resends with confirm_duplicate=1 to skip this.
+    if not f.get("confirm_duplicate") and company != "(unknown)":
+        duplicates = tracker.find_duplicates(title, company)
+        if duplicates:
+            return render_template(
+                "paste.html", statuses=STATUSES, ai_on=ai.is_configured(),
+                ready=rd, duplicates=duplicates,
+                form={
+                    "url": url, "description": text, "title": title,
+                    "company": company, "location": location, "salary": salary,
+                    "status": f.get("status", "saved"),
+                    "source": (f.get("source") or "").strip(),
+                    "autogen": bool(f.get("autogen")),
+                },
+            )
 
     # Prefer a source auto-detected from the URL (e.g. linkedin, alljobs,
     # drushim) over the generic default.
@@ -1006,6 +1025,125 @@ def resume_pdf(app_id: int):
           "fallback renderer failed). Use the Print / Save as PDF button for a "
           "pixel-perfect PDF.", "error")
     return redirect(url_for("main.resume_review", app_id=app_id))
+
+
+# --------------------------------------------------------------------------- #
+# Resume Builder: a spoken Hebrew interview that produces an English resume.
+@bp.route("/resume-builder")
+def resume_builder():
+    """The conversational resume-builder page (Hebrew interview → English CV)."""
+    rd = _readiness()
+    return render_template(
+        "resume_builder.html",
+        ready=rd,
+        ai_on=ai.is_configured(),
+        is_gemini=ai.active_provider() == "gemini",
+        first_question=ai.RESUME_BUILDER_FIRST_QUESTION,
+        has_built=config.BUILT_RESUME_PATH.exists(),
+    )
+
+
+@bp.route("/resume-builder/transcribe", methods=["POST"])
+def resume_builder_transcribe():
+    """Transcribe an uploaded Hebrew audio answer to text (Gemini)."""
+    file = request.files.get("audio")
+    if not file:
+        return {"error": "No audio was uploaded."}, 400
+    data = file.read()
+    if not data:
+        return {"error": "The audio recording was empty."}, 400
+    mime = (file.mimetype or "").lower()
+    # Phones often send an empty or generic type for native recordings; infer a
+    # sensible audio MIME from the filename so Gemini accepts it.
+    if not mime or mime in ("application/octet-stream", "application/x-www-form-urlencoded"):
+        import mimetypes
+        guessed, _ = mimetypes.guess_type(file.filename or "")
+        mime = (guessed or "audio/mp4")
+    # Strip any codec suffix (e.g. "audio/webm;codecs=opus").
+    mime = mime.split(";", 1)[0].strip()
+    try:
+        text = ai.transcribe_audio(data, mime_type=mime, language="he")
+    except ai.AIError as exc:
+        return {"error": str(exc)}, 502
+    return {"text": text}
+
+
+@bp.route("/resume-builder/next", methods=["POST"])
+def resume_builder_next():
+    """Return the next Hebrew interview question given the conversation so far."""
+    payload = request.get_json(silent=True) or {}
+    conversation = payload.get("conversation") or []
+    try:
+        result = ai.interview_question(conversation)
+    except ai.AIError as exc:
+        return {"error": str(exc)}, 502
+    return result
+
+
+@bp.route("/resume-builder/build", methods=["POST"])
+def resume_builder_build():
+    """Generate the English resume HTML from the full interview transcript."""
+    payload = request.get_json(silent=True) or {}
+    conversation = payload.get("conversation") or []
+    try:
+        html = ai.build_resume_from_interview(conversation)
+    except ai.AIError as exc:
+        return {"error": str(exc)}, 502
+    config.BUILT_RESUME_PATH.write_text(html, encoding="utf-8")
+    return {"ok": True, "url": url_for("main.resume_builder_review")}
+
+
+@bp.route("/resume-builder/review")
+def resume_builder_review():
+    if not config.BUILT_RESUME_PATH.exists():
+        flash("Build a resume from the interview first.", "error")
+        return redirect(url_for("main.resume_builder"))
+    html = config.BUILT_RESUME_PATH.read_text(encoding="utf-8")
+    return render_template("resume_built_review.html", built_html=html)
+
+
+@bp.route("/resume-builder/view")
+def resume_builder_view():
+    """Raw built-resume HTML (shown inside the review iframe / print)."""
+    if not config.BUILT_RESUME_PATH.exists():
+        abort(404)
+    return Response(config.BUILT_RESUME_PATH.read_text(encoding="utf-8"),
+                    mimetype="text/html")
+
+
+@bp.route("/resume-builder/save", methods=["POST"])
+def resume_builder_save():
+    html = request.form.get("html", "")
+    if html.strip():
+        config.BUILT_RESUME_PATH.write_text(html, encoding="utf-8")
+        flash("Saved edits.", "ok")
+    return redirect(url_for("main.resume_builder_review"))
+
+
+@bp.route("/resume-builder/pdf")
+def resume_builder_pdf():
+    if not config.BUILT_RESUME_PATH.exists():
+        abort(404)
+    import io
+    html = config.BUILT_RESUME_PATH.read_text(encoding="utf-8")
+
+    data = _render_pdf_with_browser(html)
+    if data:
+        return send_file(io.BytesIO(data), mimetype="application/pdf",
+                         as_attachment=True, download_name="resume.pdf")
+    try:
+        from xhtml2pdf import pisa
+        out = io.BytesIO()
+        result = pisa.CreatePDF(src=html, dest=out, encoding="utf-8")
+        if not result.err and out.getbuffer().nbytes > 0:
+            out.seek(0)
+            return send_file(out, mimetype="application/pdf", as_attachment=True,
+                             download_name="resume.pdf")
+    except Exception:
+        pass
+    flash("Couldn't build the PDF on the server (no local browser found). "
+          "Use the Print / Save as PDF button instead.", "error")
+    return redirect(url_for("main.resume_builder_review"))
 
 
 # --------------------------------------------------------------------------- #

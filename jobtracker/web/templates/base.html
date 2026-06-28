@@ -17,6 +17,7 @@
       <a href="{{ url_for('main.search') }}" class="{{ 'active' if ep == 'main.search' }}">Search</a>
       <a href="{{ url_for('main.paste_job') }}" class="{{ 'active' if ep == 'main.paste_job' }}">📋 Paste Job</a>
       <a href="{{ url_for('main.my_pitch') }}" class="{{ 'active' if ep == 'main.my_pitch' }}">🎤 My Pitch</a>
+      <a href="{{ url_for('main.resume_builder') }}" class="{{ 'active' if ep in ['main.resume_builder', 'main.resume_builder_review'] }}">🗣️ Resume Builder</a>
       <span class="sep"></span>
       <a href="{{ url_for('main.export_csv') }}">CSV</a>
       <a href="{{ url_for('main.export_xlsx') }}">Excel</a>
