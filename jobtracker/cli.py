@@ -269,7 +269,7 @@ def web(host: str = typer.Option("127.0.0.1", "--host"),
         idle_timeout: int = typer.Option(
             90, "--idle-timeout",
             help="Seconds with no open tab before auto-shutdown.")):
-    """Launch the Flask web dashboard (funnel, Kanban, AI, export)."""
+    """Launch the Flask web dashboard (funnel, applications, AI, export)."""
     from .web import create_app
     disp = "127.0.0.1" if host in ("0.0.0.0", "") else host
     url = f"http://{disp}:{port}/"

@@ -34,11 +34,6 @@ def inject_saved_alert():
     except Exception:
         return {"saved_alert": {"count": 0, "stale": 0}}
 
-# Columns shown on the Kanban board (drop the terminal/parked ones into a lane).
-BOARD_LANES = ["saved", "applied", "screening", "interview", "offer",
-               "accepted", "rejected", "withdrawn"]
-
-
 def _tailored_path(app_id: int):
     return TAILORED_DIR / f"{app_id}.html"
 
@@ -326,20 +321,6 @@ def dashboard():
         reminders=analytics.saved_reminders(),
         ai_on=ai.is_configured(),
     )
-
-
-@bp.route("/board")
-def board():
-    lanes = {st: [] for st in BOARD_LANES}
-    parked = []
-    for r in tracker.list_applications():
-        st = r["status"]
-        if st in lanes:
-            lanes[st].append(r)
-        else:
-            parked.append(r)
-    return render_template("board.html", lanes=lanes, parked=parked,
-                           lane_order=BOARD_LANES)
 
 
 @bp.route("/applications")

@@ -1,50 +1,46 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # ============================================================
 #  Job Tracker launcher (macOS / Linux)
-#  Double-click this file in Finder to start the app. On first
-#  run it creates a virtual environment and installs deps.
-#  A standalone app window opens automatically.
-#  Press Ctrl+C in this window (or click Quit in the app) to stop.
+#  Double-click in Finder (or run ./start.command). On launch it
+#  pulls the latest code from git, then (on first run) creates a
+#  virtual environment and installs/updates all dependencies.
+#  Press Ctrl+C in this window to stop the server.
 # ============================================================
-set -e
+cd "$(dirname "$0")" || exit 1
 
-# Always run from the folder this script lives in.
-cd "$(dirname "$0")"
-
-# Pick a Python 3.10+ interpreter (the deps require it).
-PY=""
-for cand in python3.13 python3.12 python3.11 python3.10 python3 python; do
-    if command -v "$cand" >/dev/null 2>&1; then
-        if "$cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
-            PY="$cand"
-            break
-        fi
+# --- Pull latest, then re-exec fresh so edits to this script take effect ---
+if [ -z "$JT_PULLED" ]; then
+    export JT_PULLED=1
+    if command -v git >/dev/null 2>&1; then
+        echo "[update] Pulling the latest version from git..."
+        git pull --ff-only || echo "[update] git pull skipped/failed - continuing."
+    else
+        echo "[update] git not found - skipping update."
     fi
-done
-
-if [ -z "$PY" ]; then
-    echo
-    echo "ERROR: Python 3.10+ was not found (some dependencies require it)."
-    echo "       macOS:  brew install python@3.12"
-    echo "       or download from https://www.python.org/downloads/"
-    read -r -p "Press Enter to close..."
-    exit 1
+    exec "$0" "$@"
 fi
-echo "[setup] Using $("$PY" --version 2>&1) at $(command -v "$PY")"
 
+PY="${PYTHON:-python3}"
+
+# --- First run: create the virtual environment ---
 if [ ! -x ".venv/bin/python" ]; then
-    echo "[setup] Creating virtual environment..."
-    "$PY" -m venv .venv
-    echo "[setup] Installing dependencies (first run only)..."
+    echo "[setup] Creating virtual environment (first run only)..."
+    if ! "$PY" -m venv .venv; then
+        echo
+        echo "ERROR: Python 3.10+ was not found. Install it (e.g. 'brew install python') and try again."
+        exit 1
+    fi
     ".venv/bin/python" -m pip install --upgrade pip
-    ".venv/bin/python" -m pip install -r requirements.txt
 fi
+
+# --- Always make sure dependencies are present (picks up new ones after a pull) ---
+echo "[setup] Checking / installing dependencies..."
+".venv/bin/python" -m pip install -q -r requirements.txt
 
 ".venv/bin/python" -m jobtracker init
 echo
-echo "Starting Job Tracker... an app window will open shortly."
+echo "Starting Job Tracker... open http://127.0.0.1:5000 in your browser."
 ".venv/bin/python" -m jobtracker web --port 5000
 
 echo
 echo "Job Tracker stopped."
-read -r -p "Press Enter to close..."

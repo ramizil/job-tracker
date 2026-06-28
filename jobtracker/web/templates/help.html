@@ -27,10 +27,9 @@
       <a href="{{ url_for('main.applications') }}">Applications</a> click
       <b>+ Add application</b>, paste the LinkedIn URL and the <b>job description</b>
       (the description powers AI &amp; match scoring).</li>
-    <li><b>Track progress.</b> Drag cards across the
-      <a href="{{ url_for('main.board') }}">Board</a> (saved → applied → screening →
-      interview → offer). Open an application to add notes or mark it rejected
-      (with stage + reason).</li>
+    <li><b>Track progress.</b> Move applications through the pipeline
+      (saved → applied → screening → interview → offer). Open an application to
+      change its status, add notes, or mark it rejected (with stage + reason).</li>
     <li><b>Analyze fit.</b> Open an application →
       <b>Analyze fit with Gemini</b>. You get a YES/MAYBE/NO verdict, a
       requirement-by-requirement match, risks, and concrete resume fixes.</li>
@@ -94,7 +93,7 @@ Stop-Process -Id $p -Force</pre>
   <h2>Quick tips</h2>
   <ul>
     <li><b>Add a job</b> from the <a href="{{ url_for('main.applications') }}">Applications</a> page — paste the job description so AI analysis &amp; match scoring work.</li>
-    <li><b>Move status</b> by dragging cards on the <a href="{{ url_for('main.board') }}">Board</a>.</li>
+    <li><b>Move status</b> from any application's detail page (saved → applied → screening → interview → offer).</li>
     <li><b>Analyze fit &amp; tailor your CV</b> from any application's detail page.</li>
     <li><b>Export</b> everything via the <b>CSV</b> / <b>Excel</b> buttons in the top bar.</li>
   </ul>
