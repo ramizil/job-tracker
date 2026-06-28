@@ -69,7 +69,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "OPENAI_MODEL": "OpenAI model (default gpt-4o-mini)",
     "ANTHROPIC_API_KEY": "Anthropic API key (Claude models)",
     "ANTHROPIC_MODEL": "Anthropic model (default claude-3-5-sonnet-latest)",
-    "RESUME_PATH": "Path to your resume HTML",
+    "RESUME_PATH": "Path to your resume (HTML, PDF, Word .docx, or text)",
     "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
 }
 

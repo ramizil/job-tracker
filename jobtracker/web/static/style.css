@@ -88,6 +88,10 @@ h3{font-size:12px;margin:14px 0 6px;color:#94a8c4;text-transform:uppercase;lette
 .flash.ok{background:rgba(16,52,34,.6);border:1px solid rgba(52,211,153,.5);color:#9af3c4;box-shadow:0 0 24px -8px rgba(52,211,153,.5)}
 .flash.error{background:rgba(52,18,22,.6);border:1px solid rgba(251,113,133,.5);color:#ffc0c8;box-shadow:0 0 24px -8px rgba(251,113,133,.5)}
 .banner{background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(34,211,238,.12));border:1px solid rgba(124,150,200,.25);color:#dfe8ff;padding:12px 14px;border-radius:12px;margin-bottom:16px;backdrop-filter:blur(8px)}
+.setup-banner{background:rgba(52,40,16,.6);border:1px solid rgba(251,191,36,.55);color:#ffe9b8;padding:14px 16px;border-radius:12px;margin-bottom:18px;backdrop-filter:blur(8px);box-shadow:0 0 24px -8px rgba(251,191,36,.45)}
+.setup-banner .sb-head{font-weight:800;margin-bottom:6px;color:#ffd877}
+.setup-banner .sb-list{margin:0 0 12px;padding-left:20px;line-height:1.55}
+.setup-banner .sb-list li{margin:2px 0}
 
 /* saved-jobs reminder */
 .reminder{display:flex;align-items:center;gap:13px;padding:12px 15px;border-radius:13px;margin-bottom:16px;

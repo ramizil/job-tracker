@@ -327,17 +327,38 @@ def _generate_anthropic(prompt: str, *, as_json: bool = False) -> str:
 
 
 def resume_text(resume_path: Path | None = None) -> str:
+    from . import resume as _resume
     path = Path(resume_path) if resume_path else config.RESUME_PATH
-    html = path.read_text(encoding="utf-8", errors="ignore")
-    soup = BeautifulSoup(html, "html.parser")
-    for t in soup(["style", "script"]):
-        t.decompose()
-    return re.sub(r"\n{3,}", "\n\n", soup.get_text("\n")).strip()
+    text = _resume.extract_text(path)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _text_to_resume_html(text: str) -> str:
+    """Wrap plain resume text in a clean, printable HTML document.
+
+    Used when the source resume is a PDF/Word/text file (no HTML to reuse), so
+    the tailored-resume feature still has markup to work with.
+    """
+    import html as _html
+    body = "\n".join(
+        f"<p>{_html.escape(line)}</p>" if line.strip() else "<br>"
+        for line in text.splitlines()
+    )
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;"
+        "max-width:800px;margin:32px auto;line-height:1.5;color:#1f2937;}"
+        "p{margin:0 0 6px;}h1,h2{color:#111827;}</style></head>"
+        f"<body>{body}</body></html>"
+    )
 
 
 def resume_html(resume_path: Path | None = None) -> str:
+    from . import resume as _resume
     path = Path(resume_path) if resume_path else config.RESUME_PATH
-    return path.read_text(encoding="utf-8", errors="ignore")
+    if path.suffix.lower() in (".html", ".htm"):
+        return path.read_text(encoding="utf-8", errors="ignore")
+    return _text_to_resume_html(_resume.extract_text(path))
 
 
 # --------------------------------------------------------------------------- #

@@ -62,12 +62,75 @@ DEFAULT_TARGET_TITLES = [
 ]
 
 
-def _read_text(path: Path) -> str:
-    html = path.read_text(encoding="utf-8", errors="ignore")
+# Resume file types we can read text from.
+SUPPORTED_RESUME_EXTS = {".html", ".htm", ".pdf", ".docx", ".txt", ".md", ".markdown"}
+
+
+def _html_to_text(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["style", "script"]):
         tag.decompose()
-    return soup.get_text(separator=" ").lower()
+    return soup.get_text(separator=" ")
+
+
+def _pdf_to_text(path: Path) -> str:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError(
+            "Reading PDF resumes needs PyMuPDF (pip install pymupdf)."
+        ) from exc
+    parts: list[str] = []
+    with fitz.open(str(path)) as doc:
+        for page in doc:
+            parts.append(page.get_text())
+    return "\n".join(parts)
+
+
+def _docx_to_text(path: Path) -> str:
+    try:
+        import docx  # python-docx
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError(
+            "Reading Word resumes needs python-docx (pip install python-docx)."
+        ) from exc
+    d = docx.Document(str(path))
+    parts: list[str] = [p.text for p in d.paragraphs]
+    for table in d.tables:
+        for row in table.rows:
+            parts.append("\t".join(cell.text for cell in row.cells))
+    return "\n".join(parts)
+
+
+def extract_text(path: Path | str) -> str:
+    """Extract plain text from a resume file.
+
+    Supports HTML, PDF, Word (.docx) and plain text/Markdown. Raises a clear
+    error for missing files and unsupported types (e.g. legacy .doc).
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Resume not found: {path}")
+    ext = path.suffix.lower()
+    if ext in (".html", ".htm"):
+        return _html_to_text(path.read_text(encoding="utf-8", errors="ignore"))
+    if ext == ".pdf":
+        return _pdf_to_text(path)
+    if ext == ".docx":
+        return _docx_to_text(path)
+    if ext in (".txt", ".md", ".markdown", ""):
+        return path.read_text(encoding="utf-8", errors="ignore")
+    if ext == ".doc":
+        raise ValueError(
+            "Legacy .doc files aren't supported — open it in Word and 'Save As' "
+            ".docx or PDF, then update the Resume path in Settings."
+        )
+    # Unknown extension: best-effort read as text.
+    return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def _read_text(path: Path) -> str:
+    return extract_text(path).lower()
 
 
 def build_profile(resume_path: Path | None = None) -> dict[str, Any]:

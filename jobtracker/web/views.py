@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 from flask import (
     Blueprint, Response, abort, flash, redirect, render_template,
@@ -36,6 +37,39 @@ def inject_saved_alert():
 
 def _tailored_path(app_id: int):
     return TAILORED_DIR / f"{app_id}.html"
+
+
+def _readiness() -> dict:
+    """Are the mandatory settings (a usable resume + a configured AI) in place?
+
+    Used to gate the Paste-a-job and Search flows, which both rely on the
+    resume profile and AI features.
+    """
+    issues: list[str] = []
+
+    rp = Path(str(config.RESUME_PATH)) if config.RESUME_PATH else None
+    if not rp or not rp.exists():
+        resume_ok = False
+        issues.append(
+            f"Your resume file wasn't found — set a valid Resume path in Settings "
+            f"(looked for: {rp}).")
+    elif rp.suffix.lower() not in resume_mod.SUPPORTED_RESUME_EXTS:
+        resume_ok = False
+        issues.append(
+            f"Resume type “{rp.suffix}” isn't supported — use HTML, PDF, "
+            "Word (.docx) or a text file, then update the Resume path in Settings.")
+    else:
+        resume_ok = True
+
+    ai_ok = ai.is_configured()
+    if not ai_ok:
+        issues.append(
+            f"AI isn't configured — add your {ai.provider_label()} API key on the "
+            "Settings page (Gemini has a free tier).")
+
+    return {"resume_ok": resume_ok, "ai_ok": ai_ok,
+            "ready": resume_ok and ai_ok, "issues": issues,
+            "resume_path": str(rp) if rp else ""}
 
 
 def _browser_candidates() -> list[str]:
@@ -380,9 +414,15 @@ def paste_job():
     (and the AI key is configured); the full pasted text becomes the
     description used for match scoring and fit analysis.
     """
+    rd = _readiness()
     if request.method == "GET":
         return render_template("paste.html", statuses=STATUSES,
-                               ai_on=ai.is_configured())
+                               ai_on=ai.is_configured(), ready=rd)
+
+    if not rd["ready"]:
+        for msg in rd["issues"]:
+            flash(msg, "error")
+        return redirect(url_for("main.paste_job"))
 
     f = request.form
     text = (f.get("description") or "").strip()
@@ -975,6 +1015,13 @@ def search():
     query = request.values.get("query", "")
     location = request.values.get("location", "Israel")
     configured = [s.name for s in get_sources()]
+    rd = _readiness()
+    if request.method == "POST" and not rd["ready"]:
+        for msg in rd["issues"]:
+            flash(msg, "error")
+        return render_template("search.html", results=[], query=query,
+                               location=location, configured=configured,
+                               jooble_usage=None, ready=rd)
     if request.method == "POST" and configured:
         prof = resume_mod.load_profile()
         if not query:
@@ -1001,7 +1048,7 @@ def search():
                   f"{ju['limit']}. Consider getting a fresh key soon.", "error")
     return render_template("search.html", results=results, query=query,
                            location=location, configured=configured,
-                           jooble_usage=ju)
+                           jooble_usage=ju, ready=rd)
 
 
 @bp.route("/search/save", methods=["POST"])

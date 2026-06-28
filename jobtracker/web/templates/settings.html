@@ -115,9 +115,12 @@
   <section class="panel">
     <h2>📄 Resume</h2>
     <div class="setting">
-      <label for="RESUME_PATH">Resume HTML path</label>
-      <input type="text" id="RESUME_PATH" name="RESUME_PATH" value="{{ values.RESUME_PATH }}" placeholder="C:\path\to\your-cv.html">
-      <small>Used for match scoring &amp; AI tailoring. After changing it, rebuild the profile below.</small>
+      <label for="RESUME_PATH">Resume file path</label>
+      <input type="text" id="RESUME_PATH" name="RESUME_PATH" value="{{ values.RESUME_PATH }}" placeholder="C:\path\to\your-cv.pdf">
+      <small>Supports <b>HTML, PDF, Word (.docx)</b> and plain text/Markdown. Used for
+        match scoring &amp; AI tailoring. After changing it, rebuild the profile below.
+        <em>Tip: an HTML resume produces the best-looking tailored CV; PDF/Word are
+        read as text.</em></small>
     </div>
   </section>
 

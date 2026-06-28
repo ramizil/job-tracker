@@ -1,0 +1,9 @@
+{% if ready and not ready.ready %}
+<div class="setup-banner" role="alert">
+  <div class="sb-head">⚠ Finish setup before you continue</div>
+  <ul class="sb-list">
+    {% for msg in ready.issues %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+  <a class="btn primary" href="{{ url_for('main.settings') }}">⚙ Open Settings</a>
+</div>
+{% endif %}

@@ -2,6 +2,9 @@
 {% block title %}Search · Job Tracker{% endblock %}
 {% block content %}
 <h1>Search jobs</h1>
+
+{% include "_setup_banner.html" %}
+
 {% if not configured %}
   <div class="banner">No job source configured. Add <code>RAPIDAPI_KEY</code> (JSearch) or <code>JOOBLE_API_KEY</code> to <code>.env</code>.</div>
 {% else %}
