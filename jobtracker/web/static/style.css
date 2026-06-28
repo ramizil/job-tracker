@@ -318,6 +318,12 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .tablebar .tf-min{width:62px}
 .tablebar .tf-count{margin-left:auto}
 @media(max-width:760px){.tablebar .tf-search{min-width:140px}.tablebar .tf-count{margin-left:0}}
+/* click-to-sort headers */
+.grid th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+.grid th.sortable:hover{color:#fff}
+.grid th.sortable::after{content:"\2195";font-size:10px;opacity:.35;margin-left:4px}
+.grid th.sorted-asc::after{content:"\25B2";opacity:.9}
+.grid th.sorted-desc::after{content:"\25BC";opacity:.9}
 .kbd{display:inline-block;background:rgba(8,14,24,.8);border:1px solid var(--rule);border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-family:Consolas,monospace;font-size:12px}
 .setting{margin:12px 0}
 .setting label{display:block;font-weight:600;margin-bottom:5px;font-size:13px}
