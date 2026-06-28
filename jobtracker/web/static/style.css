@@ -335,6 +335,17 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .rb-log .rb-lq{font-weight:600;color:#dbe6f5}
 .rb-log .rb-lq::before{content:counter(rbq) ". "}
 .rb-log .rb-la{margin-top:4px;color:var(--muted)}
+/* tools picker */
+.rb-tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin:8px 0}
+.rb-tool{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);border-radius:9px;padding:7px 10px;background:rgba(8,14,24,.4);cursor:pointer}
+.rb-tool:hover{border-color:rgba(34,211,238,.4)}
+.rb-tool input[type=checkbox]{width:16px;height:16px;flex:0 0 auto;accent-color:var(--accent2)}
+.rb-tool .rb-tool-name{flex:1;min-width:0;font-weight:600;color:#dbe6f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-tool .rb-tool-lvl{flex:0 0 auto;font-size:12px;padding:3px 6px}
+.rb-tool .rb-tool-lvl:disabled{opacity:.4}
+.rb-other{display:block;margin-top:8px;color:var(--muted);font-size:13px}
+.rb-other input{width:100%;margin-top:5px}
+@media(max-width:760px){.rb-tools-grid{grid-template-columns:1fr}}
 
 /* --- mobile / small screens --- */
 @media(max-width:760px){

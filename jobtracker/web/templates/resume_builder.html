@@ -41,7 +41,7 @@
     </div>
 
     <div class="rb-answer">
-      <div class="rb-rec">
+      <div class="rb-rec" id="rb-rec">
         <button class="btn primary" type="button" id="rb-record">🎙️ Record answer</button>
         <button class="btn" type="button" id="rb-stop" disabled>⏹ Stop</button>
         <button class="btn primary" type="button" id="rb-filebtn" hidden>🎙️ Record / upload audio</button>
@@ -50,6 +50,15 @@
       </div>
       <textarea id="rb-text" rows="5" dir="rtl"
         placeholder="הקלט/י את התשובה, או הקלד/י אותה כאן בעברית…"></textarea>
+
+      <div class="rb-tools" id="rb-tools" hidden>
+        <p class="muted sm">סמן/י את הכלים שאת/ה מכיר/ה ודרג/י את רמת הידע — Tick what you know &amp; rate your level.</p>
+        <div class="rb-tools-grid" id="rb-tools-grid"></div>
+        <label class="rb-other">כלים נוספים (הפרד/י בפסיקים):
+          <input type="text" id="rb-tools-other" dir="rtl" placeholder="GraphQL, Redis, Terraform…">
+        </label>
+      </div>
+
       <div class="actions">
         <button class="btn primary" type="button" id="rb-next">Save answer &amp; next ›</button>
         <button class="btn" type="button" id="rb-build" disabled>✅ Build my resume</button>
@@ -62,6 +71,14 @@
     <h2>📝 Conversation so far</h2>
     <ol class="rb-log" id="rb-log"></ol>
   </section>
+</div>
+
+<div id="rb-overlay" class="loading-overlay" hidden>
+  <div class="loading-card">
+    <div class="spinner"></div>
+    <div class="loading-msg" id="rb-overlay-msg">Thinking…</div>
+    <div class="loading-elapsed" id="rb-overlay-elapsed"></div>
+  </div>
 </div>
 {% endblock %}
 
@@ -81,11 +98,16 @@
 
   var conversation = [];              // [{q, a}]
   var currentQuestion = root.dataset.first;
+  var currentKind = 'text';
   var done = false;
 
   var qEl = document.getElementById('rb-question');
   var stepEl = document.getElementById('rb-step');
   var textEl = document.getElementById('rb-text');
+  var recRow = document.getElementById('rb-rec');
+  var toolsBox = document.getElementById('rb-tools');
+  var toolsGrid = document.getElementById('rb-tools-grid');
+  var toolsOther = document.getElementById('rb-tools-other');
   var logEl = document.getElementById('rb-log');
   var logPanel = document.getElementById('rb-log-panel');
   var statusEl = document.getElementById('rb-status');
@@ -98,6 +120,31 @@
   var buildBtn = document.getElementById('rb-build');
   var speakBtn = document.getElementById('rb-speak');
 
+  // ---- Loading popup (shown whenever the AI is working) ----
+  var overlay = document.getElementById('rb-overlay');
+  var overlayMsg = document.getElementById('rb-overlay-msg');
+  var overlayElapsed = document.getElementById('rb-overlay-elapsed');
+  var overlayTimer = null, overlayStart = 0;
+  function showOverlay(msg) {
+    overlayMsg.textContent = msg || 'Thinking…';
+    overlayElapsed.textContent = '';
+    overlay.hidden = false;
+    overlayStart = Date.now();
+    if (overlayTimer) clearInterval(overlayTimer);
+    overlayTimer = setInterval(function () {
+      overlayElapsed.textContent = Math.round((Date.now() - overlayStart) / 1000) + 's';
+    }, 1000);
+  }
+  function hideOverlay() {
+    overlay.hidden = true;
+    if (overlayTimer) { clearInterval(overlayTimer); overlayTimer = null; }
+  }
+
+  var LEVELS = [
+    { v: 'Basic', t: 'בסיסי' }, { v: 'Intermediate', t: 'בינוני' },
+    { v: 'Advanced', t: 'מתקדם' }, { v: 'Expert', t: 'מומחה' }
+  ];
+
   function setStatus(msg) { statusEl.textContent = msg || ''; }
   function renderQuestion() {
     qEl.textContent = currentQuestion || '';
@@ -105,7 +152,7 @@
   }
   function refreshLog() {
     logEl.innerHTML = '';
-    conversation.forEach(function (c, i) {
+    conversation.forEach(function (c) {
       var li = document.createElement('li');
       var q = document.createElement('div'); q.className = 'rb-lq'; q.dir = 'rtl'; q.textContent = c.q;
       var a = document.createElement('div'); a.className = 'rb-la'; a.dir = 'rtl'; a.textContent = c.a || '—';
@@ -113,6 +160,47 @@
     });
     logPanel.hidden = conversation.length === 0;
     buildBtn.disabled = conversation.length === 0;
+  }
+
+  // ---- Tools picker step ----
+  function renderTools(tools) {
+    toolsGrid.innerHTML = '';
+    toolsOther.value = '';
+    (tools || []).forEach(function (name) {
+      var row = document.createElement('label'); row.className = 'rb-tool';
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = name;
+      var span = document.createElement('span'); span.className = 'rb-tool-name'; span.textContent = name;
+      var sel = document.createElement('select'); sel.className = 'rb-tool-lvl'; sel.disabled = true;
+      LEVELS.forEach(function (l) {
+        var o = document.createElement('option'); o.value = l.v; o.textContent = l.t;
+        if (l.v === 'Intermediate') o.selected = true;
+        sel.appendChild(o);
+      });
+      cb.addEventListener('change', function () { sel.disabled = !cb.checked; });
+      row.appendChild(cb); row.appendChild(span); row.appendChild(sel);
+      toolsGrid.appendChild(row);
+    });
+  }
+  function toolsAnswer() {
+    var picked = [];
+    toolsGrid.querySelectorAll('.rb-tool').forEach(function (row) {
+      var cb = row.querySelector('input[type=checkbox]');
+      if (cb && cb.checked) picked.push(cb.value + ' (' + row.querySelector('select').value + ')');
+    });
+    var other = (toolsOther.value || '').trim();
+    var parts = [];
+    if (picked.length) parts.push('Tools I know: ' + picked.join(', '));
+    if (other) parts.push('Other tools: ' + other);
+    return parts.join('. ');
+  }
+  function applyKind(kind, tools) {
+    currentKind = kind === 'tools' ? 'tools' : 'text';
+    if (currentKind === 'tools') {
+      recRow.hidden = true; textEl.hidden = true; toolsBox.hidden = false;
+      renderTools(tools);
+    } else {
+      toolsBox.hidden = true; textEl.hidden = false; recRow.hidden = false;
+    }
   }
 
   // ---- Speak the question aloud (Hebrew neural voice via /tts) ----
@@ -206,18 +294,20 @@
       return;
     }
     recStatus.textContent = 'Transcribing…';
+    showOverlay('Transcribing your answer… מתמלל את התשובה');
     var fd = new FormData();
     fd.append('audio', blob, filename || 'answer');
     fetch(URLS.transcribe, { method: 'POST', body: fd })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
+        hideOverlay();
         if (!res.ok) { recStatus.textContent = (res.j && res.j.error) || 'Transcription failed.'; return; }
         var t = (res.j.text || '').trim();
         textEl.value = textEl.value ? (textEl.value.trim() + ' ' + t) : t;
         recStatus.textContent = t ? '✓ Transcribed — edit if needed.' : 'Heard nothing — try again or type.';
         textEl.focus();
       })
-      .catch(function () { recStatus.textContent = 'Transcription failed — type your answer.'; });
+      .catch(function () { hideOverlay(); recStatus.textContent = 'Transcription failed — type your answer.'; });
   }
 
   // Choose the recording method that works in this context:
@@ -228,13 +318,11 @@
                       && window.isSecureContext;
 
   if (!GEMINI) {
-    // No transcription available → typing only; hide all voice controls.
     recBtn.hidden = true; stopBtn.hidden = true; fileBtn.hidden = true;
   } else if (canLiveRecord) {
     recBtn.addEventListener('click', startRecording);
     stopBtn.addEventListener('click', stopRecording);
   } else {
-    // Mobile / non-secure context: use the native recorder via file input.
     recBtn.hidden = true; stopBtn.hidden = true; fileBtn.hidden = false;
     fileBtn.addEventListener('click', function () { fileInput.click(); });
     fileInput.addEventListener('change', function () {
@@ -247,19 +335,22 @@
 
   // ---- Advance the interview ----
   function askNext() {
-    setStatus('Thinking of the next question…');
+    setStatus('');
     nextBtn.disabled = true;
+    showOverlay('Thinking of the next question… חושב על השאלה הבאה');
     fetch(URLS.next, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation: conversation })
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
+        hideOverlay();
         nextBtn.disabled = false;
         if (!res.ok) { setStatus((res.j && res.j.error) || 'Could not get the next question.'); return; }
         if (res.j.done) {
           done = true;
-          currentQuestion = '';
+          currentQuestion = ''; currentKind = 'text';
+          applyKind('text');
           qEl.textContent = '🎉 תודה! יש לנו מספיק מידע. אפשר לבנות את קורות החיים.';
           stepEl.textContent = '✓';
           textEl.value = ''; recStatus.textContent = '';
@@ -269,42 +360,55 @@
         }
         currentQuestion = res.j.question;
         textEl.value = ''; recStatus.textContent = '';
+        applyKind(res.j.kind, res.j.tools);
         renderQuestion(); setStatus(''); speak(currentQuestion);
       })
-      .catch(function () { nextBtn.disabled = false; setStatus('Network error — try again.'); });
+      .catch(function () { hideOverlay(); nextBtn.disabled = false; setStatus('Network error — try again.'); });
+  }
+
+  function currentAnswer() {
+    return currentKind === 'tools' ? toolsAnswer() : (textEl.value || '').trim();
   }
 
   nextBtn.addEventListener('click', function () {
-    var ans = (textEl.value || '').trim();
-    if (!ans) { setStatus('Record or type an answer first (or use “Build my resume” to finish).'); return; }
+    var ans = currentAnswer();
+    if (!ans) {
+      setStatus(currentKind === 'tools'
+        ? 'Tick at least one tool (or add your own), then continue.'
+        : 'Record or type an answer first (or use “Build my resume” to finish).');
+      return;
+    }
     conversation.push({ q: currentQuestion, a: ans });
     refreshLog();
     askNext();
   });
 
   buildBtn.addEventListener('click', function () {
-    // Capture any answer typed but not yet saved for the current question.
-    var pending = (textEl.value || '').trim();
+    // Capture any answer in progress that wasn't saved yet.
+    var pending = currentAnswer();
     if (pending && currentQuestion && !done) {
       conversation.push({ q: currentQuestion, a: pending });
       refreshLog();
     }
     if (!conversation.length) { setStatus('Answer at least one question first.'); return; }
-    setStatus('Building your English resume… this takes ~30–60s.');
+    setStatus('');
     buildBtn.disabled = true; nextBtn.disabled = true;
+    showOverlay('Building your English resume… בונה את קורות החיים (30–60s)');
     fetch(URLS.build, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation: conversation })
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (!res.ok) { setStatus((res.j && res.j.error) || 'Build failed.'); buildBtn.disabled = false; return; }
+        if (!res.ok) { hideOverlay(); setStatus((res.j && res.j.error) || 'Build failed.'); buildBtn.disabled = false; return; }
+        overlayMsg.textContent = 'Done! Opening your resume…';
         window.location.href = res.j.url;
       })
-      .catch(function () { setStatus('Build failed — try again.'); buildBtn.disabled = false; });
+      .catch(function () { hideOverlay(); setStatus('Build failed — try again.'); buildBtn.disabled = false; });
   });
 
   // Init
+  applyKind('text');
   renderQuestion();
   refreshLog();
 })();

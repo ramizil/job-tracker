@@ -935,41 +935,61 @@ def tailor_resume(*, title: str, company: str, description: str,
 
 # Opening question is fixed (no AI call needed); follow-ups are AI-generated.
 RESUME_BUILDER_FIRST_QUESTION = (
-    "שלום! אני אעזור לך לבנות קורות חיים. בוא נתחיל — "
-    "באילו תחומים עבדת עד היום, ומה התפקיד הנוכחי או האחרון שלך?"
+    "שלום! אני אעזור לך לבנות קורות חיים מקצועיים, צעד אחר צעד. "
+    "נתחיל מהבסיס — באילו תחומים עבדת עד היום?"
 )
 
 
 _INTERVIEW_BUILDER_PROMPT = """You are a warm, professional career interviewer
-helping someone build their resume through a SPOKEN conversation IN HEBREW. You
-ask ONE question at a time, in natural, friendly Hebrew (you may use casual "אתה/את").
+helping someone build a high-quality resume through a SPOKEN conversation IN
+HEBREW. You ask ONE small question at a time, in natural, friendly Hebrew (casual
+"אתה/את" is fine). Your goal is to make this EFFORTLESS for the person while
+extracting everything needed for an excellent English resume.
 
-Over the whole conversation you must gather enough to write a strong English
-resume. Make sure these topics get covered (adapt the order to the flow):
+TOPICS to cover over the whole conversation (adapt order to the flow):
 - Full name and contact details (email, phone, city, LinkedIn/GitHub if any)
 - Fields / domains they have worked in
-- Work experience: for each role — company, job title, dates (from–to), what they
-  did, main responsibilities and the technologies/tools used
+- Work experience — gathered ROLE BY ROLE, in SMALL STEPS (see below)
 - Education & professional studies — degrees, institutions, years, certifications
 - Significant milestones & achievements (with concrete impact/numbers if possible)
-- Key skills, tools and technologies
+- Key tools & technologies (use the TOOLS step below)
 - Languages they speak (and level)
 - What kind of role they're looking for next (optional)
 
-Rules:
+WORK EXPERIENCE — ask in steps, ONE thing per question, and be INSISTENT about
+exact facts (a resume is weak without them). For EACH role gather, in order:
+  1. The employer / company name and where it is (city).
+  2. Their exact job title there.
+  3. The EXACT period: start month+year and end month+year (or "present").
+     If the answer is vague ("a few years", "recently", only a year with no
+     month), politely ask AGAIN for the specific month and year. Do NOT move on
+     until you have a concrete start and end.
+  4. Their main responsibilities / what they actually did day to day.
+  5. Key achievements with concrete numbers/impact where possible.
+Then ask if there is ANOTHER previous role to add; if yes, repeat steps 1–5 for
+it. Move to older roles until they say there are no more.
+
+TOOLS step (do this ONCE, after you understand their main role/domain and the
+technologies they touch): return "kind":"tools" with a curated "tools" array of
+~14–20 tools/technologies/frameworks that are COMMON for THAT role in TODAY's
+market — include the ones they already mentioned PLUS standard adjacent ones a
+person in that role likely knows. In "question", ask them (in Hebrew) to tick
+the ones they know and rate their level. The app shows checkboxes + a level
+picker, so keep "question" short and don't list the tools inside the text.
+
+GENERAL RULES:
 - Ask in HEBREW only, ONE short question at a time.
-- If the previous answer is vague, very short, or mentions something worth
-  expanding (a notable project, missing dates, an unclear gap), ask a relevant
-  FOLLOW-UP question before moving on.
-- Never repeat a topic that's already been answered. Keep it conversational and
-  encouraging, not an interrogation.
-- Once all the key topics are reasonably covered (usually after 10–16 questions),
-  set "done" to true and return an empty question.
+- Follow up when an answer is vague, very short, or worth expanding.
+- Never re-ask something already answered. Stay warm and encouraging.
+- Once all key topics are reasonably covered (usually 12–18 questions), set
+  "done" to true and return an empty question.
 
 Return ONLY valid JSON with EXACTLY this shape:
 {{
   "question": "the next question in Hebrew (empty string when done)",
-  "topic": "short english tag, e.g. 'contact' | 'experience' | 'education' | 'skills' | 'milestones'",
+  "topic": "short english tag, e.g. 'contact'|'experience'|'experience_dates'|'education'|'tools'|'milestones'|'languages'",
+  "kind": "text" | "tools",
+  "tools": ["only when kind is 'tools': a list of tool/technology names as plain strings"],
   "done": true | false
 }}
 
@@ -993,7 +1013,9 @@ def _format_conversation(conversation: list[dict[str, Any]]) -> str:
 def interview_question(conversation: list[dict[str, Any]]) -> dict[str, Any]:
     """Pick the next Hebrew interview question (or signal the interview is done).
 
-    Returns {"question": str, "topic": str, "done": bool}.
+    Returns {"question", "topic", "kind", "tools", "done"} where ``kind`` is
+    "text" for a normal question or "tools" for a tools-selection step (with a
+    suggested ``tools`` list the UI renders as checkboxes + a level picker).
     """
     prompt = _INTERVIEW_BUILDER_PROMPT.format(
         conversation=_format_conversation(conversation)[:12000])
@@ -1002,9 +1024,16 @@ def interview_question(conversation: list[dict[str, Any]]) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise AIError("AI returned an unexpected question format. Please try again.")
     question = str(data.get("question", "")).strip()
-    done = bool(data.get("done")) or not question
+    kind = str(data.get("kind", "text")).strip().lower() or "text"
+    tools = data.get("tools") or []
+    if not isinstance(tools, list):
+        tools = []
+    tools = [str(t).strip() for t in tools if str(t).strip()]
+    if kind == "tools" and not tools:
+        kind = "text"  # nothing to pick → fall back to a normal question
+    done = bool(data.get("done")) or (not question and kind != "tools")
     return {"question": question, "topic": str(data.get("topic", "")).strip(),
-            "done": done}
+            "kind": kind, "tools": tools, "done": done}
 
 
 _RESUME_BUILD_PROMPT = """You are an expert resume writer. Below is the transcript
@@ -1024,7 +1053,10 @@ Hard rules:
   numbers, titles or skills. If a detail is missing, omit it gracefully — never
   output placeholders like [Name] or "N/A".
 - Write concise, achievement-oriented bullet points. Order experience newest
-  first when dates are known.
+  first when dates are known. Always include each role's employer and exact
+  dates when they were given.
+- If the candidate rated tool/technology proficiency (e.g. "Java (Advanced)"),
+  reflect it sensibly in the Skills section (e.g. group by level or note it).
 - Return ONLY the HTML, no markdown fences, no commentary.
 
 INTERVIEW TRANSCRIPT:
