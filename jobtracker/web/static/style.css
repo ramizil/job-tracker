@@ -328,6 +328,7 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .rb-q{flex:1;font-size:18px;font-weight:600;line-height:1.5;color:#eaf2ff;padding-top:3px}
 .rb-answer{margin-top:14px;display:flex;flex-direction:column;gap:10px}
 .rb-rec{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rb-rec[hidden]{display:none}
 .rb-answer textarea{width:100%;min-height:96px;font-size:15px;line-height:1.5}
 .rb-log-panel h2{margin-top:0}
 .rb-log{list-style:none;counter-reset:rbq;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}

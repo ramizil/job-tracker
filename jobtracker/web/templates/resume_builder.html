@@ -245,7 +245,7 @@
       toolsHint.textContent = 'בחר/י את כל התחומים הרלוונטיים — Select all areas that apply.';
       otherLabel.textContent = 'תחומים נוספים (הפרד/י בפסיקים):';
       toolsOther.placeholder = 'למשל: Game Development, Robotics…';
-      renderPicker(AREAS, false);
+      renderPicker(AREAS.map(function (a) { return { value: a.v, label: a.t }; }), false);
     }
   }
 
