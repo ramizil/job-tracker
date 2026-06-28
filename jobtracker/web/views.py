@@ -198,6 +198,8 @@ def settings():
         data_dir=str(config.DATA_DIR),
         jooble_usage=usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None,
         gemini_models=ai.list_models(),
+        openai_models=ai.OPENAI_MODELS,
+        anthropic_models=ai.ANTHROPIC_MODELS,
     )
 
 
@@ -615,6 +617,36 @@ def recruiter_note_save(app_id: int):
     tracker.set_recruiter_note(app_id, request.form.get("text", ""))
     flash("Recruiter note saved.", "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#note")
+
+
+@bp.route("/application/<int:app_id>/feedback-request", methods=["POST"])
+def feedback_request(app_id: int):
+    """Generate a polite 'why was I rejected / how can I improve' email."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    language = request.form.get("language", "en")
+    instructions = request.form.get("instructions", "").strip()
+    try:
+        text = ai.feedback_request(
+            title=r["title"], company=r["company"],
+            stage=r["rejection_stage"] or "", reason=r["rejection_reason"] or "",
+            instructions=instructions, language=language,
+        )
+        tracker.set_feedback_request(app_id, text)
+        flash("Feedback-request letter generated.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#feedback")
+
+
+@bp.route("/application/<int:app_id>/feedback-request/save", methods=["POST"])
+def feedback_request_save(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    tracker.set_feedback_request(app_id, request.form.get("text", ""))
+    flash("Feedback-request letter saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#feedback")
 
 
 @bp.route("/application/<int:app_id>/interview-prep", methods=["POST"])

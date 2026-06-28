@@ -20,8 +20,42 @@ class AIError(RuntimeError):
     """Raised when the AI call cannot be completed."""
 
 
+# Curated model suggestions per provider (the Settings datalists). Users can
+# always type any model id; these are just convenient starting points.
+OPENAI_MODELS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "o4-mini"]
+ANTHROPIC_MODELS = [
+    "claude-3-5-haiku-latest", "claude-3-5-sonnet-latest",
+    "claude-3-7-sonnet-latest", "claude-sonnet-4-latest",
+]
+
+_PROVIDER_LABELS = {
+    "gemini": "Google Gemini",
+    "openai": "OpenAI (GPT)",
+    "anthropic": "Anthropic (Claude)",
+}
+
+
+def active_provider() -> str:
+    p = (config.AI_PROVIDER or "gemini").lower()
+    return p if p in _PROVIDER_LABELS else "gemini"
+
+
+def provider_label(provider: str | None = None) -> str:
+    return _PROVIDER_LABELS.get(provider or active_provider(), "AI")
+
+
+def _provider_key(provider: str | None = None) -> str:
+    p = provider or active_provider()
+    return {
+        "gemini": config.GEMINI_API_KEY,
+        "openai": config.OPENAI_API_KEY,
+        "anthropic": config.ANTHROPIC_API_KEY,
+    }.get(p, "")
+
+
 def is_configured() -> bool:
-    return bool(config.GEMINI_API_KEY)
+    """True if the currently selected AI provider has an API key set."""
+    return bool(_provider_key())
 
 
 def _lang_name(language: str | None) -> str:
@@ -153,6 +187,16 @@ def _parse_json(raw: str) -> Any:
 
 
 def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
+    """Generate text using the currently selected AI provider."""
+    provider = active_provider()
+    if provider == "openai":
+        return _generate_openai(prompt, as_json=as_json)
+    if provider == "anthropic":
+        return _generate_anthropic(prompt, as_json=as_json)
+    return _generate_gemini(prompt, as_json=as_json, attempts=attempts)
+
+
+def _generate_gemini(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
     import time
 
     client = _client()
@@ -213,6 +257,73 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
         f"All Gemini models were unavailable (last error: {last_exc}). "
         "This is usually a temporary overload - try again in a moment."
     )
+
+
+def _generate_openai(prompt: str, *, as_json: bool = False) -> str:
+    """Generate text with OpenAI (GPT). JSON mode uses response_format."""
+    if not config.OPENAI_API_KEY:
+        raise AIError("No OpenAI API key configured. Add it on the Settings page "
+                      "(get one at https://platform.openai.com/api-keys).")
+    try:
+        from openai import OpenAI  # type: ignore
+    except ImportError as exc:  # pragma: no cover
+        raise AIError("openai is not installed (pip install openai).") from exc
+
+    client = OpenAI(api_key=config.OPENAI_API_KEY, timeout=AI_TIMEOUT_S)
+    model = config.OPENAI_MODEL or "gpt-4o-mini"
+    base = dict(model=model, messages=[{"role": "user", "content": prompt}])
+    attempts = [
+        {**base, "temperature": 0.4,
+         **({"response_format": {"type": "json_object"}} if as_json else {})},
+        {**base, "temperature": 0.4},   # model may reject response_format
+        dict(base),                      # model may reject custom temperature
+    ]
+    last_exc: Exception | None = None
+    for kwargs in attempts:
+        try:
+            resp = client.chat.completions.create(**kwargs)
+            text = (resp.choices[0].message.content or "").strip()
+            if not text:
+                raise AIError("OpenAI returned an empty response.")
+            return text
+        except AIError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise AIError(f"OpenAI request failed: {last_exc}")
+
+
+def _generate_anthropic(prompt: str, *, as_json: bool = False) -> str:
+    """Generate text with Anthropic (Claude)."""
+    if not config.ANTHROPIC_API_KEY:
+        raise AIError("No Anthropic API key configured. Add it on the Settings "
+                      "page (get one at https://console.anthropic.com/).")
+    try:
+        import anthropic  # type: ignore
+    except ImportError as exc:  # pragma: no cover
+        raise AIError("anthropic is not installed (pip install anthropic).") from exc
+
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, timeout=AI_TIMEOUT_S)
+    model = config.ANTHROPIC_MODEL or "claude-3-5-sonnet-latest"
+    kwargs: dict[str, Any] = dict(
+        model=model, max_tokens=8192, temperature=0.4,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if as_json:
+        kwargs["system"] = ("Respond with ONLY a single valid JSON object. "
+                            "No prose, no explanations, no code fences.")
+    try:
+        msg = client.messages.create(**kwargs)
+        text = "".join(
+            getattr(b, "text", "") for b in msg.content
+            if getattr(b, "type", None) == "text"
+        ).strip()
+    except Exception as exc:
+        raise AIError(f"Anthropic request failed: {exc}") from exc
+    if not text:
+        raise AIError("Anthropic returned an empty response.")
+    return text
 
 
 def resume_text(resume_path: Path | None = None) -> str:
@@ -415,6 +526,66 @@ def recruiter_note(*, title: str, company: str, instructions: str = "",
         lang_rule=lang_rule,
         extra=extra, title=title or "", company=company or "",
         resume=(resume or resume_text())[:6000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```\w*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text
+
+
+# --------------------------------------------------------------------------- #
+_FEEDBACK_REQUEST_PROMPT = """You are the candidate. Write a SHORT, gracious
+email to the recruiter / hiring manager after being turned down for the job
+below, politely asking for brief constructive feedback so you can improve. Rules:
+- Genuinely warm and professional. NO bitterness, no arguing the decision, no
+  begging to reconsider. Accept the outcome with grace.
+- Thank them for their time and the opportunity to apply/interview.
+- Ask for 1-2 specific, actionable pointers: what was missing, which skills or
+  experience to strengthen, or how you could be a stronger fit next time.
+- Optionally note you'd welcome being kept in mind for future roles.
+- 5 to 9 sentences, under ~140 words. Include a subject line as the first line
+  ("Subject: ..."). No markdown, no placeholders like [Name] — sign off simply.
+{lang_rule}
+
+{extra}JOB:
+Title: {title}
+Company: {company}
+{reject_ctx}
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def feedback_request(*, title: str, company: str, stage: str = "",
+                     reason: str = "", instructions: str = "",
+                     resume: str | None = None, language: str = "en") -> str:
+    """Generate a polite 'why was I rejected, how can I improve' email.
+
+    Uses the resume and (when known) the logged rejection stage/reason. An
+    English version is always included; a non-English language is produced first
+    followed by the English version below a divider.
+    """
+    lang = (language or "en").lower()
+    if lang == "en":
+        lang_rule = "- Write the ENTIRE email in English (natural, professional English)."
+    else:
+        ln = _lang_name(lang)
+        lang_rule = (
+            f"- Produce TWO versions. First the email in {ln} (natural, "
+            f"professional {ln}), then a line containing only '———', then the "
+            "SAME email in English. Label the first block with a line "
+            f"'{ln}:' and the English block with a line 'English:'."
+        )
+    ctx_bits = []
+    if stage:
+        ctx_bits.append(f"Rejection stage: {stage}")
+    if reason:
+        ctx_bits.append(f"Logged reason: {reason}")
+    reject_ctx = ("\n" + "\n".join(ctx_bits) + "\n") if ctx_bits else ""
+    extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
+    prompt = _FEEDBACK_REQUEST_PROMPT.format(
+        lang_rule=lang_rule, extra=extra, title=title or "", company=company or "",
+        reject_ctx=reject_ctx, resume=(resume or resume_text())[:6000],
     )
     text = _generate(prompt, as_json=False).strip()
     text = re.sub(r"^```\w*\s*", "", text)
@@ -718,8 +889,13 @@ def _generate_grounded(prompt: str) -> tuple[str, list[dict[str, str]]]:
 
     Returns (text, sources). Raises AIError if no model could produce a
     grounded answer (the caller may then fall back to an ungrounded call).
+    Web-search grounding is Gemini-only; other providers raise here so the
+    caller falls back to an ungrounded answer from the selected provider.
     """
     import time
+
+    if active_provider() != "gemini" or not config.GEMINI_API_KEY:
+        raise AIError("Web-search grounding requires a Gemini API key.")
 
     client = _client()
     from google.genai import types  # type: ignore

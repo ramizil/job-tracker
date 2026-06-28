@@ -45,24 +45,72 @@
   </section>
 
   <section class="panel">
-    <h2>🤖 AI (Gemini)</h2>
+    <h2>🤖 AI provider</h2>
     <div class="setting">
-      <label for="GEMINI_API_KEY">Gemini API key</label>
-      <input type="text" id="GEMINI_API_KEY" name="GEMINI_API_KEY" value="{{ values.GEMINI_API_KEY }}" placeholder="AIza..." autocomplete="off">
-      <small>Get it at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>. Status: {% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off</span>{% endif %}</small>
+      <label for="AI_PROVIDER">Provider</label>
+      <select id="AI_PROVIDER" name="AI_PROVIDER">
+        <option value="gemini" {{ 'selected' if values.AI_PROVIDER == 'gemini' }}>Google Gemini</option>
+        <option value="openai" {{ 'selected' if values.AI_PROVIDER == 'openai' }}>OpenAI (GPT)</option>
+        <option value="anthropic" {{ 'selected' if values.AI_PROVIDER == 'anthropic' }}>Anthropic (Claude)</option>
+      </select>
+      <small>The selected provider powers all AI features. Status:
+        {% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off — add the API key for the selected provider</span>{% endif %}.
+        <b>Company research</b> web-grounding works only with Gemini (other providers fall back to an ungrounded answer).</small>
     </div>
-    <div class="setting">
-      <label for="GEMINI_MODEL">Gemini model</label>
-      <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash" list="gemini-models" autocomplete="off">
-      <datalist id="gemini-models">
-        {% for m in gemini_models %}<option value="{{ m }}">{% endfor %}
-      </datalist>
-      <small>
-        Pick from the dropdown{% if values.GEMINI_API_KEY %} (available on your key){% endif %} or type any model id.
-        Default <code>gemini-2.5-flash</code>; falls back automatically if a model is busy.
-      </small>
+
+    <div class="provider-block" data-provider="gemini">
+      <div class="setting">
+        <label for="GEMINI_API_KEY">Gemini API key</label>
+        <input type="text" id="GEMINI_API_KEY" name="GEMINI_API_KEY" value="{{ values.GEMINI_API_KEY }}" placeholder="AIza..." autocomplete="off">
+        <small>Get it at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>.</small>
+      </div>
+      <div class="setting">
+        <label for="GEMINI_MODEL">Gemini model</label>
+        <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash" list="gemini-models" autocomplete="off">
+        <datalist id="gemini-models">{% for m in gemini_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>gemini-2.5-flash</code>; falls back automatically if a model is busy.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="openai">
+      <div class="setting">
+        <label for="OPENAI_API_KEY">OpenAI API key</label>
+        <input type="text" id="OPENAI_API_KEY" name="OPENAI_API_KEY" value="{{ values.OPENAI_API_KEY }}" placeholder="sk-..." autocomplete="off">
+        <small>Get it at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>.</small>
+      </div>
+      <div class="setting">
+        <label for="OPENAI_MODEL">OpenAI model</label>
+        <input type="text" id="OPENAI_MODEL" name="OPENAI_MODEL" value="{{ values.OPENAI_MODEL }}" placeholder="gpt-4o-mini" list="openai-models" autocomplete="off">
+        <datalist id="openai-models">{% for m in openai_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>gpt-4o-mini</code>, or type any model id available on your account.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="anthropic">
+      <div class="setting">
+        <label for="ANTHROPIC_API_KEY">Anthropic API key</label>
+        <input type="text" id="ANTHROPIC_API_KEY" name="ANTHROPIC_API_KEY" value="{{ values.ANTHROPIC_API_KEY }}" placeholder="sk-ant-..." autocomplete="off">
+        <small>Get it at <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>.</small>
+      </div>
+      <div class="setting">
+        <label for="ANTHROPIC_MODEL">Anthropic model</label>
+        <input type="text" id="ANTHROPIC_MODEL" name="ANTHROPIC_MODEL" value="{{ values.ANTHROPIC_MODEL }}" placeholder="claude-3-5-sonnet-latest" list="anthropic-models" autocomplete="off">
+        <datalist id="anthropic-models">{% for m in anthropic_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>claude-3-5-sonnet-latest</code>, or type any current Claude model id.</small>
+      </div>
     </div>
   </section>
+  <script>
+    (function () {
+      var sel = document.getElementById('AI_PROVIDER');
+      function sync() {
+        document.querySelectorAll('.provider-block').forEach(function (b) {
+          b.style.display = (b.getAttribute('data-provider') === sel.value) ? '' : 'none';
+        });
+      }
+      if (sel) { sel.addEventListener('change', sync); sync(); }
+    })();
+  </script>
 
   <section class="panel">
     <h2>📄 Resume</h2>

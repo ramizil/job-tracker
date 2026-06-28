@@ -220,6 +220,39 @@
       {% endif %}
     </section>
 
+    <section class="panel ai" id="feedback">
+      <div class="panel-head"><h2>🙏 Ask why I was rejected</h2>
+        {% if app.feedback_request_at %}<span class="muted sm">saved {{ (app.feedback_request_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">A polite, gracious email asking the recruiter for brief, constructive feedback so you can improve next time — written from your resume{% if app.rejection_stage or app.rejection_reason %} and the logged rejection details{% endif %}.</p>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% else %}
+        {% if app.status != 'rejected' and not app.feedback_request %}
+        <p class="muted">This is meant for after a rejection — mark the application <b>rejected</b> first (left), then generate.</p>
+        {% endif %}
+        {% if app.feedback_request %}
+        <form method="post" action="{{ url_for('main.feedback_request_save', app_id=app.id) }}" class="stack mt">
+          <textarea name="text" rows="9" class="gen-text" dir="auto">{{ app.feedback_request }}</textarea>
+          <div class="actions">
+            <button class="btn" type="submit">Save edits</button>
+            <button class="btn sm" type="button" data-copy="prev">Copy</button>
+          </div>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('main.feedback_request', app_id=app.id) }}" class="stack mt" data-loading="Writing a polite feedback request with Gemini…">
+          <label class="muted sm">Language
+            <select name="language">
+              <option value="en">English</option>
+              <option value="he">Hebrew + English</option>
+            </select>
+          </label>
+          <input name="instructions" placeholder="optional: tone or specific points to include">
+          <button class="btn primary" type="submit">{{ 'Regenerate' if app.feedback_request else '🙏 Generate feedback request (AI)' }}</button>
+        </form>
+      {% endif %}
+    </section>
+
     <section class="panel ai" id="prep">
       <div class="panel-head"><h2>🎤 Interview &amp; test prep</h2>
         {% if app.interview_prep_at %}<span class="muted sm">saved {{ (app.interview_prep_at or '')[:16].replace('T',' ') }}</span>{% endif %}

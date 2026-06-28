@@ -255,6 +255,16 @@ def set_pitch(app_id: int, script: str, notes: str | None = None) -> bool:
         return cur.rowcount > 0
 
 
+def set_feedback_request(app_id: int, text: str) -> bool:
+    """Persist the polite 'why was I rejected' feedback letter."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET feedback_request=?, feedback_request_at=?, updated_at=? WHERE id=?",
+            (text, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def set_company_brief(app_id: int, markdown: str) -> bool:
     """Persist AI web-research about the company (Markdown)."""
     with get_connection() as conn:
