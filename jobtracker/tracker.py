@@ -191,15 +191,24 @@ def add_note(app_id: int, text: str) -> bool:
 def set_ai_analysis(app_id: int, analysis: dict[str, Any]) -> bool:
     """Persist a Gemini fit-analysis result on the application."""
     import json
+    score = _coerce_fit_score(analysis.get("fit_score"))
     with get_connection() as conn:
         cur = conn.execute(
             """UPDATE applications
-                 SET ai_fit_level=?, ai_verdict=?, ai_analysis_json=?,
+                 SET ai_fit_level=?, ai_fit_score=?, ai_verdict=?, ai_analysis_json=?,
                      ai_analyzed_at=?, updated_at=? WHERE id=?""",
-            (analysis.get("fit_level", ""), analysis.get("verdict", ""),
+            (analysis.get("fit_level", ""), score, analysis.get("verdict", ""),
              json.dumps(analysis, ensure_ascii=False), now_iso(), now_iso(), app_id),
         )
         return cur.rowcount > 0
+
+
+def _coerce_fit_score(value: Any) -> int | None:
+    """Clamp an AI fit_score to a 0-100 int, or None if it isn't a number."""
+    try:
+        return max(0, min(100, int(round(float(value)))))
+    except (TypeError, ValueError):
+        return None
 
 
 def get_ai_analysis(app_id: int) -> dict[str, Any] | None:

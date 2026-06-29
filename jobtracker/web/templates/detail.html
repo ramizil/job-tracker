@@ -5,7 +5,7 @@
 <div class="detail-head">
   <h1>{{ app.title }}</h1>
   <span class="pill status-{{ app.status }}">{{ app.status }}</span>
-  {% if app.ai_fit_level %}<span class="fit fit-{{ app.ai_fit_level|lower }}">{{ app.ai_fit_level }}</span>{% endif %}
+  {% if app.ai_fit_level %}<span class="fit fit-{{ app.ai_fit_level|lower }}" title="{{ app.ai_fit_level }}{% if app.ai_verdict %} · {{ app.ai_verdict }}{% endif %}">{% if app.ai_fit_score is not none %}{{ app.ai_fit_score }}%{% else %}{{ app.ai_fit_level }}{% endif %}</span>{% endif %}
 </div>
 <p class="sub">{{ app.company }}{% if app.location %} · {{ app.location }}{% endif %}
   · match {{ '%.0f'|format(app.match_score or 0) }}%
@@ -133,8 +133,8 @@
         <p class="muted">Tick <b>Fit analysis</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
       {% else %}
         <div class="verdict">
-          <span class="fit big fit-{{ (analysis.fit_level or 'maybe')|lower }}">{{ analysis.fit_level }}</span>
-          <div dir="auto"><b>{{ analysis.verdict }}</b>{% if analysis.fit_score is defined %}<div class="muted">fit score {{ analysis.fit_score }}/100</div>{% endif %}</div>
+          <span class="fit big fit-{{ (analysis.fit_level or 'maybe')|lower }}" title="{{ analysis.fit_level }}">{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %}{{ analysis.fit_score }}%{% else %}{{ analysis.fit_level }}{% endif %}</span>
+          <div dir="auto"><b>{{ analysis.verdict }}</b><div class="muted">{{ analysis.fit_level }}{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %} · fit score {{ analysis.fit_score }}/100{% endif %}</div></div>
         </div>
 
         {% if analysis.requirements %}

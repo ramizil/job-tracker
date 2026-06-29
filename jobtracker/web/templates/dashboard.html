@@ -82,7 +82,7 @@
     <thead><tr><th>ID</th><th>Status</th>
       <th><span class="col-help" title="Offline keyword score (0-100%): how many of your resume's skills appear in the posting. Instant, automatic, no AI — title keywords count double.">Match</span></th>
       <th>Company</th><th>Title</th>
-      <th><span class="col-help" title="Gemini's fit verdict (YES / MAYBE / NO): reads the posting and your resume and judges real suitability. Only shows once you run the AI fit analysis.">AI</span></th>
+      <th><span class="col-help" title="Gemini's fit score (0-100%): reads the posting and your resume and judges real suitability. Green = strong (YES), yellow = partial (MAYBE), red = weak (NO). Only shows once you run the AI fit analysis.">AI</span></th>
     </tr></thead>
     <tbody>
       {% for r in recent %}
@@ -92,7 +92,7 @@
         <td>{{ '%.0f'|format(r.match_score or 0) }}%</td>
         <td>{{ r.company }}</td>
         <td>{{ r.title }}</td>
-        <td>{% if r.ai_fit_level %}<span class="fit fit-{{ r.ai_fit_level|lower }}">{{ r.ai_fit_level }}</span>{% endif %}</td>
+        <td>{% if r.ai_fit_level %}<span class="fit fit-{{ r.ai_fit_level|lower }}" data-val="{{ r.ai_fit_level }}" title="{{ r.ai_fit_level }}{% if r.ai_verdict %} · {{ r.ai_verdict }}{% endif %}">{% if r.ai_fit_score is not none %}{{ r.ai_fit_score }}%{% else %}{{ r.ai_fit_level }}{% endif %}</span>{% endif %}</td>
       </tr>
       {% else %}
       <tr><td colspan="6" class="muted">No applications yet — add one from the Applications page.</td></tr>
@@ -101,8 +101,8 @@
   </table>
   <p class="legend muted">
     <b>Match</b> = offline keyword overlap with your resume (instant, automatic).
-    <b>AI</b> = Gemini's considered fit verdict (YES / MAYBE / NO), shown after you run the fit analysis.
-    They're independent — a low Match can still be an AI <span class="fit fit-yes">YES</span>, and vice-versa.
+    <b>AI</b> = Gemini's considered fit score (0-100%), coloured green / yellow / red for YES / MAYBE / NO, shown after you run the fit analysis.
+    They're independent — a low Match can still be a strong AI score (<span class="fit fit-yes">85%</span>), and vice-versa.
   </p>
 </section>
 {% endblock %}

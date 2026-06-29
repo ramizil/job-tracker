@@ -61,6 +61,7 @@ def get_connection() -> sqlite3.Connection:
 # Columns added after the initial release. Applied idempotently on init.
 EXTRA_COLUMNS: dict[str, str] = {
     "ai_fit_level": "TEXT",        # YES / MAYBE / NO
+    "ai_fit_score": "INTEGER",     # 0-100 AI fit score (shown as a % badge)
     "ai_verdict": "TEXT",          # one-line verdict
     "ai_analysis_json": "TEXT",    # full structured analysis (JSON)
     "ai_analyzed_at": "TEXT",
@@ -85,9 +86,26 @@ EXTRA_COLUMNS: dict[str, str] = {
 
 def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)")}
+    added = []
     for name, decl in EXTRA_COLUMNS.items():
         if name not in cols:
             conn.execute(f"ALTER TABLE applications ADD COLUMN {name} {decl}")
+            added.append(name)
+
+    # Backfill the AI fit score from the stored analysis JSON for rows analysed
+    # before this column existed (best-effort; needs SQLite's JSON1 extension).
+    if "ai_fit_score" in added:
+        try:
+            conn.execute(
+                """UPDATE applications
+                      SET ai_fit_score = CAST(json_extract(ai_analysis_json,
+                                                            '$.fit_score') AS INTEGER)
+                    WHERE ai_fit_score IS NULL
+                      AND ai_analysis_json IS NOT NULL
+                      AND json_extract(ai_analysis_json, '$.fit_score') IS NOT NULL"""
+            )
+        except sqlite3.Error:
+            pass  # JSON1 unavailable — scores fill in as jobs are re-analysed
 
 
 def init_db() -> None:

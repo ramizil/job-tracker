@@ -21,6 +21,9 @@
   function colValue(cell) {
     if (!cell) return '';
     var tag = cell.querySelector('.pill, .fit');
+    // A data-val attribute (e.g. the AI tier YES/MAYBE/NO behind a "85%" badge)
+    // wins, so filtering/sorting use the tier rather than the displayed number.
+    if (tag && tag.hasAttribute('data-val')) return tag.getAttribute('data-val').trim();
     return (tag ? tag.textContent : cell.textContent).trim();
   }
 
