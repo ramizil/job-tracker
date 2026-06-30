@@ -17,7 +17,8 @@ from flask import (
     request, send_file, url_for,
 )
 
-from .. import ai, analytics, backup, config, exporter, pitch, tracker, tts, usage
+from .. import (ai, analytics, backup, config, exporter, gitbackup, pitch,
+                tracker, tts, usage)
 from .. import resume as resume_mod
 from ..config import TAILORED_DIR
 from ..matcher import score_job
@@ -257,6 +258,26 @@ def backup_download():
     return send_file(io.BytesIO(data), mimetype="application/zip",
                      as_attachment=True,
                      download_name=f"jobtracker-backup-{stamp}.zip")
+
+
+@bp.route("/settings/git-backup", methods=["POST"])
+def git_backup():
+    try:
+        note = gitbackup.push_to_github()
+        flash(note, "ok")
+    except Exception as exc:
+        flash(f"GitHub backup failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/git-restore", methods=["POST"])
+def git_restore():
+    try:
+        restored = gitbackup.restore_from_github()
+        flash(f"Restored from GitHub: {', '.join(restored) or 'nothing found'}.", "ok")
+    except Exception as exc:
+        flash(f"GitHub restore failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
 
 
 @bp.route("/settings/restore", methods=["POST"])

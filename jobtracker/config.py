@@ -33,6 +33,10 @@ BUILT_RESUME_PATH = DATA_DIR / "built_resume.html"
 TAILORED_DIR = DATA_DIR / "tailored"
 TAILORED_DIR.mkdir(exist_ok=True)
 
+# Local working tree used to mirror the data to a private GitHub repo
+# (see jobtracker/gitbackup.py). Kept inside the git-ignored data dir.
+GIT_BACKUP_DIR = DATA_DIR / ".git-backup"
+
 DEFAULT_RESUME = BASE_DIR / "sample_resume.html"
 
 
@@ -74,6 +78,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "ANTHROPIC_MODEL": "Anthropic model (default claude-3-5-sonnet-latest)",
     "RESUME_PATH": "Path to your resume (HTML, PDF, Word .docx, or text)",
     "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
+    "DATA_BACKUP_REMOTE": "Private git repo URL to mirror your data to (GitHub backup)",
 }
 
 # Module-level settings (re-assigned by reload()).
@@ -90,6 +95,7 @@ ANTHROPIC_API_KEY = ""
 ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
 RESUME_PATH = DEFAULT_RESUME
 BACKUP_DIR = _default_backup_dir()
+DATA_BACKUP_REMOTE = ""
 
 
 def reload() -> None:
@@ -97,7 +103,7 @@ def reload() -> None:
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
     global AI_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
-    global RESUME_PATH, BACKUP_DIR
+    global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
 
     load_dotenv(ENV_PATH, override=True)
     RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "").strip()
@@ -113,6 +119,7 @@ def reload() -> None:
     ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest").strip()
     RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
     BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or _default_backup_dir())
+    DATA_BACKUP_REMOTE = os.getenv("DATA_BACKUP_REMOTE", "").strip()
 
 
 def current_settings() -> dict[str, str]:
@@ -131,6 +138,7 @@ def current_settings() -> dict[str, str]:
         "ANTHROPIC_MODEL": ANTHROPIC_MODEL,
         "RESUME_PATH": str(RESUME_PATH),
         "BACKUP_DIR": str(BACKUP_DIR),
+        "DATA_BACKUP_REMOTE": DATA_BACKUP_REMOTE,
     }
 
 

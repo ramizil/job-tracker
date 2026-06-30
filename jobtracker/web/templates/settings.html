@@ -161,6 +161,36 @@
 </section>
 
 <section class="panel">
+  <h2>☁️ GitHub backup</h2>
+  <p class="muted">Mirror your data to a <b>private</b> git repo. Set the repo URL
+    below (in <code>DATA_BACKUP_REMOTE</code>) and <b>Save settings</b> first, then
+    push. Uses your existing git credentials — no token is stored by the app.</p>
+  {% if values.DATA_BACKUP_REMOTE %}
+    <p class="muted sm">Remote: <code>{{ values.DATA_BACKUP_REMOTE }}</code></p>
+    <div class="actions">
+      <form method="post" action="{{ url_for('main.git_backup') }}">
+        <button class="btn primary" type="submit">⬆️ Back up to GitHub</button>
+      </form>
+    </div>
+    <p class="muted sm mt">⚠️ This includes your <code>.env</code> (API keys). Make
+      sure the repo is private — anything pushed stays in its git history.</p>
+    <details class="mt">
+      <summary class="btn sm danger">Restore from GitHub…</summary>
+      <form method="post" action="{{ url_for('main.git_restore') }}" class="stack mt"
+            onsubmit="return confirm('Restore from GitHub will OVERWRITE your current database, settings and resumes with the latest backup. Continue?')">
+        <small>Pulls the latest backup and overwrites your current DB, profile,
+          pitch, settings and tailored resumes.</small>
+        <button class="btn danger" type="submit">Restore from GitHub (overwrite current data)</button>
+      </form>
+    </details>
+  {% else %}
+    <p class="muted sm">Add a repo URL to <code>DATA_BACKUP_REMOTE</code> above and
+      save settings to enable GitHub backup
+      (e.g. <code>https://github.com/&lt;you&gt;/job-tracker-data.git</code>).</p>
+  {% endif %}
+</section>
+
+<section class="panel">
   <h2>Match profile</h2>
   <p class="muted">Rebuild the weighted skill profile from your resume (do this after changing the resume path).</p>
   <form method="post" action="{{ url_for('main.rebuild_profile') }}">
