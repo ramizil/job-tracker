@@ -236,6 +236,7 @@ def settings():
         gemini_models=ai.list_models(),
         openai_models=ai.OPENAI_MODELS,
         anthropic_models=ai.ANTHROPIC_MODELS,
+        cursor_models=ai.CURSOR_MODELS,
     )
 
 

@@ -52,6 +52,7 @@
         <option value="gemini" {{ 'selected' if values.AI_PROVIDER == 'gemini' }}>Google Gemini</option>
         <option value="openai" {{ 'selected' if values.AI_PROVIDER == 'openai' }}>OpenAI (GPT)</option>
         <option value="anthropic" {{ 'selected' if values.AI_PROVIDER == 'anthropic' }}>Anthropic (Claude)</option>
+        <option value="cursor" {{ 'selected' if values.AI_PROVIDER == 'cursor' }}>Cursor (via local proxy)</option>
       </select>
       <small>The selected provider powers all AI features. Status:
         {% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off — add the API key for the selected provider</span>{% endif %}.
@@ -97,6 +98,30 @@
         <input type="text" id="ANTHROPIC_MODEL" name="ANTHROPIC_MODEL" value="{{ values.ANTHROPIC_MODEL }}" placeholder="claude-3-5-sonnet-latest" list="anthropic-models" autocomplete="off">
         <datalist id="anthropic-models">{% for m in anthropic_models %}<option value="{{ m }}">{% endfor %}</datalist>
         <small>Default <code>claude-3-5-sonnet-latest</code>, or type any current Claude model id.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="cursor">
+      <div class="setting">
+        <label for="CURSOR_API_KEY">Cursor API key</label>
+        <input type="text" id="CURSOR_API_KEY" name="CURSOR_API_KEY" value="{{ values.CURSOR_API_KEY }}" placeholder="crsr_..." autocomplete="off">
+        <small>Get it at <a href="https://cursor.com/dashboard/integrations" target="_blank" rel="noopener">cursor.com/dashboard/integrations</a>.
+          <b>Note:</b> Cursor has no native chat API — you must run a local
+          OpenAI-compatible proxy (e.g.
+          <a href="https://github.com/Randomblock1/cursor-openai-api" target="_blank" rel="noopener">cursor-openai-api</a>
+          or <a href="https://github.com/tageecc/cursor-agent-api-proxy" target="_blank" rel="noopener">cursor-agent-api-proxy</a>)
+          that wraps the Cursor Agent CLI.</small>
+      </div>
+      <div class="setting">
+        <label for="CURSOR_BASE_URL">Cursor proxy base URL</label>
+        <input type="text" id="CURSOR_BASE_URL" name="CURSOR_BASE_URL" value="{{ values.CURSOR_BASE_URL }}" placeholder="http://localhost:8080/v1" autocomplete="off">
+        <small>The <code>/v1</code> URL your local proxy listens on. Default <code>http://localhost:8080/v1</code>.</small>
+      </div>
+      <div class="setting">
+        <label for="CURSOR_MODEL">Cursor model</label>
+        <input type="text" id="CURSOR_MODEL" name="CURSOR_MODEL" value="{{ values.CURSOR_MODEL }}" placeholder="composer-2.5" list="cursor-models" autocomplete="off">
+        <datalist id="cursor-models">{% for m in cursor_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>composer-2.5</code>, or any model your proxy exposes (<code>agent --list-models</code>).</small>
       </div>
     </div>
   </section>

@@ -69,13 +69,16 @@ EDITABLE_KEYS: dict[str, str] = {
     "JOOBLE_API_KEY": "Jooble - free job search, Israel",
     "ADZUNA_APP_ID": "Adzuna app id (optional, no Israel)",
     "ADZUNA_APP_KEY": "Adzuna app key (optional)",
-    "AI_PROVIDER": "AI provider: gemini | openai | anthropic",
+    "AI_PROVIDER": "AI provider: gemini | openai | anthropic | cursor",
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
     "GEMINI_MODEL": "Gemini model (default gemini-2.5-flash)",
     "OPENAI_API_KEY": "OpenAI API key (GPT models)",
     "OPENAI_MODEL": "OpenAI model (default gpt-4o-mini)",
     "ANTHROPIC_API_KEY": "Anthropic API key (Claude models)",
     "ANTHROPIC_MODEL": "Anthropic model (default claude-3-5-sonnet-latest)",
+    "CURSOR_API_KEY": "Cursor API key (crsr_...) - used via a local OpenAI-compatible proxy",
+    "CURSOR_MODEL": "Cursor model (default composer-2.5)",
+    "CURSOR_BASE_URL": "Cursor proxy base URL (default http://localhost:8080/v1)",
     "RESUME_PATH": "Path to your resume (HTML, PDF, Word .docx, or text)",
     "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
     "DATA_BACKUP_REMOTE": "Private git repo URL to mirror your data to (GitHub backup)",
@@ -93,6 +96,9 @@ OPENAI_API_KEY = ""
 OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_API_KEY = ""
 ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
+CURSOR_API_KEY = ""
+CURSOR_MODEL = "composer-2.5"
+CURSOR_BASE_URL = "http://localhost:8080/v1"
 RESUME_PATH = DEFAULT_RESUME
 BACKUP_DIR = _default_backup_dir()
 DATA_BACKUP_REMOTE = ""
@@ -103,6 +109,7 @@ def reload() -> None:
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
     global AI_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+    global CURSOR_API_KEY, CURSOR_MODEL, CURSOR_BASE_URL
     global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
 
     load_dotenv(ENV_PATH, override=True)
@@ -117,6 +124,9 @@ def reload() -> None:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
     ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest").strip()
+    CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "").strip()
+    CURSOR_MODEL = os.getenv("CURSOR_MODEL", "composer-2.5").strip()
+    CURSOR_BASE_URL = os.getenv("CURSOR_BASE_URL", "http://localhost:8080/v1").strip()
     RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
     BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or _default_backup_dir())
     DATA_BACKUP_REMOTE = os.getenv("DATA_BACKUP_REMOTE", "").strip()
@@ -136,6 +146,9 @@ def current_settings() -> dict[str, str]:
         "OPENAI_MODEL": OPENAI_MODEL,
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
         "ANTHROPIC_MODEL": ANTHROPIC_MODEL,
+        "CURSOR_API_KEY": CURSOR_API_KEY,
+        "CURSOR_MODEL": CURSOR_MODEL,
+        "CURSOR_BASE_URL": CURSOR_BASE_URL,
         "RESUME_PATH": str(RESUME_PATH),
         "BACKUP_DIR": str(BACKUP_DIR),
         "DATA_BACKUP_REMOTE": DATA_BACKUP_REMOTE,

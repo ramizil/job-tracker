@@ -27,11 +27,16 @@ ANTHROPIC_MODELS = [
     "claude-3-5-haiku-latest", "claude-3-5-sonnet-latest",
     "claude-3-7-sonnet-latest", "claude-sonnet-4-latest",
 ]
+# Cursor models are served through a local OpenAI-compatible proxy (see the
+# Settings help text). These are common Composer ids; users can type any id the
+# proxy exposes via `agent --list-models`.
+CURSOR_MODELS = ["composer-2.5", "composer-2", "auto"]
 
 _PROVIDER_LABELS = {
     "gemini": "Google Gemini",
     "openai": "OpenAI (GPT)",
     "anthropic": "Anthropic (Claude)",
+    "cursor": "Cursor (via local proxy)",
 }
 
 
@@ -50,6 +55,7 @@ def _provider_key(provider: str | None = None) -> str:
         "gemini": config.GEMINI_API_KEY,
         "openai": config.OPENAI_API_KEY,
         "anthropic": config.ANTHROPIC_API_KEY,
+        "cursor": config.CURSOR_API_KEY,
     }.get(p, "")
 
 
@@ -217,6 +223,8 @@ def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
         return _generate_openai(prompt, as_json=as_json)
     if provider == "anthropic":
         return _generate_anthropic(prompt, as_json=as_json)
+    if provider == "cursor":
+        return _generate_cursor(prompt, as_json=as_json)
     return _generate_gemini(prompt, as_json=as_json, attempts=attempts)
 
 
@@ -332,6 +340,55 @@ def _generate_openai(prompt: str, *, as_json: bool = False) -> str:
             last_exc = exc
             continue
     raise AIError(f"OpenAI request failed: {last_exc}")
+
+
+def _generate_cursor(prompt: str, *, as_json: bool = False) -> str:
+    """Generate text with Cursor models via a local OpenAI-compatible proxy.
+
+    Cursor has no native chat/completions API, so this points the OpenAI SDK at
+    a local proxy (e.g. cursor-openai-api / cursor-agent-api-proxy) that wraps
+    the Cursor Agent and re-exposes an OpenAI-shaped endpoint, authenticated
+    with the Cursor API key. Configure the proxy URL in Settings (CURSOR_BASE_URL).
+    """
+    if not config.CURSOR_API_KEY:
+        raise AIError(
+            "No Cursor API key configured. Add it on the Settings page "
+            "(get one at https://cursor.com/dashboard/integrations).")
+    base_url = (config.CURSOR_BASE_URL or "http://localhost:8080/v1").strip()
+    try:
+        from openai import OpenAI  # type: ignore
+    except ImportError as exc:  # pragma: no cover
+        raise AIError("openai is not installed (pip install openai).") from exc
+
+    client = OpenAI(api_key=config.CURSOR_API_KEY, base_url=base_url,
+                    timeout=AI_TIMEOUT_S)
+    model = config.CURSOR_MODEL or "composer-2.5"
+    base = dict(model=model, messages=[{"role": "user", "content": prompt}])
+    # Agent-backed proxies often reject response_format / custom temperature, so
+    # try the richest request first and progressively fall back to the plainest.
+    attempts = [
+        {**base, "temperature": 0.4,
+         **({"response_format": {"type": "json_object"}} if as_json else {})},
+        {**base, "temperature": 0.4},
+        dict(base),
+    ]
+    last_exc: Exception | None = None
+    for kwargs in attempts:
+        try:
+            resp = client.chat.completions.create(**kwargs)
+            text = (resp.choices[0].message.content or "").strip()
+            if not text:
+                raise AIError("Cursor returned an empty response.")
+            return text
+        except AIError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise AIError(
+        "Cursor request failed: "
+        f"{last_exc}. Make sure your local Cursor proxy is running and reachable "
+        f"at {base_url} (see the Settings help text).")
 
 
 def _generate_anthropic(prompt: str, *, as_json: bool = False) -> str:
