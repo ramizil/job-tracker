@@ -409,6 +409,7 @@ def detail(app_id: int):
         has_tailored=_tailored_path(app_id).exists(),
         base_pitch=pitch.load_base_pitch(),
         salary=tracker.get_salary_research(app_id),
+        company_brief=tracker.get_company_brief(app_id),
     )
 
 
@@ -515,7 +516,7 @@ def paste_job():
     if ai.is_configured() and f.get("autogen"):
         r = tracker.get_application(app_id)
         # (item-key, language) — order = what the user sees populate first.
-        plan = [("company", "he"), ("analyze", "en"), ("note", "en"), ("cover", "en")]
+        plan = [("company", "en"), ("analyze", "en"), ("note", "en"), ("cover", "en")]
         done: list[str] = []
         failed: list[str] = []
         for idx, (key, lang) in enumerate(plan):
@@ -910,7 +911,6 @@ def company_research(app_id: int):
         brief = ai.company_research(
             company=r["company"], location=r["location"] or "",
             title=r["title"] or "", description=r["description"] or "",
-            language="en",
         )
         tracker.set_company_brief(app_id, brief)
         flash("Company research complete.", "ok")

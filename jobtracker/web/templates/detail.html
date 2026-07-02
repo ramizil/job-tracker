@@ -76,15 +76,22 @@
       <div class="panel-head"><h2>🔎 Company insight</h2>
         {% if app.company_brief_at %}<span class="muted sm">researched {{ (app.company_brief_at or '')[:16].replace('T',' ') }}</span>{% endif %}
       </div>
-      <p class="muted">Live AI web research on <b>{{ app.company }}</b> — what they do, size &amp; status, growth history and angles for your application (in English).</p>
+      <p class="muted">Live AI web research on <b>{{ app.company }}</b> — what they do, size &amp; status, growth history and angles for your application (English + Hebrew).</p>
       {% if not ai_on %}
-        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
+        <p class="muted">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
       {% else %}
-        {% if app.company_brief %}
-        <div class="md mt" dir="auto">{{ app.company_brief | md | safe }}</div>
+        {% if company_brief %}
+        {% if company_brief.he %}
+        <div class="bi cols mt">
+          <div class="md" dir="ltr">{{ company_brief.en | md | safe }}</div>
+          <div class="md he">{{ company_brief.he | md | safe }}</div>
+        </div>
+        {% else %}
+        <div class="md mt" dir="ltr">{{ company_brief.en | md | safe }}</div>
+        {% endif %}
         {% endif %}
         <form method="post" action="{{ url_for('main.company_research', app_id=app.id) }}" data-loading="Researching the company on the web with Gemini…" class="mt">
-          <button class="btn primary" type="submit">{{ 'Refresh research' if app.company_brief else '🔎 Research company (AI)' }}</button>
+          <button class="btn primary" type="submit">{{ 'Refresh research' if company_brief else '🔎 Research company (AI)' }}</button>
         </form>
       {% endif %}
     </section>

@@ -1293,19 +1293,32 @@ Use these ## sections with short bullets:
 - 3-5 specific talking points the candidate can use, plus 2-3 smart questions to
   ask the interviewer, tied to what this company actually does.
 
-Keep it tight and skimmable. Write in {lang}.
+Keep it tight and skimmable. Write in English ONLY (a Hebrew version is produced
+separately). Output Markdown only, no code fences.
 
 COMPANY: {company}
 {context}
 """
 
+_COMPANY_TRANSLATE_HE = """Translate the following company research briefing into
+natural, professional Hebrew. Keep the SAME Markdown structure and sections, but
+use Hebrew section headings (e.g. ## מה הם עושים, ## גודל ומצב, ## היסטוריה
+וגידול, ## חדשות אחרונות, ## זוויות לראיון). Do NOT add or remove facts.
+Output Hebrew Markdown only, no code fences.
+
+ENGLISH BRIEFING:
+{brief}
+"""
+
 
 def company_research(*, company: str, location: str = "", title: str = "",
-                     description: str = "", language: str = "en") -> str:
-    """Research a company on the web and return a Markdown briefing.
+                     description: str = "", language: str = "en") -> dict[str, Any]:
+    """Research a company on the web and return a bilingual Markdown briefing.
 
-    Uses Gemini with Google Search grounding when available; otherwise falls
-    back to the model's own knowledge (clearly flagged) so it never hard-fails.
+    Returns {"en", "he", "sources", "grounded"}. Uses Gemini with Google Search
+    grounding for the English brief when available; Hebrew is a faithful
+    translation of the same facts. ``language`` is accepted for API compatibility
+    but both languages are always produced.
     """
     ctx_lines = []
     if location:
@@ -1316,25 +1329,32 @@ def company_research(*, company: str, location: str = "", title: str = "",
         ctx_lines.append("Context from the job posting (to disambiguate the "
                          f"company):\n{description[:1500]}")
     context = "\n".join(ctx_lines)
-    prompt = _COMPANY_PROMPT.format(
-        lang=_lang_name(language), company=company or "", context=context)
+    prompt = _COMPANY_PROMPT.format(company=company or "", context=context)
 
     grounded = True
+    sources: list[dict[str, str]] = []
     try:
-        text, sources = _generate_grounded(prompt)
+        text_en, sources = _generate_grounded(prompt)
     except AIError:
         grounded = False
-        text, sources = _generate(prompt, as_json=False), []
+        text_en = _generate(prompt, as_json=False)
 
-    text = re.sub(r"^```\w*\s*", "", text.strip())
-    text = re.sub(r"\s*```$", "", text)
+    text_en = re.sub(r"^```\w*\s*", "", text_en.strip())
+    text_en = re.sub(r"\s*```$", "", text_en)
     if sources:
-        text += "\n\n## Sources\n" + "\n".join(
+        text_en += "\n\n## Sources\n" + "\n".join(
             f"- [{s['title']}]({s['uri']})" for s in sources)
     if not grounded:
-        text += ("\n\n_Note: live web search wasn't available, so this is from "
-                 "the model's general knowledge and may be out of date._")
-    return text
+        text_en += ("\n\n_Note: live web search wasn't available, so this is from "
+                    "the model's general knowledge and may be out of date._")
+
+    # Hebrew: translate the English brief (same facts, separate column in UI).
+    he_prompt = _COMPANY_TRANSLATE_HE.format(brief=text_en[:12000])
+    text_he = _generate(he_prompt, as_json=False).strip()
+    text_he = re.sub(r"^```\w*\s*", "", text_he)
+    text_he = re.sub(r"\s*```$", "", text_he)
+
+    return {"en": text_en, "he": text_he, "sources": sources, "grounded": grounded}
 
 
 # --------------------------------------------------------------------------- #

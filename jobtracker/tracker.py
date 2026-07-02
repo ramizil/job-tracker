@@ -290,14 +290,33 @@ def set_feedback_request(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
-def set_company_brief(app_id: int, markdown: str) -> bool:
-    """Persist AI web-research about the company (Markdown)."""
+def set_company_brief(app_id: int, data: str | dict[str, Any]) -> bool:
+    """Persist AI web-research about the company (JSON dict or legacy Markdown)."""
+    import json
+    payload = (json.dumps(data, ensure_ascii=False)
+               if isinstance(data, dict) else data)
     with get_connection() as conn:
         cur = conn.execute(
             "UPDATE applications SET company_brief=?, company_brief_at=?, updated_at=? WHERE id=?",
-            (markdown, now_iso(), now_iso(), app_id),
+            (payload, now_iso(), now_iso(), app_id),
         )
         return cur.rowcount > 0
+
+
+def get_company_brief(app_id: int) -> dict[str, Any] | None:
+    """Return company brief as {en, he, sources?, grounded?} or None."""
+    import json
+    row = get_application(app_id)
+    if not row or not row["company_brief"]:
+        return None
+    raw = row["company_brief"]
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and ("en" in data or "he" in data):
+            return data
+    except (TypeError, ValueError):
+        pass
+    return {"en": raw, "he": "", "sources": [], "grounded": None}
 
 
 def set_salary_research(app_id: int, data: dict[str, Any]) -> bool:

@@ -27,8 +27,8 @@ AI output.
   providers must degrade gracefully (ungrounded fallback, readable `AIError`).
 - **Bilingual AI output**: never ask a model for mixed "English — עברית"
   strings (RTL/LTR interleaving breaks rendering). Return **separate fields**
-  (`verdict`/`verdict_he`, `{en, he}` objects) and render with the `.bi`
-  two-column grid (EN left/LTR, HE right/RTL) in templates.
+  (`verdict`/`verdict_he`, `{en, he}` objects, `company_brief.en`/`he`) and
+  render with the `.bi` two-column grid (EN left/LTR, HE right/RTL) in templates.
 - **Backward compatibility**: analysis/artefact JSON is persisted in SQLite.
   Templates must handle both old and new stored shapes (feature-detect fields,
   e.g. `{% if q.requirement_he %}`).
