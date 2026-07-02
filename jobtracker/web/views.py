@@ -512,11 +512,12 @@ def paste_job():
     flash(f"Captured job as #{app_id}.", "ok")
 
     # Auto-run the most useful AI artefacts right after capture (opt-out via the
-    # checkbox). Company research is in Hebrew; fit analysis is bilingual.
+    # checkbox). Company research and fit analysis are bilingual.
     if ai.is_configured() and f.get("autogen"):
         r = tracker.get_application(app_id)
         # (item-key, language) — order = what the user sees populate first.
-        plan = [("company", "en"), ("analyze", "en"), ("note", "en"), ("cover", "en")]
+        plan = [("company", "en"), ("analyze", "en"), ("salary", "en"),
+                ("note", "en"), ("cover", "en")]
         done: list[str] = []
         failed: list[str] = []
         for idx, (key, lang) in enumerate(plan):
