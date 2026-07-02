@@ -28,9 +28,9 @@ ANTHROPIC_MODELS = [
     "claude-3-7-sonnet-latest", "claude-sonnet-4-latest",
 ]
 # Cursor models are served through a local OpenAI-compatible proxy (see the
-# Settings help text). These are common Composer ids; users can type any id the
-# proxy exposes via `agent --list-models`.
-CURSOR_MODELS = ["composer-2.5", "composer-2", "auto"]
+# Settings help text). "auto" lets Cursor pick (e.g. Composer); users can type
+# any id the proxy exposes via GET /v1/models or `agent --list-models`.
+CURSOR_MODELS = ["auto", "sonnet-4.5", "gpt-5.2", "gemini-3-flash", "opus-4.6"]
 
 _PROVIDER_LABELS = {
     "gemini": "Google Gemini",
@@ -362,7 +362,7 @@ def _generate_cursor(prompt: str, *, as_json: bool = False) -> str:
 
     client = OpenAI(api_key=config.CURSOR_API_KEY, base_url=base_url,
                     timeout=AI_TIMEOUT_S)
-    model = config.CURSOR_MODEL or "composer-2.5"
+    model = config.CURSOR_MODEL or "auto"
     base = dict(model=model, messages=[{"role": "user", "content": prompt}])
     # Agent-backed proxies often reject response_format / custom temperature, so
     # try the richest request first and progressively fall back to the plainest.

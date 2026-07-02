@@ -77,7 +77,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "ANTHROPIC_API_KEY": "Anthropic API key (Claude models)",
     "ANTHROPIC_MODEL": "Anthropic model (default claude-3-5-sonnet-latest)",
     "CURSOR_API_KEY": "Cursor API key (crsr_...) - used via a local OpenAI-compatible proxy",
-    "CURSOR_MODEL": "Cursor model (default composer-2.5)",
+    "CURSOR_MODEL": "Cursor model (default auto)",
     "CURSOR_BASE_URL": "Cursor proxy base URL (default http://localhost:8080/v1)",
     "RESUME_PATH": "Path to your resume (HTML, PDF, Word .docx, or text)",
     "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
@@ -97,7 +97,7 @@ OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_API_KEY = ""
 ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
 CURSOR_API_KEY = ""
-CURSOR_MODEL = "composer-2.5"
+CURSOR_MODEL = "auto"
 CURSOR_BASE_URL = "http://localhost:8080/v1"
 RESUME_PATH = DEFAULT_RESUME
 BACKUP_DIR = _default_backup_dir()
@@ -125,7 +125,7 @@ def reload() -> None:
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
     ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest").strip()
     CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "").strip()
-    CURSOR_MODEL = os.getenv("CURSOR_MODEL", "composer-2.5").strip()
+    CURSOR_MODEL = os.getenv("CURSOR_MODEL", "auto").strip()
     CURSOR_BASE_URL = os.getenv("CURSOR_BASE_URL", "http://localhost:8080/v1").strip()
     RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
     BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or _default_backup_dir())

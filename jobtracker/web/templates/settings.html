@@ -119,9 +119,9 @@
       </div>
       <div class="setting">
         <label for="CURSOR_MODEL">Cursor model</label>
-        <input type="text" id="CURSOR_MODEL" name="CURSOR_MODEL" value="{{ values.CURSOR_MODEL }}" placeholder="composer-2.5" list="cursor-models" autocomplete="off">
+        <input type="text" id="CURSOR_MODEL" name="CURSOR_MODEL" value="{{ values.CURSOR_MODEL }}" placeholder="auto" list="cursor-models" autocomplete="off">
         <datalist id="cursor-models">{% for m in cursor_models %}<option value="{{ m }}">{% endfor %}</datalist>
-        <small>Default <code>composer-2.5</code>, or any model your proxy exposes (<code>agent --list-models</code>).</small>
+        <small>Default <code>auto</code> (Cursor picks the model), or any id your proxy exposes (<code>GET /v1/models</code>).</small>
       </div>
     </div>
   </section>
