@@ -277,9 +277,38 @@ def _hide_dev_server_warning() -> None:
     logging.getLogger("werkzeug").addFilter(_strip)
 
 
+def _resolve_web_port(port: int) -> int:
+    """Avoid macOS AirPlay Receiver on port 5000 (returns HTTP 403 / AirTunes).
+
+    When AirPlay owns 5000 and Flask is not running, the browser hits AirPlay
+    instead of the dashboard. Default to 5001; still auto-bump if --port 5000.
+    """
+    if port != 5000:
+        return port
+    import urllib.error
+    import urllib.request
+
+    try:
+        urllib.request.urlopen("http://127.0.0.1:5000/", timeout=0.5)
+    except urllib.error.HTTPError as exc:
+        if exc.headers.get("Server", "").startswith("AirTunes"):
+            console.print(
+                "[yellow]Port 5000 is used by macOS AirPlay Receiver "
+                "(HTTP 403); using 5001 instead.[/yellow]"
+            )
+            console.print(
+                "[dim]Or disable AirPlay: System Settings → General → "
+                "AirDrop & Handoff → AirPlay Receiver → Off.[/dim]"
+            )
+            return 5001
+    except OSError:
+        pass
+    return port
+
+
 @app.command()
 def web(host: str = typer.Option("127.0.0.1", "--host"),
-        port: int = typer.Option(5000, "--port", "-p"),
+        port: int = typer.Option(5001, "--port", "-p"),
         debug: bool = typer.Option(False, "--debug"),
         open_window: bool = typer.Option(True, "--open/--no-open",
                                          help="Open a standalone app window."),
@@ -294,6 +323,7 @@ def web(host: str = typer.Option("127.0.0.1", "--host"),
     """Launch the Flask web dashboard (funnel, applications, AI, export)."""
     from .web import create_app
     _hide_dev_server_warning()
+    port = _resolve_web_port(port)
     disp = "127.0.0.1" if host in ("0.0.0.0", "") else host
     url = f"http://{disp}:{port}/"
     console.print(f"[green]Dashboard:[/green] {url}")

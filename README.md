@@ -136,7 +136,7 @@ responses are slower than direct APIs (an agent is spawned per request).
 
 ## Web dashboard
 ```powershell
-python -m jobtracker web              # opens an app window at http://127.0.0.1:5000
+python -m jobtracker web              # opens an app window at http://127.0.0.1:5001
 python -m jobtracker web --port 8080
 python -m jobtracker web --no-open    # don't auto-open a window
 python -m jobtracker web --fullscreen # open the app window fullscreen

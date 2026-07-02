@@ -72,9 +72,11 @@ if grep -qE '^AI_PROVIDER=cursor[[:space:]]*$' .env 2>/dev/null; then
     fi
 fi
 
+PORT="${JT_PORT:-5001}"
 echo
-echo "Starting Job Tracker... open http://127.0.0.1:5000 in your browser."
-"$VENV_PY" -m jobtracker web --port 5000
+echo "Starting Job Tracker... open http://127.0.0.1:${PORT} in your browser."
+echo "(Port 5001 avoids macOS AirPlay Receiver, which hijacks 5000 with HTTP 403.)"
+"$VENV_PY" -m jobtracker web --port "$PORT"
 
 echo
 echo "Job Tracker stopped."

@@ -63,7 +63,7 @@ if errorlevel 1 (
 
 echo.
 echo Starting Job Tracker... an app window will open shortly.
-"%PY%" -m jobtracker web --port 5000
+"%PY%" -m jobtracker web --port 5001
 
 echo.
 echo Job Tracker stopped.

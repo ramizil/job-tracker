@@ -337,7 +337,7 @@ def help_page():
     return render_template(
         "help.html",
         host=request.host,
-        port=(request.host.split(":", 1) + ["5000"])[1] if ":" in request.host else "5000",
+        port=(request.host.split(":", 1) + ["5001"])[1] if ":" in request.host else "5001",
         python=sys.executable,
         ai_on=ai.is_configured(),
         sources=[s.name for s in get_sources()],
