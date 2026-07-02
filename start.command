@@ -51,6 +51,27 @@ else
     echo "[setup] Dependencies already up to date."
 fi
 
+# --- Cursor AI provider: auto-start the local proxy when needed ---
+# The "cursor" provider calls a local OpenAI-compatible proxy that wraps the
+# Cursor Agent CLI (see .env.example). Start it here so AI features just work.
+# Finder launches get a minimal PATH, so add the usual install locations.
+export PATH="$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+if grep -qE '^AI_PROVIDER=cursor[[:space:]]*$' .env 2>/dev/null; then
+    CURSOR_PORT="$(grep -E '^CURSOR_BASE_URL=' .env | sed -nE 's#.*://[^:/]+:([0-9]+).*#\1#p')"
+    CURSOR_PORT="${CURSOR_PORT:-8080}"
+    if curl -s -m 2 "http://localhost:${CURSOR_PORT}/health" >/dev/null 2>&1; then
+        echo "[cursor] Proxy already running on port ${CURSOR_PORT}."
+    elif command -v cursor-agent-api >/dev/null 2>&1; then
+        echo "[cursor] Starting Cursor proxy on port ${CURSOR_PORT}..."
+        CURSOR_API_KEY="$(grep -E '^CURSOR_API_KEY=' .env | cut -d= -f2-)" \
+            cursor-agent-api start "${CURSOR_PORT}" \
+            || echo "[cursor] Proxy failed to start - AI features will error until it runs (see ~/.cursor-agent-api/server.log)."
+    else
+        echo "[cursor] cursor-agent-api is not installed - AI features will fail."
+        echo "[cursor] Install it with: npm install -g cursor-agent-api-proxy"
+    fi
+fi
+
 echo
 echo "Starting Job Tracker... open http://127.0.0.1:5000 in your browser."
 "$VENV_PY" -m jobtracker web --port 5000
