@@ -1,0 +1,23 @@
+---
+description: Rami's workflow preferences for git, commits and secrets
+alwaysApply: true
+---
+
+# Workflow preferences
+
+- **Always commit** after completing a change — Rami's standing instruction
+  ("we can always roll back from git"). Use concise, capitalized commit
+  subjects matching the existing log style. Push to `origin main` after
+  committing unless told otherwise.
+- **Git remote is SSH** (`git@github.com:ramizil/<repo>.git`). This machine has
+  no GitHub HTTPS credentials and no `gh` CLI — never switch remotes back to
+  HTTPS; clone new repos with SSH URLs.
+- **Secrets**: `.env` holds real API keys (Gemini, Cursor `crsr_...`, etc.).
+  Never print key values to the terminal, commit them, or copy them into code.
+  Only `.env.example` is tracked.
+- **Cursor AI provider**: if AI calls fail with "Connection error … localhost:8080",
+  the local proxy is down. Start it with:
+  `CURSOR_API_KEY=<from .env> cursor-agent-api start 8080`
+  (logs: `~/.cursor-agent-api/server.log`; `agent` CLI lives in `~/.local/bin`).
+- **Language**: Rami writes in English and Hebrew; reply in the language he
+  uses. User-facing AI artefacts are bilingual EN+HE unless specified.

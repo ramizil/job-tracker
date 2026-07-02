@@ -25,9 +25,13 @@ fallback) that already index LinkedIn/Indeed/Glassdoor listings.
 - **Search**: query aggregators, rank by match, import top matches.
 - **Analytics**: pipeline funnel, response/interview rates, rejection breakdowns,
   per-source effectiveness, and a match-score signal (advanced vs rejected).
-- **Gemini AI fit analysis**: for any job, get a recruiter-style verdict
-  (YES/MAYBE/NO), a requirement-by-requirement match, risks, and concrete
-  **resume-fix suggestions**.
+- **AI fit analysis** (Gemini / OpenAI / Anthropic / Cursor): for any job, get a
+  recruiter-style verdict (YES/MAYBE/NO), a requirement-by-requirement match,
+  risks, and concrete **resume-fix suggestions** — bilingual, rendered in
+  side-by-side English/Hebrew columns.
+- **AI salary research**: expected **₪/month gross** range for the role — from
+  published data via live web search (Gemini) when available, otherwise
+  estimated from the company's size, growth and industry.
 - **AI resume tailoring**: pick the suggestions, generate a tailored CV (same
   styling), review/edit it, and export to **PDF** (browser Print = pixel-perfect;
   server-side PDF as a fallback).
@@ -84,11 +88,25 @@ show up in **Search**. You can also add any single LinkedIn job by hand on the
 | `RAPIDAPI_KEY` | [JSearch](https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch) | **Primary**, Israel + LinkedIn, free tier |
 | `JOOBLE_API_KEY` | [Jooble](https://jooble.org/api/about) | Free, Israel coverage |
 | `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | [Adzuna](https://developer.adzuna.com/) | Optional, **no Israel** (remote/UK/US/EU) |
-| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) | For AI fit analysis & resume tailoring |
+| `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) | Default AI provider; the only one with web grounding + voice |
+| `OPENAI_API_KEY` | [OpenAI](https://platform.openai.com/api-keys) | Alternative AI provider (GPT) |
+| `ANTHROPIC_API_KEY` | [Anthropic](https://console.anthropic.com/) | Alternative AI provider (Claude) |
+| `CURSOR_API_KEY` | [Cursor](https://cursor.com/dashboard/integrations) | Alternative AI provider — see note below |
 
-> The AI model is configurable via `GEMINI_MODEL` (default `gemini-2.5-flash`).
-> If a model is overloaded/out of quota, the client automatically falls back to
-> other available Gemini models.
+> The AI provider is selected via `AI_PROVIDER` (gemini | openai | anthropic |
+> cursor); each has its own model setting. Gemini (default `gemini-2.5-flash`)
+> automatically falls back to other models when overloaded/out of quota.
+> **Company research web-grounding and voice transcription are Gemini-only** —
+> other providers fall back gracefully.
+
+### The Cursor provider
+Cursor has **no native chat-completions API**, so this app calls it through a
+local OpenAI-compatible proxy that wraps the Cursor Agent CLI:
+[`cursor-agent-api-proxy`](https://github.com/tageecc/cursor-agent-api-proxy)
+(`npm install -g cursor-agent-api-proxy`). `start.command` auto-starts the
+proxy on the port from `CURSOR_BASE_URL` (default `http://localhost:8080/v1`)
+whenever `AI_PROVIDER=cursor`. Model default is `auto` (Cursor picks). Note:
+responses are slower than direct APIs (an agent is spawned per request).
 
 ## Launch (double-click)
 
@@ -184,7 +202,17 @@ jobtracker/
   web/          Flask app (views, templates, static)
   cli.py        Typer CLI (incl. `web`, `analyze`)
 data/           local SQLite DB + profile.yaml + tailored/ (git-ignored)
+.cursor/rules/  agent playbook: architecture conventions + workflow preferences
 ```
+
+## Conventions (the rules of the road)
+- **Settings** are added in one place: `config.EDITABLE_KEYS` (+ globals,
+  `reload()`, `current_settings()`) — the Settings UI picks them up.
+- **DB columns** are added via `EXTRA_COLUMNS` in `db.py` (auto-migration).
+- **Bilingual AI output** uses separate English/Hebrew fields (never mixed
+  strings) rendered in two columns (`.bi` grid); templates stay backward
+  compatible with previously stored JSON shapes.
+- Full details live in `.cursor/rules/` so AI agents follow them consistently.
 
 ## Roadmap
 - Auto follow-up reminders for stale "applied" rows.

@@ -1,0 +1,43 @@
+---
+description: Job Tracker architecture, conventions and key decisions
+alwaysApply: true
+---
+
+# Job Tracker — project context
+
+Local-first Flask + SQLite job-application tracker (`jobtracker/` package).
+Owner: Rami (GitHub `ramizil`), an automation/performance test specialist using
+this to manage his job search. UI language is English with bilingual (EN+HE)
+AI output.
+
+## Architecture conventions
+
+- **Config**: all settings live in the project-root `.env`, loaded by
+  `jobtracker/config.py`. To add a setting: add it to `EDITABLE_KEYS`, the
+  module globals, `reload()`, and `current_settings()` — the Settings UI and
+  its POST handler pick it up automatically. The running server caches config;
+  it reloads on Settings save (`update_env_file()`), not on manual `.env` edits.
+- **DB migrations**: add new columns to `EXTRA_COLUMNS` in `jobtracker/db.py`
+  (auto `ALTER TABLE` on `init_db()`). Never edit the base schema for additions.
+- **AI providers**: `jobtracker/ai.py` dispatches via `_generate()` to
+  gemini | openai | anthropic | cursor. Cursor has no native chat API — it goes
+  through a local OpenAI-compatible proxy (`cursor-agent-api`, port 8080,
+  model `auto`); `start.command` auto-starts it when `AI_PROVIDER=cursor`.
+  Web-search grounding and voice transcription are **Gemini-only**; other
+  providers must degrade gracefully (ungrounded fallback, readable `AIError`).
+- **Bilingual AI output**: never ask a model for mixed "English — עברית"
+  strings (RTL/LTR interleaving breaks rendering). Return **separate fields**
+  (`verdict`/`verdict_he`, `{en, he}` objects) and render with the `.bi`
+  two-column grid (EN left/LTR, HE right/RTL) in templates.
+- **Backward compatibility**: analysis/artefact JSON is persisted in SQLite.
+  Templates must handle both old and new stored shapes (feature-detect fields,
+  e.g. `{% if q.requirement_he %}`).
+- **Error handling**: AI features raise `AIError` with a user-readable message
+  that the UI flashes; features never hard-crash the page.
+
+## Testing changes
+
+- Use the project venv: `./.venv/bin/python -c "..."` smoke tests.
+- For template changes, render real pages via
+  `jobtracker.web.create_app().test_client()` and assert on the HTML.
+- Restore any DB rows a test mutates (the DB holds real application data).
