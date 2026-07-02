@@ -511,29 +511,31 @@ _ANALYSIS_PROMPT = """You are a senior technical recruiter and career coach.
 Compare the CANDIDATE RESUME against the JOB POSTING and produce a brutally
 honest fit analysis. Return ONLY valid JSON with EXACTLY this shape:
 
-LANGUAGE (bilingual, REQUIRED): Write EVERY human-readable text value (verdict,
-requirement, evidence, risks, suggestion action/rationale) in BOTH English and
-Hebrew, formatted as "English text — Hebrew text" (English first, then " — ",
-then the Hebrew translation). For "analysis_markdown", write the full write-up
-in English first, then a "## עברית" heading followed by the same write-up in
-Hebrew. Keep the JSON keys, the "fit_level" value (YES/MAYBE/NO) and the "match"
-value (strong/partial/gap) in English only.
+LANGUAGE (bilingual, REQUIRED): Provide every human-readable text value TWICE,
+in SEPARATE fields — English in the base field and its Hebrew translation in
+the matching "*_he" field (or "he" key). NEVER mix English and Hebrew inside a
+single string. Keep the JSON keys, the "fit_level" value (YES/MAYBE/NO), the
+"match" value (strong/partial/gap) and the "target" value in English only.
 
 {{
   "fit_level": "YES" | "MAYBE" | "NO",
-  "verdict": "one concise sentence (e.g. 'Strong match but overqualified')",
+  "verdict": "one concise sentence in English (e.g. 'Strong match but overqualified')",
+  "verdict_he": "the same sentence in Hebrew",
   "fit_score": 0-100,
   "requirements": [
-     {{"area": "string", "requirement": "what the job asks",
-       "evidence": "what the resume shows", "match": "strong"|"partial"|"gap"}}
+     {{"area": "short area label in English", "area_he": "the same in Hebrew",
+       "requirement": "what the job asks (English)", "requirement_he": "the same in Hebrew",
+       "evidence": "what the resume shows (English)", "evidence_he": "the same in Hebrew",
+       "match": "strong"|"partial"|"gap"}}
   ],
-  "risks": ["short risk bullet", "..."],
+  "risks": [{{"en": "short risk bullet in English", "he": "the same in Hebrew"}}],
   "suggestions": [
      {{"target": "summary"|"skills"|"experience"|"title"|"general",
-       "action": "concrete CV change to make",
-       "rationale": "why it helps for THIS job"}}
+       "action": "concrete CV change to make (English)", "action_he": "the same in Hebrew",
+       "rationale": "why it helps for THIS job (English)", "rationale_he": "the same in Hebrew"}}
   ],
-  "analysis_markdown": "a readable markdown write-up similar to a recruiter's notes, with sections and emojis"
+  "analysis_markdown": "a readable markdown write-up similar to a recruiter's notes, with sections and emojis, in English ONLY",
+  "analysis_markdown_he": "the same write-up in Hebrew ONLY"
 }}
 
 JOB POSTING:
@@ -568,6 +570,16 @@ def analyze_fit(*, title: str, company: str, location: str,
     data.setdefault("fit_level", "MAYBE")
     data.setdefault("verdict", "")
     data.setdefault("suggestions", [])
+    # Normalise risks to {"en", "he"} dicts (the model occasionally returns
+    # plain strings; older stored analyses did too).
+    risks = []
+    for item in data.get("risks") or []:
+        if isinstance(item, dict):
+            risks.append({"en": str(item.get("en", "")).strip(),
+                          "he": str(item.get("he", "")).strip()})
+        elif str(item).strip():
+            risks.append({"en": str(item).strip(), "he": ""})
+    data["risks"] = risks
     data["language"] = "bi"
     return data
 
@@ -1323,3 +1335,99 @@ def company_research(*, company: str, location: str = "", title: str = "",
         text += ("\n\n_Note: live web search wasn't available, so this is from "
                  "the model's general knowledge and may be out of date._")
     return text
+
+
+# --------------------------------------------------------------------------- #
+_SALARY_PROMPT = """You are a compensation researcher for the Israeli tech job
+market. Estimate the MONTHLY GROSS salary (in ILS, ₪) that the employer below
+would realistically offer for this position.
+
+METHOD (in order of preference):
+1. Look for published salary data for this exact company and role (Glassdoor,
+   levels.fyi, AllJobs salary surveys, Drushim, jobinfo, news reports).
+2. If none found, look for Israeli market ranges for this role, seniority and
+   tech stack.
+3. If still nothing concrete, ESTIMATE from what is known about the company:
+   its size, headcount, funding/revenue, growth stage, industry (e.g. defense,
+   enterprise, startup) and location — and say clearly that it is an estimate.
+
+Return ONLY valid JSON with EXACTLY this shape (numbers are plain integers in
+ILS per month, gross):
+
+{{
+  "range_low": 20000,
+  "range_high": 28000,
+  "confidence": "high" | "medium" | "low",
+  "basis": "published-data" | "market-range" | "company-estimate",
+  "summary": "3-6 sentences in English: how the range was derived, what factors move it up or down for THIS candidate/company, and negotiation context",
+  "summary_he": "the same summary in Hebrew",
+  "factors": [{{"en": "short factor bullet in English", "he": "the same in Hebrew"}}]
+}}
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description (excerpt):
+{description}
+"""
+
+
+def salary_research(*, title: str, company: str, location: str = "",
+                    description: str = "") -> dict[str, Any]:
+    """Research/estimate the expected monthly gross salary (ILS) for a job.
+
+    Prefers live web-grounded research (Gemini). When grounding is unavailable
+    (other providers / no search tool) it falls back to a model estimate based
+    on the company profile, flagged via "grounded": false. Returns a dict with
+    range_low/range_high (ILS gross per month), confidence, basis, bilingual
+    summary and factors, plus optional web sources.
+    """
+    prompt = _SALARY_PROMPT.format(
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:5000],
+    )
+    grounded = True
+    sources: list[dict[str, str]] = []
+    try:
+        raw, sources = _generate_grounded(prompt)
+    except AIError:
+        grounded = False
+        raw = _generate(prompt, as_json=True)
+
+    data = _parse_json(raw)
+    if not isinstance(data, dict):
+        raise AIError("The AI returned an unexpected salary format. Please try again.")
+
+    def _num(v) -> int | None:
+        try:
+            n = int(float(str(v).replace(",", "").replace("₪", "").strip()))
+            return n if n > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    low, high = _num(data.get("range_low")), _num(data.get("range_high"))
+    if low and high and low > high:
+        low, high = high, low
+    if not (low and high):
+        raise AIError("The AI couldn't produce a salary range. Please try again.")
+
+    factors = []
+    for item in data.get("factors") or []:
+        if isinstance(item, dict):
+            factors.append({"en": str(item.get("en", "")).strip(),
+                            "he": str(item.get("he", "")).strip()})
+        elif str(item).strip():
+            factors.append({"en": str(item).strip(), "he": ""})
+
+    return {
+        "range_low": low,
+        "range_high": high,
+        "confidence": str(data.get("confidence", "low")).lower(),
+        "basis": str(data.get("basis", "company-estimate")),
+        "summary": str(data.get("summary", "")).strip(),
+        "summary_he": str(data.get("summary_he", "")).strip(),
+        "factors": factors,
+        "sources": sources,
+        "grounded": grounded,
+    }

@@ -89,6 +89,45 @@
       {% endif %}
     </section>
 
+    <section class="panel ai" id="salary">
+      <div class="panel-head"><h2>💰 Expected salary</h2>
+        {% if app.salary_research_at %}<span class="muted sm">researched {{ (app.salary_research_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">AI research of the monthly <b>gross salary (₪, ILS)</b> this employer would likely offer for the role — from published data when available, otherwise estimated from the company's size, growth and industry.</p>
+      {% if not ai_on %}
+        <p class="muted">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
+      {% else %}
+        {% if salary %}
+        <div class="salary-range">
+          ₪{{ '{:,}'.format(salary.range_low) }} – ₪{{ '{:,}'.format(salary.range_high) }}
+          <span class="muted sm">/ month gross · confidence: {{ salary.confidence }} ·
+            {% if salary.basis == 'published-data' %}based on published salary data{% elif salary.basis == 'market-range' %}based on Israeli market ranges{% else %}estimated from the company profile{% endif %}{% if not salary.grounded %} (no live web search){% endif %}</span>
+        </div>
+        {% if salary.summary %}
+        <div class="bi mt">
+          <div dir="ltr">{{ salary.summary }}</div>
+          <div class="he">{{ salary.summary_he }}</div>
+        </div>
+        {% endif %}
+        {% if salary.factors %}
+        <ul class="risks mt">
+          {% for f in salary.factors %}
+          <li>{% if f.he %}<div class="bi"><span dir="ltr">{{ f.en }}</span><span class="he">{{ f.he }}</span></div>{% else %}<span dir="auto">{{ f.en }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if salary.sources %}
+        <details class="mt"><summary class="btn sm">Sources</summary>
+          <ul>{% for s in salary.sources %}<li><a href="{{ s.uri }}" target="_blank" rel="noopener">{{ s.title }}</a></li>{% endfor %}</ul>
+        </details>
+        {% endif %}
+        {% endif %}
+        <form method="post" action="{{ url_for('main.salary_research', app_id=app.id) }}" data-loading="Researching expected salary with AI…" class="mt">
+          <button class="btn primary" type="submit">{{ 'Refresh salary research' if salary else '💰 Research expected salary (AI)' }}</button>
+        </form>
+      {% endif %}
+    </section>
+
     <section class="panel ai" id="ai-generate">
       <div class="panel-head"><h2>🤖 Generate with AI</h2></div>
       {% if not ai_on %}
@@ -111,6 +150,8 @@
               <span><b>About-me pitch</b><br><span class="muted">tailor my interview script (תסריט)</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="company">
               <span><b>Company research</b><br><span class="muted">live web brief on the company</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="salary">
+              <span><b>Salary research</b><br><span class="muted">expected ₪/month gross for this role</span></span></label>
           </div>
           <input name="instructions" placeholder="optional instructions (used by cover letter / recruiter note / interview prep)">
           <p class="muted sm" style="margin:2px 0 0">Language applies to cover letter / interview prep / mock. <b>Fit analysis</b> is always English + Hebrew; <b>Note to recruiter</b> always includes an English version.</p>
@@ -134,7 +175,14 @@
       {% else %}
         <div class="verdict">
           <span class="fit big fit-{{ (analysis.fit_level or 'maybe')|lower }}" title="{{ analysis.fit_level }}">{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %}{{ analysis.fit_score }}%{% else %}{{ analysis.fit_level }}{% endif %}</span>
-          <div dir="auto"><b>{{ analysis.verdict }}</b><div class="muted">{{ analysis.fit_level }}{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %} · fit score {{ analysis.fit_score }}/100{% endif %}</div></div>
+          <div style="flex:1">
+            {% if analysis.verdict_he %}
+            <div class="bi"><b dir="ltr">{{ analysis.verdict }}</b><b class="he">{{ analysis.verdict_he }}</b></div>
+            {% else %}
+            <b dir="auto">{{ analysis.verdict }}</b>
+            {% endif %}
+            <div class="muted">{{ analysis.fit_level }}{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %} · fit score {{ analysis.fit_score }}/100{% endif %}</div>
+          </div>
         </div>
 
         {% if analysis.requirements %}
@@ -143,8 +191,23 @@
           {% for q in analysis.requirements %}
           <tr>
             <td class="m-{{ q.match }}">{{ q.match }}</td>
+            {% if q.requirement_he or q.evidence_he %}
+            <td>
+              <div class="bi">
+                <span dir="ltr"><b>{{ q.area }}</b><br><span class="muted">{{ q.requirement }}</span></span>
+                <span class="he"><b>{{ q.area_he or q.area }}</b><br><span class="muted">{{ q.requirement_he or q.requirement }}</span></span>
+              </div>
+            </td>
+            <td>
+              <div class="bi">
+                <span dir="ltr">{{ q.evidence }}</span>
+                <span class="he">{{ q.evidence_he or q.evidence }}</span>
+              </div>
+            </td>
+            {% else %}
             <td dir="auto"><b>{{ q.area }}</b><br><span class="muted">{{ q.requirement }}</span></td>
             <td dir="auto">{{ q.evidence }}</td>
+            {% endif %}
           </tr>
           {% endfor %}
         </tbody></table>
@@ -152,7 +215,15 @@
 
         {% if analysis.risks %}
         <h3>Risks</h3>
-        <ul class="risks">{% for r in analysis.risks %}<li dir="auto">{{ r }}</li>{% endfor %}</ul>
+        <ul class="risks">
+          {% for r in analysis.risks %}
+          {% if r is mapping %}
+          <li>{% if r.he %}<div class="bi"><span dir="ltr">{{ r.en }}</span><span class="he">{{ r.he }}</span></div>{% else %}<span dir="auto">{{ r.en }}</span>{% endif %}</li>
+          {% else %}
+          <li dir="auto">{{ r }}</li>
+          {% endif %}
+          {% endfor %}
+        </ul>
         {% endif %}
 
         <h3>Suggested resume fixes</h3>
@@ -160,7 +231,14 @@
           {% for s in analysis.suggestions %}
           <label class="sugg">
             <input type="checkbox" name="suggestion" value="[{{ s.target }}] {{ s.action }}" checked>
+            {% if s.action_he or s.rationale_he %}
+            <span class="bi" style="flex:1">
+              <span dir="ltr"><b>{{ s.target }}:</b> {{ s.action }}<br><span class="muted">{{ s.rationale }}</span></span>
+              <span class="he">{{ s.action_he or s.action }}<br><span class="muted">{{ s.rationale_he or s.rationale }}</span></span>
+            </span>
+            {% else %}
             <span dir="auto"><b>{{ s.target }}:</b> {{ s.action }}<br><span class="muted">{{ s.rationale }}</span></span>
+            {% endif %}
           </label>
           {% endfor %}
           <textarea name="instructions" rows="2" placeholder="extra tailoring instructions (optional)"></textarea>
@@ -175,7 +253,14 @@
 
         {% if analysis.analysis_markdown %}
         <details class="mt"><summary class="btn sm">Full AI write-up</summary>
+          {% if analysis.analysis_markdown_he %}
+          <div class="bi cols mt">
+            <div class="md" dir="ltr">{{ analysis.analysis_markdown | md | safe }}</div>
+            <div class="md he">{{ analysis.analysis_markdown_he | md | safe }}</div>
+          </div>
+          {% else %}
           <div class="md" dir="auto">{{ analysis.analysis_markdown | md | safe }}</div>
+          {% endif %}
         </details>
         {% endif %}
       {% endif %}

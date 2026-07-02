@@ -283,6 +283,17 @@ pre.notes,pre.jd{background:rgba(8,14,24,.7);border:1px solid var(--rule);border
 .mi-q{margin:0 0 6px;font-weight:600;color:#dbe6f5}
 .mi-a{margin:0;color:var(--ink);line-height:1.6}
 .mi-tag{display:inline-block;background:var(--grad);color:#fff;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:800;margin-right:4px;vertical-align:middle}
+/* Bilingual side-by-side: English (LTR) on the left, Hebrew (RTL) on the right.
+   Keeps the two languages in separate columns so they never interleave. */
+.bi{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;align-items:start}
+.bi .he{direction:rtl;text-align:right;unicode-bidi:plaintext}
+.bi.cols{gap:8px 22px}
+.bi.cols>.md{min-width:0}
+@media(max-width:640px){.bi{grid-template-columns:1fr}.bi .he{border-top:1px dashed var(--rule);padding-top:4px}}
+/* expected-salary panel */
+.salary-range{font-size:1.35rem;font-weight:800;color:#dbe6f5;margin:6px 0 2px}
+.salary-range .muted.sm{display:block;font-size:12px;font-weight:400;margin-top:2px}
+
 /* Bidirectional text: let each line/paragraph pick its own direction so
    English words/punctuation embedded in Hebrew (and vice-versa) render correctly. */
 [dir="auto"]{unicode-bidi:plaintext}

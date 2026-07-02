@@ -300,6 +300,29 @@ def set_company_brief(app_id: int, markdown: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_salary_research(app_id: int, data: dict[str, Any]) -> bool:
+    """Persist AI expected-salary research (stored as JSON)."""
+    import json
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET salary_research=?, salary_research_at=?, updated_at=? WHERE id=?",
+            (json.dumps(data, ensure_ascii=False), now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
+def get_salary_research(app_id: int) -> dict[str, Any] | None:
+    import json
+    row = get_application(app_id)
+    if not row or not row["salary_research"]:
+        return None
+    try:
+        data = json.loads(row["salary_research"])
+        return data if isinstance(data, dict) else None
+    except (TypeError, ValueError):
+        return None
+
+
 def mark_tailored(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute(

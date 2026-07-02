@@ -408,6 +408,7 @@ def detail(app_id: int):
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
         has_tailored=_tailored_path(app_id).exists(),
         base_pitch=pitch.load_base_pitch(),
+        salary=tracker.get_salary_research(app_id),
     )
 
 
@@ -789,6 +790,7 @@ _BATCH_ITEMS = {
     "mock": "mock interview",
     "pitch": "about-me pitch",
     "company": "company research",
+    "salary": "salary research",
 }
 
 # Small pause between back-to-back AI calls so a burst of auto-gen requests
@@ -837,6 +839,10 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
         tracker.set_company_brief(app_id, ai.company_research(
             company=company, location=location, title=title,
             description=description, language=language))
+    elif key == "salary":
+        tracker.set_salary_research(app_id, ai.salary_research(
+            title=title, company=company, location=location,
+            description=description))
 
 
 @bp.route("/application/<int:app_id>/generate", methods=["POST"])
@@ -874,6 +880,24 @@ def generate_batch(app_id: int):
     if failed:
         flash("Failed: " + "; ".join(failed) + ".", "error")
     return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/salary", methods=["POST"])
+def salary_research(app_id: int):
+    """AI research of the expected monthly gross salary (ILS) for this job."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    try:
+        data = ai.salary_research(
+            title=r["title"] or "", company=r["company"] or "",
+            location=r["location"] or "", description=r["description"] or "",
+        )
+        tracker.set_salary_research(app_id, data)
+        flash("Salary research complete.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#salary")
 
 
 @bp.route("/application/<int:app_id>/company", methods=["POST"])

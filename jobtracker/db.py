@@ -79,6 +79,8 @@ EXTRA_COLUMNS: dict[str, str] = {
     "pitch_at": "TEXT",
     "company_brief": "TEXT",       # AI web research about the company (Markdown)
     "company_brief_at": "TEXT",
+    "salary_research": "TEXT",     # AI expected-salary research (JSON)
+    "salary_research_at": "TEXT",
     "feedback_request": "TEXT",    # polite letter asking why I was rejected
     "feedback_request_at": "TEXT",
 }
