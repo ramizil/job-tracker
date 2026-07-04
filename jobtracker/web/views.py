@@ -516,8 +516,10 @@ def paste_job():
     if ai.is_configured() and f.get("autogen"):
         r = tracker.get_application(app_id)
         # (item-key, language) — order = what the user sees populate first.
+        # ("pitch" ignores the language hint: it is always tailored in Hebrew,
+        # keeping the base pitch verbatim + a job-specific closing station.)
         plan = [("company", "en"), ("analyze", "en"), ("salary", "en"),
-                ("note", "en"), ("cover", "en")]
+                ("note", "en"), ("cover", "en"), ("pitch", "he")]
         done: list[str] = []
         failed: list[str] = []
         for idx, (key, lang) in enumerate(plan):

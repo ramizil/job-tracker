@@ -940,16 +940,23 @@ def pitch_from_resume(*, resume: str | None = None, language: str = "he") -> str
 
 _PITCH_TAILOR_PROMPT = """You are an interview coach. The candidate has a
 personal "about me" pitch — a memorized spoken introduction, structured in
-"stations". Adapt it for the SPECIFIC job below so it lands as well as possible,
-WITHOUT inventing anything: ground every claim ONLY in the candidate's existing
-pitch and resume. Keep the spoken, station-based structure and a similar length.
+"stations". The candidate has already memorized it, so:
+
+- KEEP the original pitch VERBATIM — same stations, same wording, same order.
+  Do NOT rewrite, trim, or paraphrase any existing sentence.
+- ADD one short, new closing station tailored to the SPECIFIC job below
+  (3-6 spoken sentences): connect the candidate's strongest relevant
+  experience to what this role needs, so the recruiter is convinced the
+  candidate can deliver in it from day one. Make it impressive but natural
+  to say aloud, and ground EVERY claim ONLY in the candidate's existing
+  pitch and resume — invent nothing.
 
 Return ONLY valid JSON with EXACTLY this shape:
 {{
   "suggestions": [
-    "short, concrete bullet on what to emphasise / add / trim for THIS job"
+    "short, concrete bullet on what to emphasise for THIS job when delivering the pitch"
   ],
-  "script": "the full tailored pitch, ready to memorize and say aloud"
+  "script": "the original pitch verbatim + the new job-tailored closing station"
 }}
 
 Write BOTH the suggestions and the script in {lang} (natural, native {lang}).
