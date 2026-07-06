@@ -158,8 +158,8 @@ def set_rejection(app_id: int, *, stage: str = "", reason: str = "",
         conn.execute(
             """UPDATE applications
                  SET status='rejected', rejection_stage=?, rejection_reason=?,
-                     rejection_date=?, updated_at=? WHERE id=?""",
-            (stage, reason, ts, ts, app_id),
+                     rejection_note=?, rejection_date=?, updated_at=? WHERE id=?""",
+            (stage, reason, note, ts, ts, app_id),
         )
         conn.execute(
             """INSERT INTO status_history

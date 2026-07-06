@@ -10,7 +10,7 @@ COLUMNS = [
     "id", "company", "title", "location", "status", "match_score",
     "source", "url", "salary", "contact", "resume_version",
     "date_found", "date_applied", "rejection_stage", "rejection_reason",
-    "rejection_date", "ai_fit_level", "ai_verdict", "notes",
+    "rejection_note", "rejection_date", "ai_fit_level", "ai_verdict", "notes",
 ]
 
 
@@ -45,7 +45,8 @@ def to_xlsx() -> bytes:
 
     # Reasonable column widths.
     for i, c in enumerate(COLUMNS, 1):
-        width = 40 if c in ("title", "notes", "url", "ai_verdict") else 16
+        width = 40 if c in ("title", "notes", "url", "ai_verdict",
+                            "rejection_note") else 16
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
     ws.freeze_panes = "A2"
 

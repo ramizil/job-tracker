@@ -83,6 +83,7 @@ EXTRA_COLUMNS: dict[str, str] = {
     "salary_research_at": "TEXT",
     "feedback_request": "TEXT",    # polite letter asking why I was rejected
     "feedback_request_at": "TEXT",
+    "rejection_note": "TEXT",      # free-text note captured on rejection
 }
 
 
@@ -108,6 +109,22 @@ def _migrate(conn: sqlite3.Connection) -> None:
             )
         except sqlite3.Error:
             pass  # JSON1 unavailable — scores fill in as jobs are re-analysed
+
+    # Backfill rejection notes recorded before this column existed: they only
+    # lived in status_history. Skip the auto-generated "stage=..." fallbacks,
+    # which just duplicate the rejection_stage/rejection_reason columns.
+    if "rejection_note" in added:
+        conn.execute(
+            """UPDATE applications
+                  SET rejection_note = (
+                      SELECT note FROM status_history h
+                       WHERE h.application_id = applications.id
+                         AND h.new_status = 'rejected'
+                         AND h.note != ''
+                         AND h.note NOT LIKE 'stage=%'
+                       ORDER BY h.changed_at DESC LIMIT 1)
+                WHERE status = 'rejected'"""
+        )
 
 
 def init_db() -> None:
