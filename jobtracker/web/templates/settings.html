@@ -158,6 +158,26 @@
     </div>
   </section>
 
+  <section class="panel">
+    <h2>📊 Google Sheets sync</h2>
+    <div class="setting">
+      <label for="GDRIVE_FOLDER">Google Drive folder (URL)</label>
+      <input type="text" id="GDRIVE_FOLDER" name="GDRIVE_FOLDER" value="{{ values.GDRIVE_FOLDER }}" placeholder="https://drive.google.com/drive/u/0/folders/..." autocomplete="off">
+      <small>A spreadsheet named <b>“Job Tracker Applications”</b> is created in this
+        folder (same columns as the Excel export) and kept up to date automatically
+        after every change. Save settings, then connect &amp; sync below.</small>
+    </div>
+    <div class="setting">
+      <label for="GOOGLE_CLIENT_SECRET">Google OAuth client JSON (path)</label>
+      <input type="text" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" value="{{ values.GOOGLE_CLIENT_SECRET }}" autocomplete="off">
+      <small>One-time setup: in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>
+        create an OAuth client of type <b>Desktop app</b> (and enable the
+        <b>Drive API</b> + <b>Sheets API</b>), download its JSON and put it at this path.
+        Status: {% if gs_secret_found %}<span class="fit fit-yes">file found</span>{% else %}<span class="fit fit-no">file not found</span>{% endif %},
+        {% if gs_connected %}<span class="fit fit-yes">Google connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</small>
+    </div>
+  </section>
+
   <div class="actions">
     <button class="btn primary" type="submit">💾 Save settings</button>
   </div>
@@ -183,6 +203,32 @@
       <button class="btn danger" type="submit">Restore (overwrite current data)</button>
     </form>
   </details>
+</section>
+
+<section class="panel">
+  <h2>📊 Google Sheets — connect &amp; sync</h2>
+  {% if values.GDRIVE_FOLDER %}
+    <p class="muted sm">Folder: <code>{{ values.GDRIVE_FOLDER }}</code></p>
+    <div class="actions">
+      {% if not gs_connected %}
+        <form method="post" action="{{ url_for('main.gsheet_connect') }}">
+          <button class="btn primary" type="submit">🔑 Connect Google (opens a sign-in window)</button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('main.gsheet_sync') }}">
+          <button class="btn primary" type="submit">🔄 Sync to Google Sheet now</button>
+        </form>
+        <form method="post" action="{{ url_for('main.gsheet_disconnect') }}">
+          <button class="btn danger" type="submit">Disconnect Google</button>
+        </form>
+      {% endif %}
+    </div>
+    <p class="muted sm mt">Once connected, the sheet also updates by itself a few
+      seconds after you add, edit, reject or delete an application.</p>
+  {% else %}
+    <p class="muted sm">Paste your Drive folder URL in <b>Google Sheets sync</b>
+      above and save settings to enable this.</p>
+  {% endif %}
 </section>
 
 <section class="panel">

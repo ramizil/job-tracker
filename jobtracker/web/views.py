@@ -17,8 +17,8 @@ from flask import (
     request, send_file, url_for,
 )
 
-from .. import (ai, analytics, backup, config, exporter, gitbackup, pitch,
-                tracker, tts, usage)
+from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
+                pitch, tracker, tts, usage)
 from .. import resume as resume_mod
 from ..config import TAILORED_DIR
 from ..matcher import score_job
@@ -229,6 +229,8 @@ def settings():
         fields=config.EDITABLE_KEYS,
         sources=[s.name for s in get_sources()],
         ai_on=ai.is_configured(),
+        gs_connected=gsheets.is_connected(),
+        gs_secret_found=Path(str(config.GOOGLE_CLIENT_SECRET)).exists(),
         env_path=str(config.ENV_PATH),
         backup_dir=str(config.BACKUP_DIR),
         data_dir=str(config.DATA_DIR),
@@ -293,6 +295,43 @@ def restore():
     except Exception as exc:
         flash(f"Restore failed: {exc}", "error")
     return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gsheet-connect", methods=["POST"])
+def gsheet_connect():
+    """One-time Google sign-in (opens a browser window on this machine)."""
+    try:
+        gsheets.connect()
+        flash("Google account connected — you can sync now.", "ok")
+    except Exception as exc:
+        flash(f"Google connection failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gsheet-sync", methods=["POST"])
+def gsheet_sync():
+    try:
+        url = gsheets.sync()
+        flash(f"Google Sheet updated: {url}", "ok")
+    except Exception as exc:
+        flash(f"Google Sheet sync failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gsheet-disconnect", methods=["POST"])
+def gsheet_disconnect():
+    gsheets.disconnect()
+    flash("Google account disconnected.", "ok")
+    return redirect(url_for("main.settings"))
+
+
+@bp.after_app_request
+def _auto_gsheet_sync(response):
+    """Keep the online sheet fresh: debounce a sync after data mutations."""
+    if request.method == "POST" and request.path.startswith(
+            ("/application", "/search/save")):
+        gsheets.schedule_sync()
+    return response
 
 
 @bp.route("/settings/rebuild-profile", methods=["POST"])

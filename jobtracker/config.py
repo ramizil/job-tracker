@@ -82,6 +82,8 @@ EDITABLE_KEYS: dict[str, str] = {
     "RESUME_PATH": "Path to your resume (HTML, PDF, Word .docx, or text)",
     "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
     "DATA_BACKUP_REMOTE": "Private git repo URL to mirror your data to (GitHub backup)",
+    "GDRIVE_FOLDER": "Google Drive folder URL for the online applications sheet",
+    "GOOGLE_CLIENT_SECRET": "Path to the Google OAuth client JSON (Desktop app)",
 }
 
 # Module-level settings (re-assigned by reload()).
@@ -102,6 +104,8 @@ CURSOR_BASE_URL = "http://localhost:8080/v1"
 RESUME_PATH = DEFAULT_RESUME
 BACKUP_DIR = _default_backup_dir()
 DATA_BACKUP_REMOTE = ""
+GDRIVE_FOLDER = ""
+GOOGLE_CLIENT_SECRET = DATA_DIR / "google_client_secret.json"
 
 
 def reload() -> None:
@@ -111,6 +115,7 @@ def reload() -> None:
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
     global CURSOR_API_KEY, CURSOR_MODEL, CURSOR_BASE_URL
     global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
+    global GDRIVE_FOLDER, GOOGLE_CLIENT_SECRET
 
     load_dotenv(ENV_PATH, override=True)
     RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "").strip()
@@ -130,6 +135,9 @@ def reload() -> None:
     RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
     BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or _default_backup_dir())
     DATA_BACKUP_REMOTE = os.getenv("DATA_BACKUP_REMOTE", "").strip()
+    GDRIVE_FOLDER = os.getenv("GDRIVE_FOLDER", "").strip()
+    GOOGLE_CLIENT_SECRET = Path(
+        os.getenv("GOOGLE_CLIENT_SECRET") or DATA_DIR / "google_client_secret.json")
 
 
 def current_settings() -> dict[str, str]:
@@ -152,6 +160,8 @@ def current_settings() -> dict[str, str]:
         "RESUME_PATH": str(RESUME_PATH),
         "BACKUP_DIR": str(BACKUP_DIR),
         "DATA_BACKUP_REMOTE": DATA_BACKUP_REMOTE,
+        "GDRIVE_FOLDER": GDRIVE_FOLDER,
+        "GOOGLE_CLIENT_SECRET": str(GOOGLE_CLIENT_SECRET),
     }
 
 
