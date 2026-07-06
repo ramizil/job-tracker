@@ -76,7 +76,7 @@ PORT="${JT_PORT:-5001}"
 echo
 echo "Starting Job Tracker... open http://127.0.0.1:${PORT} in your browser."
 echo "(Port 5001 avoids macOS AirPlay Receiver, which hijacks 5000 with HTTP 403.)"
-"$VENV_PY" -m jobtracker web --port "$PORT"
+"$VENV_PY" -m jobtracker web --port "$PORT" --fullscreen
 
 echo
 echo "Job Tracker stopped."
