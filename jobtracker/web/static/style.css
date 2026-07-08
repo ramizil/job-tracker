@@ -407,3 +407,10 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
   #fx{display:none}
   *{transition:none!important}
 }
+
+/* Preferred-job star (applications list) */
+.rowno{white-space:nowrap}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;
+  color:#8b93a5;padding:0 2px;line-height:1;vertical-align:-1px}
+.star-btn.on{color:#f5b301}
+.star-btn:hover{color:#f5b301;transform:scale(1.2)}

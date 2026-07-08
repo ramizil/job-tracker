@@ -84,6 +84,7 @@ EXTRA_COLUMNS: dict[str, str] = {
     "feedback_request": "TEXT",    # polite letter asking why I was rejected
     "feedback_request_at": "TEXT",
     "rejection_note": "TEXT",      # free-text note captured on rejection
+    "starred": "INTEGER DEFAULT 0",  # preferred / favourite job flag
 }
 
 

@@ -7,7 +7,7 @@ import io
 from .tracker import list_applications
 
 COLUMNS = [
-    "id", "company", "title", "location", "status", "match_score",
+    "id", "starred", "company", "title", "location", "status", "match_score",
     "source", "url", "salary", "contact", "resume_version",
     "date_found", "date_applied", "rejection_stage", "rejection_reason",
     "rejection_note", "rejection_date", "ai_fit_level", "ai_verdict", "notes",

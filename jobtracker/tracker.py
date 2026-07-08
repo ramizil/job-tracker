@@ -171,6 +171,56 @@ def set_rejection(app_id: int, *, stage: str = "", reason: str = "",
         return True
 
 
+def toggle_star(app_id: int) -> int | None:
+    """Flip the preferred-job star. Returns the new value (or None if missing)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT starred FROM applications WHERE id=?", (app_id,)
+        ).fetchone()
+        if not row:
+            return None
+        new = 0 if row["starred"] else 1
+        conn.execute("UPDATE applications SET starred=?, updated_at=? WHERE id=?",
+                     (new, now_iso(), app_id))
+        return new
+
+
+def set_star(app_id: int, starred: bool) -> None:
+    with get_connection() as conn:
+        conn.execute("UPDATE applications SET starred=?, updated_at=? WHERE id=?",
+                     (1 if starred else 0, now_iso(), app_id))
+
+
+def auto_ghost_stale(days: int = 30) -> list[sqlite3.Row]:
+    """Mark 'applied' rows with no movement for `days`+ days as ghosted.
+
+    Uses the application date (falling back to the last update) so a job that
+    has sat in "applied" for over a month without any response is closed out
+    automatically. Each transition is recorded in the status history.
+    """
+    from datetime import datetime, timedelta, timezone
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(
+        timespec="seconds")
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT id, company, title FROM applications
+                WHERE status='applied'
+                  AND COALESCE(date_applied, updated_at, created_at) < ?""",
+            (cutoff,)).fetchall()
+        ts = now_iso()
+        for r in rows:
+            conn.execute(
+                "UPDATE applications SET status='ghosted', updated_at=? WHERE id=?",
+                (ts, r["id"]))
+            conn.execute(
+                """INSERT INTO status_history
+                     (application_id, old_status, new_status, note, changed_at)
+                   VALUES (?,?,?,?,?)""",
+                (r["id"], "applied", "ghosted",
+                 f"auto-ghosted after {days}+ days with no response", ts))
+        return rows
+
+
 def add_note(app_id: int, text: str) -> bool:
     with get_connection() as conn:
         row = conn.execute(

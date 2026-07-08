@@ -12,9 +12,11 @@ import tempfile
 import time
 from pathlib import Path
 
+from datetime import datetime
+
 from flask import (
-    Blueprint, Response, abort, flash, redirect, render_template,
-    request, send_file, url_for,
+    Blueprint, Response, abort, flash, make_response, redirect,
+    render_template, request, send_file, url_for,
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
@@ -407,6 +409,11 @@ def my_pitch_draft():
 
 @bp.route("/")
 def dashboard():
+    ghosted = tracker.auto_ghost_stale()
+    if ghosted:
+        names = ", ".join(f"{g['company']} — {g['title']}" for g in ghosted[:5])
+        flash(f"{len(ghosted)} application(s) with no response for 30+ days "
+              f"were marked ghosted: {names}.", "ok")
     funnel = analytics.funnel()
     totals = analytics.totals()
     recent = tracker.list_applications()[:10]
@@ -424,7 +431,8 @@ def dashboard():
 @bp.route("/applications")
 def applications():
     status = request.args.get("status") or None
-    rows = tracker.list_applications(status=status)
+    rows = tracker.list_applications(status=status,
+                                     order_by="starred DESC, updated_at DESC")
     return render_template("applications.html", rows=rows, statuses=STATUSES,
                            active=status)
 
@@ -533,6 +541,7 @@ def paste_job():
                     "status": f.get("status", "saved"),
                     "source": (f.get("source") or "").strip(),
                     "autogen": bool(f.get("autogen")),
+                    "starred": bool(f.get("starred")),
                 },
             )
 
@@ -548,6 +557,8 @@ def paste_job():
         description=text, salary=salary, source=source,
         status=f.get("status", "saved"), match_score=score,
     )
+    if f.get("starred"):
+        tracker.set_star(app_id, True)
     flash(f"Captured job as #{app_id}.", "ok")
 
     # Auto-run the most useful AI artefacts right after capture (opt-out via the
@@ -575,6 +586,35 @@ def paste_job():
             flash("Failed: " + "; ".join(failed) + ".", "error")
 
     return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/star", methods=["POST"])
+def star(app_id: int):
+    new = tracker.toggle_star(app_id)
+    if new is None:
+        abort(404)
+    return {"starred": new}
+
+
+@bp.route("/application/<int:app_id>/share")
+def share(app_id: int):
+    """Standalone HTML snapshot of the AI insights — shareable by email."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    html = render_template(
+        "share.html", app=r,
+        analysis=tracker.get_ai_analysis(app_id),
+        salary=tracker.get_salary_research(app_id),
+        company_brief=tracker.get_company_brief(app_id),
+        generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )
+    safe_co = re.sub(r"[^A-Za-z0-9_-]+", "-", r["company"] or "job").strip("-")
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Content-Disposition"] = (
+        f"attachment; filename=job-analysis-{safe_co}-{app_id}.html")
+    return resp
 
 
 @bp.route("/application/<int:app_id>/status", methods=["POST"])

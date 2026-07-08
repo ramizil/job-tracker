@@ -41,11 +41,13 @@
 </div>
 
 <table id="apps-table" class="grid">
-  <thead><tr><th>ID</th><th>Status</th><th>Match</th><th>AI</th><th>Company</th><th>Title</th><th>Location</th><th>Source</th><th>Applied</th></tr></thead>
+  <thead><tr><th>#</th><th>Status</th><th>Match</th><th>AI</th><th>Company</th><th>Title</th><th>Location</th><th>Source</th><th>Applied</th></tr></thead>
   <tbody>
     {% for r in rows %}
     <tr onclick="location.href='{{ url_for('main.detail', app_id=r.id) }}'">
-      <td>{{ r.id }}</td>
+      <td class="rowno"><button type="button" class="star-btn {{ 'on' if r.starred }}"
+            title="{{ 'Unstar' if r.starred else 'Mark as preferred' }}"
+            data-star-url="{{ url_for('main.star', app_id=r.id) }}">{{ '★' if r.starred else '☆' }}</button> {{ loop.index }}</td>
       <td><span class="pill status-{{ r.status }}">{{ r.status }}</span>{% if r.status == 'saved' %} <span class="alert-ic" title="Saved but not applied yet — handle this">⏰</span>{% endif %}</td>
       <td>{{ '%.0f'|format(r.match_score or 0) }}%</td>
       <td>{% if r.ai_fit_level %}<span class="fit fit-{{ r.ai_fit_level|lower }}" data-val="{{ r.ai_fit_level }}" title="{{ r.ai_fit_level }}{% if r.ai_verdict %} · {{ r.ai_verdict }}{% endif %}">{% if r.ai_fit_score is not none %}{{ r.ai_fit_score }}%{% else %}{{ r.ai_fit_level }}{% endif %}</span>{% endif %}</td>
@@ -60,4 +62,18 @@
     {% endfor %}
   </tbody>
 </table>
+<script>
+  document.querySelectorAll('.star-btn').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      fetch(btn.dataset.starUrl, {method: 'POST'})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          btn.textContent = d.starred ? '★' : '☆';
+          btn.classList.toggle('on', !!d.starred);
+          btn.title = d.starred ? 'Unstar' : 'Mark as preferred';
+        });
+    });
+  });
+</script>
 {% endblock %}

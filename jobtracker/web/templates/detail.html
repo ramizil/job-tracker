@@ -10,7 +10,8 @@
 <p class="sub">{{ app.company }}{% if app.location %} · {{ app.location }}{% endif %}
   · match {{ '%.0f'|format(app.match_score or 0) }}%
   {% if app.url %} · <a href="{{ app.url }}" target="_blank" rel="noopener">job link ↗</a>{% endif %}
-  · <a href="#company">🔎 company insight</a></p>
+  · <a href="#company">🔎 company insight</a>
+  · <a href="{{ url_for('main.share', app_id=app.id) }}" title="Download the AI insights as a standalone HTML page you can email">📤 export analysis (HTML)</a></p>
 
 <div class="grid2">
   <div>
