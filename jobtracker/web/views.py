@@ -433,8 +433,13 @@ def applications():
     status = request.args.get("status") or None
     rows = tracker.list_applications(status=status,
                                      order_by="starred DESC, updated_at DESC")
+    # Gap-free display numbers in creation order (oldest = 1), stable across
+    # deletes, filters and sorting — computed over ALL applications so a job
+    # keeps the same number on filtered views too.
+    all_ids = sorted(r["id"] for r in tracker.list_applications())
+    seq = {app_id: n for n, app_id in enumerate(all_ids, start=1)}
     return render_template("applications.html", rows=rows, statuses=STATUSES,
-                           active=status)
+                           active=status, seq=seq)
 
 
 @bp.route("/application/<int:app_id>")

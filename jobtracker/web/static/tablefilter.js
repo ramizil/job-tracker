@@ -20,6 +20,9 @@
   // the "⏰" saved-icon don't pollute dropdown values or sort keys.
   function colValue(cell) {
     if (!cell) return '';
+    // A data-val on the cell itself wins (e.g. the row-number cell, whose text
+    // also contains the star button glyph and would otherwise sort as text).
+    if (cell.hasAttribute('data-val')) return cell.getAttribute('data-val').trim();
     var tag = cell.querySelector('.pill, .fit');
     // A data-val attribute (e.g. the AI tier YES/MAYBE/NO behind a "85%" badge)
     // wins, so filtering/sorting use the tier rather than the displayed number.
