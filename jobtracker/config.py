@@ -1,8 +1,14 @@
 """Central configuration: filesystem paths and environment-backed settings.
 
-Settings live in the project-root ``.env`` file. They can be edited by hand or
-from the web UI (Settings page). ``reload()`` re-reads ``.env`` at runtime so
-changes take effect without restarting the server.
+The app supports multiple *profiles*, each with its own database, settings and
+generated artefacts under ``data/profiles/<name>/``. The active profile name
+is stored in ``data/active_profile``; ``reload()`` recomputes every per-profile
+path and re-reads that profile's ``.env``, so switching profiles (or editing
+settings from the web UI) takes effect without restarting the server.
+
+The **default** profile keeps its settings in the historical project-root
+``.env`` (the launcher scripts read it), while every other profile has its own
+``.env`` inside its profile folder.
 """
 from __future__ import annotations
 
@@ -14,30 +20,70 @@ from dotenv import load_dotenv
 
 # Project root = the folder that contains the `jobtracker` package.
 BASE_DIR = Path(__file__).resolve().parent.parent
-ENV_PATH = BASE_DIR / ".env"
+ROOT_ENV_PATH = BASE_DIR / ".env"
 
-# Local, git-ignored data directory (holds the SQLite DB and generated profile).
+# Local, git-ignored data directory. Shared (profile-independent) files live
+# directly in it; per-profile data lives under data/profiles/<name>/.
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-DB_PATH = Path(os.getenv("JOBTRACKER_DB", DATA_DIR / "jobtracker.db"))
-PROFILE_PATH = DATA_DIR / "profile.yaml"
-
-# Personal "about me" pitch / interview script (the global base version).
-PITCH_PATH = DATA_DIR / "pitch.md"
-
-# Resume built by the conversational Resume Builder (AI-generated, English).
-BUILT_RESUME_PATH = DATA_DIR / "built_resume.html"
-
-# Tailored resumes (AI-generated) are written here.
-TAILORED_DIR = DATA_DIR / "tailored"
-TAILORED_DIR.mkdir(exist_ok=True)
+PROFILES_DIR = DATA_DIR / "profiles"
+ACTIVE_PROFILE_FILE = DATA_DIR / "active_profile"
+DEFAULT_PROFILE = "default"
 
 # Local working tree used to mirror the data to a private GitHub repo
-# (see jobtracker/gitbackup.py). Kept inside the git-ignored data dir.
+# (see jobtracker/gitbackup.py). Shared: it mirrors ALL profiles.
 GIT_BACKUP_DIR = DATA_DIR / ".git-backup"
 
 DEFAULT_RESUME = BASE_DIR / "sample_resume.html"
+
+
+def env_path_for(profile: str) -> Path:
+    """Settings file for a profile (root .env for the historical default)."""
+    if profile == DEFAULT_PROFILE:
+        return ROOT_ENV_PATH
+    return PROFILES_DIR / profile / ".env"
+
+
+def _migrate_legacy_layout() -> None:
+    """One-time move of pre-profiles data/ files into data/profiles/default/.
+
+    Shared assets stay in data/: tts_cache (content-addressed), the Google
+    OAuth *client* JSON (app identity, not account) and the git-backup mirror.
+    """
+    if PROFILES_DIR.exists():
+        return
+    default_dir = PROFILES_DIR / DEFAULT_PROFILE
+    default_dir.mkdir(parents=True)
+    for pattern in ("jobtracker.db*", "profile.yaml", "pitch.md",
+                    "built_resume.html", "usage.json", "google_token.json"):
+        for src in DATA_DIR.glob(pattern):
+            if src.is_file():
+                src.rename(default_dir / src.name)
+    legacy_tailored = DATA_DIR / "tailored"
+    if legacy_tailored.is_dir():
+        legacy_tailored.rename(default_dir / "tailored")
+
+
+def _read_active_profile() -> str:
+    try:
+        name = ACTIVE_PROFILE_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return DEFAULT_PROFILE
+    if name and (PROFILES_DIR / name).is_dir():
+        return name
+    return DEFAULT_PROFILE
+
+
+# Per-profile paths — (re)assigned by reload().
+ACTIVE_PROFILE = DEFAULT_PROFILE
+PROFILE_DIR = PROFILES_DIR / DEFAULT_PROFILE
+ENV_PATH = ROOT_ENV_PATH
+DB_PATH = PROFILE_DIR / "jobtracker.db"
+PROFILE_PATH = PROFILE_DIR / "profile.yaml"
+PITCH_PATH = PROFILE_DIR / "pitch.md"
+BUILT_RESUME_PATH = PROFILE_DIR / "built_resume.html"
+TAILORED_DIR = PROFILE_DIR / "tailored"
 
 
 def _default_backup_dir() -> Path:
@@ -109,7 +155,9 @@ GOOGLE_CLIENT_SECRET = DATA_DIR / "google_client_secret.json"
 
 
 def reload() -> None:
-    """(Re)load values from .env into this module's globals."""
+    """(Re)compute per-profile paths and load the active profile's .env."""
+    global ACTIVE_PROFILE, PROFILE_DIR, ENV_PATH
+    global DB_PATH, PROFILE_PATH, PITCH_PATH, BUILT_RESUME_PATH, TAILORED_DIR
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
     global AI_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
@@ -117,6 +165,22 @@ def reload() -> None:
     global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
     global GDRIVE_FOLDER, GOOGLE_CLIENT_SECRET
 
+    _migrate_legacy_layout()
+    ACTIVE_PROFILE = _read_active_profile()
+    PROFILE_DIR = PROFILES_DIR / ACTIVE_PROFILE
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    ENV_PATH = env_path_for(ACTIVE_PROFILE)
+    DB_PATH = Path(os.getenv("JOBTRACKER_DB") or PROFILE_DIR / "jobtracker.db")
+    PROFILE_PATH = PROFILE_DIR / "profile.yaml"
+    PITCH_PATH = PROFILE_DIR / "pitch.md"
+    BUILT_RESUME_PATH = PROFILE_DIR / "built_resume.html"
+    TAILORED_DIR = PROFILE_DIR / "tailored"
+    TAILORED_DIR.mkdir(exist_ok=True)
+
+    # Start from a clean slate so keys absent from this profile's .env don't
+    # leak in from a previously loaded profile.
+    for key in EDITABLE_KEYS:
+        os.environ.pop(key, None)
     load_dotenv(ENV_PATH, override=True)
     RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "").strip()
     JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "").strip()

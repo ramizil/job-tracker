@@ -21,8 +21,8 @@ from flask import (
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
                 pitch, tracker, tts, usage)
+from .. import profiles as profiles_mod
 from .. import resume as resume_mod
-from ..config import TAILORED_DIR
 from ..matcher import score_job
 from ..models import COMMON_REJECTION_REASONS, REJECTION_STAGES, STATUSES
 from ..sources import get_sources
@@ -39,8 +39,18 @@ def inject_saved_alert():
     except Exception:
         return {"saved_alert": {"count": 0, "stale": 0}}
 
+
+@bp.app_context_processor
+def inject_profiles():
+    """Expose the profile list + active name to every template (topbar switcher)."""
+    try:
+        return {"profiles": profiles_mod.list_profiles(),
+                "active_profile": config.ACTIVE_PROFILE}
+    except Exception:
+        return {"profiles": [], "active_profile": ""}
+
 def _tailored_path(app_id: int):
-    return TAILORED_DIR / f"{app_id}.html"
+    return config.TAILORED_DIR / f"{app_id}.html"
 
 
 def _readiness() -> dict:
@@ -235,13 +245,49 @@ def settings():
         gs_secret_found=Path(str(config.GOOGLE_CLIENT_SECRET)).exists(),
         env_path=str(config.ENV_PATH),
         backup_dir=str(config.BACKUP_DIR),
-        data_dir=str(config.DATA_DIR),
+        data_dir=str(config.PROFILE_DIR),
         jooble_usage=usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None,
         gemini_models=ai.list_models(),
         openai_models=ai.OPENAI_MODELS,
         anthropic_models=ai.ANTHROPIC_MODELS,
         cursor_models=ai.CURSOR_MODELS,
     )
+
+
+@bp.route("/profiles/switch", methods=["POST"])
+def profile_switch():
+    name = request.form.get("name", "")
+    try:
+        profiles_mod.switch_profile(name)
+        flash(f"Switched to profile “{name}”.", "ok")
+    except Exception as exc:
+        flash(f"Could not switch profile: {exc}", "error")
+    return redirect(request.referrer or url_for("main.dashboard"))
+
+
+@bp.route("/profiles/create", methods=["POST"])
+def profile_create():
+    name = request.form.get("name", "")
+    import_from = request.form.get("import_from", "").strip() or None
+    try:
+        profiles_mod.create_profile(name, import_from=import_from)
+        profiles_mod.switch_profile(name.strip())
+        note = f" (settings imported from “{import_from}”)" if import_from else ""
+        flash(f"Profile “{name.strip()}” created and activated{note}.", "ok")
+    except Exception as exc:
+        flash(f"Could not create profile: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/profiles/delete", methods=["POST"])
+def profile_delete():
+    name = request.form.get("name", "")
+    try:
+        profiles_mod.delete_profile(name)
+        flash(f"Profile “{name}” deleted.", "ok")
+    except Exception as exc:
+        flash(f"Could not delete profile: {exc}", "error")
+    return redirect(url_for("main.settings"))
 
 
 @bp.route("/settings/backup", methods=["POST"])

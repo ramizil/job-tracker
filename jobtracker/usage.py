@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 
 from . import config
 
-_USAGE_PATH = config.DATA_DIR / "usage.json"
 JOOBLE_FREE_LIMIT = 500
 # Warn the user once the remaining requests drop to/under this.
 JOOBLE_WARN_AT = 50
@@ -27,10 +26,16 @@ def _key_id(key: str) -> str:
     return f"{key[:4]}…{key[-4:]}" if len(key) >= 8 else key
 
 
+def _usage_path():
+    # Per active profile (keys differ per profile), resolved at call time.
+    return config.PROFILE_DIR / "usage.json"
+
+
 def _load() -> dict:
-    if _USAGE_PATH.exists():
+    path = _usage_path()
+    if path.exists():
         try:
-            return json.loads(_USAGE_PATH.read_text(encoding="utf-8"))
+            return json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return {}
     return {}
@@ -38,7 +43,7 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     try:
-        _USAGE_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        _usage_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
     except Exception:
         pass
 

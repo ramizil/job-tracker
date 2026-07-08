@@ -22,6 +22,15 @@
       <a href="{{ url_for('main.export_csv') }}">CSV</a>
       <a href="{{ url_for('main.export_xlsx') }}">Excel</a>
       <span class="sep"></span>
+      {% if profiles|length > 1 %}
+      <form method="post" action="{{ url_for('main.profile_switch') }}" class="profile-switch" title="Active profile — each profile has its own applications and settings">
+        <select name="name" onchange="this.form.submit()">
+          {% for p in profiles %}
+          <option value="{{ p }}" {{ 'selected' if p == active_profile }}>👤 {{ p }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
       <a href="{{ url_for('main.settings') }}" class="{{ 'active' if ep == 'main.settings' }}">⚙ Settings</a>
       <a href="{{ url_for('main.help_page') }}" class="{{ 'active' if ep == 'main.help_page' }}">❓ Help</a>
       <a href="{{ url_for('main.quit_app') }}" class="quit">⏻ Quit</a>

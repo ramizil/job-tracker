@@ -184,10 +184,60 @@
 </form>
 
 <section class="panel">
+  <h2>👤 Profiles</h2>
+  <p class="muted">Each profile has its <b>own applications database and settings</b>
+    (API keys, resume, Google Sheet…). Active profile:
+    <span class="pill">{{ active_profile }}</span> — switch from the top bar or here.</p>
+  <table class="profiles-table">
+    <tbody>
+      {% for p in profiles %}
+      <tr>
+        <td>{% if p == active_profile %}<b>👤 {{ p }}</b> <span class="muted sm">(active)</span>{% else %}👤 {{ p }}{% endif %}</td>
+        <td class="actions-cell">
+          {% if p != active_profile %}
+          <form method="post" action="{{ url_for('main.profile_switch') }}" style="display:inline">
+            <input type="hidden" name="name" value="{{ p }}">
+            <button class="btn sm" type="submit">Switch to</button>
+          </form>
+          {% if p != 'default' %}
+          <form method="post" action="{{ url_for('main.profile_delete') }}" style="display:inline"
+                onsubmit="return confirm('Delete profile “{{ p }}” and ALL its data (applications, settings, resumes)? This cannot be undone.')">
+            <input type="hidden" name="name" value="{{ p }}">
+            <button class="btn sm danger" type="submit">Delete</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <details class="mt">
+    <summary class="btn sm">➕ New profile…</summary>
+    <form method="post" action="{{ url_for('main.profile_create') }}" class="stack mt">
+      <input name="name" placeholder="profile name (letters, digits, - and _)" required pattern="[A-Za-z0-9][A-Za-z0-9_-]*" maxlength="40">
+      <label class="muted sm">Import settings from
+        <select name="import_from">
+          <option value="">— start blank —</option>
+          {% for p in profiles %}
+          <option value="{{ p }}">{{ p }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <small>Importing copies the source profile's settings (API keys, resume path…),
+        match profile and pitch — the applications list starts <b>empty</b>.
+        The new profile is activated right away.</small>
+      <button class="btn primary" type="submit">Create profile</button>
+    </form>
+  </details>
+</section>
+
+<section class="panel">
   <h2>🗄️ Backup &amp; restore</h2>
-  <p class="muted">A backup copies your database (all applications + AI analyses,
-    cover letters, recruiter notes), match profile, settings (<code>.env</code>)
-    and tailored resumes. Your live data lives in <code>{{ data_dir }}</code>.</p>
+  <p class="muted">A backup copies <b>all profiles</b>: each profile's database
+    (applications + AI analyses, cover letters, recruiter notes), match profile,
+    settings (<code>.env</code>) and tailored resumes. The active profile's live
+    data lives in <code>{{ data_dir }}</code>.</p>
   <div class="actions">
     <form method="post" action="{{ url_for('main.backup_now') }}">
       <button class="btn primary" type="submit">📦 Back up now → {{ backup_dir }}</button>

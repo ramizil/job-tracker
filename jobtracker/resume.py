@@ -13,7 +13,6 @@ import yaml
 from bs4 import BeautifulSoup
 
 from . import config
-from .config import PROFILE_PATH
 
 # A curated skill dictionary. Keys are canonical skills; values are aliases that
 # may appear in a job description. Extend freely in data/profile.yaml.
@@ -160,7 +159,7 @@ def build_profile(resume_path: Path | None = None) -> dict[str, Any]:
 
 
 def save_profile(profile: dict[str, Any]) -> None:
-    PROFILE_PATH.write_text(
+    config.PROFILE_PATH.write_text(
         yaml.safe_dump(profile, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
@@ -168,8 +167,8 @@ def save_profile(profile: dict[str, Any]) -> None:
 
 def load_profile() -> dict[str, Any]:
     """Load the saved profile, building it from the resume on first use."""
-    if PROFILE_PATH.exists():
-        return yaml.safe_load(PROFILE_PATH.read_text(encoding="utf-8"))
+    if config.PROFILE_PATH.exists():
+        return yaml.safe_load(config.PROFILE_PATH.read_text(encoding="utf-8"))
     return build_profile()
 
 

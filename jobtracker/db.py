@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 
-from .config import DB_PATH
+from . import config
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS applications (
@@ -52,7 +52,8 @@ def now_iso() -> str:
 
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
+    # Resolved at call time so switching profiles changes the DB immediately.
+    conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn

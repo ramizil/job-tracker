@@ -2,7 +2,8 @@
 
 Auth is a one-time OAuth sign-in (browser window) using a Google Cloud
 "Desktop app" OAuth client. The client-secret JSON path and the Drive folder
-URL live in Settings; the refresh token is stored in the git-ignored data dir.
+URL live in Settings; the refresh token is stored in the active profile's
+folder (each profile can connect its own Google account).
 
 The spreadsheet mirrors the Excel export (same columns, jobtracker/exporter.py)
 and is created inside the folder on first sync if it doesn't exist yet. Uses
@@ -15,13 +16,16 @@ import re
 import threading
 
 from . import config
-from .config import DATA_DIR
 from .exporter import COLUMNS
 from .tracker import list_applications
 
 SHEET_NAME = "Job Tracker Applications"
-TOKEN_PATH = DATA_DIR / "google_token.json"
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
+
+def _token_path():
+    # Per active profile: each profile can connect its own Google account.
+    return config.PROFILE_DIR / "google_token.json"
 
 _MIME_SHEET = "application/vnd.google-apps.spreadsheet"
 
@@ -48,7 +52,7 @@ def is_configured() -> bool:
 
 
 def is_connected() -> bool:
-    return TOKEN_PATH.exists()
+    return _token_path().exists()
 
 
 def connect() -> None:
@@ -70,25 +74,26 @@ def connect() -> None:
     flow = InstalledAppFlow.from_client_secrets_file(str(secret), SCOPES)
     creds = flow.run_local_server(port=0, open_browser=True,
                                   authorization_prompt_message="")
-    TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
+    _token_path().write_text(creds.to_json(), encoding="utf-8")
 
 
 def disconnect() -> None:
-    TOKEN_PATH.unlink(missing_ok=True)
+    _token_path().unlink(missing_ok=True)
 
 
 def _credentials():
-    if not TOKEN_PATH.exists():
+    token_path = _token_path()
+    if not token_path.exists():
         raise SyncError("Google account isn't connected yet — click "
                         "\u201cConnect Google\u201d in Settings first.")
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
     creds = Credentials.from_authorized_user_info(
-        json.loads(TOKEN_PATH.read_text(encoding="utf-8")), SCOPES)
+        json.loads(token_path.read_text(encoding="utf-8")), SCOPES)
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
-        TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
+        token_path.write_text(creds.to_json(), encoding="utf-8")
     if not creds.valid:
         raise SyncError("Google login expired — click \u201cConnect Google\u201d "
                         "in Settings to sign in again.")

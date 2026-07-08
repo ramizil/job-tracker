@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import config
+from .profiles import list_profiles
 
 
 class GitBackupError(RuntimeError):
@@ -60,12 +61,13 @@ tts_cache/
 _README = """\
 # Job Tracker data backup
 
-Private mirror of the Job Tracker `data/` folder created by the app's
-**Back up to GitHub** button. Contains the SQLite database, match profile,
-pitch, generated/tailored resumes and (optionally) the `.env` settings.
+Private mirror of the Job Tracker data created by the app's
+**Back up to GitHub** button. Contains ALL profiles (`profiles/<name>/`):
+each profile's SQLite database, match profile, pitch, generated/tailored
+resumes and settings, plus (optionally) the default profile's `.env`.
 
 Restore with the app's **Restore from GitHub** button, or copy the files back
-into your local `data/` folder and `.env`.
+into your local `data/profiles/` folder and `.env`.
 """
 
 
@@ -85,25 +87,26 @@ def _ensure_repo(repo: Path, url: str) -> None:
 
 
 def _copy_data_in(repo: Path, include_env: bool) -> None:
-    """Copy the live data files into the backup working tree."""
+    """Copy ALL profiles' data files into the backup working tree."""
     (repo / ".gitignore").write_text(_GITIGNORE, encoding="utf-8")
     (repo / "README.md").write_text(_README, encoding="utf-8")
 
-    singles = [config.DB_PATH, config.PROFILE_PATH, config.PITCH_PATH,
-               config.BUILT_RESUME_PATH]
-    for src in singles:
-        if src.exists():
-            shutil.copy2(src, repo / src.name)
+    # Mirror every profile folder, dropping deletions (each profile's .env,
+    # DB, pitch, resumes... live inside its folder; the historical default
+    # profile keeps its settings in the root .env, copied below).
+    dst_profiles = repo / "profiles"
+    if dst_profiles.exists():
+        shutil.rmtree(dst_profiles)
+    for name in list_profiles():
+        shutil.copytree(
+            config.PROFILES_DIR / name, dst_profiles / name,
+            ignore=shutil.ignore_patterns("tts_cache",
+                                          *(() if include_env else (".env",))))
 
-    if include_env and config.ENV_PATH.exists():
-        shutil.copy2(config.ENV_PATH, repo / ".env")
-
-    # Tailored resumes (mirror the whole folder, dropping deletions).
-    dst_tailored = repo / "tailored"
-    if config.TAILORED_DIR.exists() and any(config.TAILORED_DIR.iterdir()):
-        if dst_tailored.exists():
-            shutil.rmtree(dst_tailored)
-        shutil.copytree(config.TAILORED_DIR, dst_tailored)
+    if config.ACTIVE_PROFILE_FILE.exists():
+        shutil.copy2(config.ACTIVE_PROFILE_FILE, repo / "active_profile")
+    if include_env and config.ROOT_ENV_PATH.exists():
+        shutil.copy2(config.ROOT_ENV_PATH, repo / ".env")
 
 
 def push_to_github(message: str | None = None, *, include_env: bool = True) -> str:
@@ -126,7 +129,8 @@ def push_to_github(message: str | None = None, *, include_env: bool = True) -> s
 
 def restore_from_github() -> list[str]:
     """Pull the latest backup and copy it back over the live data. Overwrites
-    the current DB / profile / pitch / resumes (and .env if present in backup)."""
+    every backed-up profile (and .env if present in the backup). Backups made
+    before multi-profile support restore into the currently active profile."""
     url = _remote_url()
     repo = config.GIT_BACKUP_DIR
     _ensure_repo(repo, url)
@@ -135,25 +139,39 @@ def restore_from_github() -> list[str]:
     _run(["reset", "--hard", "origin/main"], repo)
 
     restored: list[str] = []
-    mapping = {
-        config.DB_PATH.name: config.DB_PATH,
-        config.PROFILE_PATH.name: config.PROFILE_PATH,
-        config.PITCH_PATH.name: config.PITCH_PATH,
-        config.BUILT_RESUME_PATH.name: config.BUILT_RESUME_PATH,
-        ".env": config.ENV_PATH,
-    }
-    for name, target in mapping.items():
-        src = repo / name
-        if src.exists():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, target)
-            restored.append(name)
+    src_profiles = repo / "profiles"
 
-    src_tailored = repo / "tailored"
-    if src_tailored.is_dir():
-        config.TAILORED_DIR.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src_tailored, config.TAILORED_DIR, dirs_exist_ok=True)
-        restored.append("tailored/")
+    if src_profiles.is_dir():
+        for pdir in sorted(p for p in src_profiles.iterdir() if p.is_dir()):
+            shutil.copytree(pdir, config.PROFILES_DIR / pdir.name,
+                            dirs_exist_ok=True)
+            restored.append(f"profiles/{pdir.name}/")
+        if (repo / "active_profile").exists():
+            shutil.copy2(repo / "active_profile", config.ACTIVE_PROFILE_FILE)
+            restored.append("active_profile")
+        if (repo / ".env").exists():
+            shutil.copy2(repo / ".env", config.ROOT_ENV_PATH)
+            restored.append(".env")
+    else:
+        # Legacy single-profile backup layout -> active profile.
+        mapping = {
+            config.DB_PATH.name: config.DB_PATH,
+            config.PROFILE_PATH.name: config.PROFILE_PATH,
+            config.PITCH_PATH.name: config.PITCH_PATH,
+            config.BUILT_RESUME_PATH.name: config.BUILT_RESUME_PATH,
+            ".env": config.ENV_PATH,
+        }
+        for name, target in mapping.items():
+            src = repo / name
+            if src.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, target)
+                restored.append(name)
+        src_tailored = repo / "tailored"
+        if src_tailored.is_dir():
+            config.TAILORED_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src_tailored, config.TAILORED_DIR, dirs_exist_ok=True)
+            restored.append("tailored/")
 
     config.reload()
     return restored
