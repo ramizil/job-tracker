@@ -41,7 +41,7 @@
 </div>
 
 <table id="apps-table" class="grid">
-  <thead><tr><th>#</th><th>Status</th><th>Match</th><th>AI</th><th>Company</th><th>Title</th><th>Location</th><th>Source</th><th>Applied</th></tr></thead>
+  <thead><tr><th data-sort="desc" class="sorted-desc">#</th><th>Status</th><th>Match</th><th>AI</th><th>Company</th><th>Title</th><th>Location</th><th>Source</th><th>Applied</th></tr></thead>
   <tbody>
     {% for r in rows %}
     <tr onclick="location.href='{{ url_for('main.detail', app_id=r.id) }}'">

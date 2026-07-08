@@ -477,8 +477,9 @@ def dashboard():
 @bp.route("/applications")
 def applications():
     status = request.args.get("status") or None
-    rows = tracker.list_applications(status=status,
-                                     order_by="starred DESC, updated_at DESC")
+    # Default order = row number descending (newest application on top),
+    # matching the '#' column; click a column header to re-sort client-side.
+    rows = tracker.list_applications(status=status, order_by="id DESC")
     # Gap-free display numbers in creation order (oldest = 1), stable across
     # deletes, filters and sorting — computed over ALL applications so a job
     # keeps the same number on filtered views too.
