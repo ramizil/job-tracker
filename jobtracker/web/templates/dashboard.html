@@ -26,11 +26,12 @@
 
 <section class="cards">
   <div class="metric"><span class="num">{{ totals.total }}</span><span class="lbl">Tracked</span></div>
-  <div class="metric"><span class="num">{{ totals.applied_or_beyond }}</span><span class="lbl">Applied+</span></div>
+  <div class="metric" title="Applications actually submitted (excludes saved-only and withdrawn jobs)"><span class="num">{{ totals.applied_or_beyond }}</span><span class="lbl">Applied+</span></div>
   <div class="metric"><span class="num">{{ totals.active }}</span><span class="lbl">Active</span></div>
   <div class="metric"><span class="num">{{ totals.interviews_reached }}</span><span class="lbl">Interviews</span></div>
   <div class="metric"><span class="num">{{ totals.response_rate_pct }}%</span><span class="lbl">Response rate</span></div>
   <div class="metric"><span class="num">{{ totals.interview_rate_pct }}%</span><span class="lbl">Interview rate</span></div>
+  <div class="metric" title="Rejected / applied applications"><span class="num">{{ totals.rejection_rate_pct }}%</span><span class="lbl">Rejection rate</span></div>
 </section>
 
 <div class="grid2">

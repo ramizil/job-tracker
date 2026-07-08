@@ -65,7 +65,9 @@ def funnel() -> dict[str, int]:
 def totals() -> dict[str, Any]:
     f = funnel()
     total = sum(f.values())
-    applied = sum(v for k, v in f.items() if k != "saved")
+    # "Applied+" = real applications: everything past "saved", except the ones
+    # the candidate withdrew (those weren't pursued, so they don't count).
+    applied = sum(v for k, v in f.items() if k not in ("saved", "withdrawn"))
     rejected = f.get("rejected", 0)
     interviews = f.get("interview", 0) + f.get("offer", 0) + f.get("accepted", 0)
     active = sum(v for k, v in f.items() if k in ACTIVE_STATUSES)
@@ -82,6 +84,7 @@ def totals() -> dict[str, Any]:
         "negative": negative,
         "response_rate_pct": round(responded / applied * 100, 1) if applied else 0.0,
         "interview_rate_pct": round(interviews / applied * 100, 1) if applied else 0.0,
+        "rejection_rate_pct": round(rejected / applied * 100, 1) if applied else 0.0,
     }
 
 

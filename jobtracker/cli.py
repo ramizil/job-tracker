@@ -382,6 +382,7 @@ def stats():
     kt.add_row("Reached interview+", str(t["interviews_reached"]))
     kt.add_row("Response rate", f"{t['response_rate_pct']}%")
     kt.add_row("Interview rate", f"{t['interview_rate_pct']}%")
+    kt.add_row("Rejection rate", f"{t['rejection_rate_pct']}%")
     console.print(kt)
 
     stage = analytics.rejection_by_stage()
