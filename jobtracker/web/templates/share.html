@@ -38,6 +38,7 @@
   ul{padding-left:20px;font-size:13.5px;}
   li{margin-bottom:5px;}
   .salary-range{font-size:21px;font-weight:800;margin:4px 0 8px;}
+  .pitch{white-space:pre-wrap;font-size:13.5px;unicode-bidi:plaintext;}
   .md p,.md ul,.md ol{margin-bottom:8px;font-size:13.5px;}
   .md h1,.md h2,.md h3{font-size:14px;margin:10px 0 4px;}
   .footer{color:var(--muted);font-size:12px;text-align:center;margin-top:8px;}
@@ -159,7 +160,19 @@
   </div>
   {% endif %}
 
-  {% if not analysis and not company_brief and not salary %}
+  {% if app.pitch %}
+  <div class="panel">
+    <h2>🎤 About-me pitch (תסריט)</h2>
+    {% if app.pitch_notes %}
+    <h3>AI suggestions for this job</h3>
+    <div class="md" dir="auto">{{ app.pitch_notes | md | safe }}</div>
+    {% endif %}
+    <h3>Script</h3>
+    <div class="pitch" dir="auto">{{ app.pitch }}</div>
+  </div>
+  {% endif %}
+
+  {% if not analysis and not company_brief and not salary and not app.pitch %}
   <div class="panel"><p class="muted">No AI insights have been generated for this
     application yet.</p></div>
   {% endif %}
