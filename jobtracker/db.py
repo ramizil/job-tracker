@@ -75,6 +75,8 @@ EXTRA_COLUMNS: dict[str, str] = {
     "interview_prep_at": "TEXT",
     "mock_interview": "TEXT",      # mock interview Q&A simulation (JSON)
     "mock_interview_at": "TEXT",
+    "qa_exercise": "TEXT",         # practice QA testing-scenario exercise (Markdown)
+    "qa_exercise_at": "TEXT",
     "pitch": "TEXT",               # per-job tailored about-me pitch (script text)
     "pitch_notes": "TEXT",         # latest AI tailoring suggestions for the pitch
     "pitch_at": "TEXT",

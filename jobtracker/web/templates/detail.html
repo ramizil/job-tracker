@@ -154,6 +154,8 @@
               <span><b>Interview &amp; test prep</b><br><span class="muted">likely questions + tips</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="mock">
               <span><b>Mock interview</b><br><span class="muted">listenable Q&amp;A simulation</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="exercise">
+              <span><b>QA exercise</b><br><span class="muted">practice testing-scenario task</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="pitch">
               <span><b>About-me pitch</b><br><span class="muted">tailor my interview script (תסריט)</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="company">
@@ -397,6 +399,47 @@
           </div>
           {% endfor %}
         </div>
+      {% endif %}
+    </section>
+
+    <section class="panel ai" id="exercise">
+      <div class="panel-head"><h2>🧪 QA exercise</h2>
+        {% if app.qa_exercise_at %}<span class="muted sm">saved {{ (app.qa_exercise_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">A hands-on testing-scenario exercise in this company's domain — business rules,
+        full test-case suite (Happy Path / Negative / Boundary / Edge) and data-driven automation
+        pseudo-code. Practice it like the real interview task.</p>
+      {% if not ai_on %}
+        <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
+      {% elif not app.qa_exercise %}
+        <p class="muted">Tick <b>QA exercise</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
+        <form method="post" action="{{ url_for('main.qa_exercise', app_id=app.id) }}" class="mt"
+              data-loading="Building a practice QA exercise for this job…">
+          <label class="lang">Language
+            <select name="language"><option value="he" selected>עברית</option><option value="en">English</option></select>
+          </label>
+          <button class="btn primary" type="submit">🧪 Generate exercise (AI)</button>
+        </form>
+      {% else %}
+        <div class="md mt" dir="auto">{{ app.qa_exercise | md | safe }}</div>
+        <form method="post" action="{{ url_for('main.qa_exercise', app_id=app.id) }}" class="mt"
+              data-loading="Building a fresh QA exercise for this job…"
+              onsubmit="return confirm('Generate a new exercise? The current one will be replaced.')">
+          <label class="lang">Language
+            <select name="language"><option value="he" selected>עברית</option><option value="en">English</option></select>
+          </label>
+          <button class="btn sm" type="submit">↻ New exercise</button>
+        </form>
+        <details class="mt">
+          <summary class="btn sm">Edit exercise</summary>
+          <form method="post" action="{{ url_for('main.qa_exercise_save', app_id=app.id) }}" class="stack mt">
+            <textarea name="text" rows="16" class="gen-text" dir="auto">{{ app.qa_exercise }}</textarea>
+            <div class="actions">
+              <button class="btn" type="submit">Save edits</button>
+              <button class="btn sm" type="button" data-copy="prev">Copy</button>
+            </div>
+          </form>
+        </details>
       {% endif %}
     </section>
 

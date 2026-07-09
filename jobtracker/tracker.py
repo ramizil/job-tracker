@@ -312,6 +312,16 @@ def set_mock_interview(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_qa_exercise(app_id: int, text: str) -> bool:
+    """Persist a (generated or edited) QA testing-scenario exercise (Markdown)."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET qa_exercise=?, qa_exercise_at=?, updated_at=? WHERE id=?",
+            (text, now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
 def set_pitch(app_id: int, script: str, notes: str | None = None) -> bool:
     """Persist the per-job about-me pitch. ``notes`` (AI suggestions) is only
     updated when provided, so hand-edits to the script keep the last notes."""

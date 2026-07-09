@@ -13,7 +13,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from . import config
+from . import config, question_bank
 
 
 class AIError(RuntimeError):
@@ -853,7 +853,7 @@ STYLE (very important):
   question back.
 
 Write everything in {lang} (natural, native-sounding {lang}).
-
+{bank}
 Return ONLY valid JSON with EXACTLY this shape:
 {{
   "qa": [
@@ -873,15 +873,39 @@ CANDIDATE RESUME (plain text):
 """
 
 
+def _mock_interview_bank_block(language: str) -> str:
+    """Prompt block injecting the curated Hebrew QA question bank (Hebrew only)."""
+    if (language or "").lower() != "he":
+        return ""
+    picks = question_bank.sample_interview_questions(10)
+    if not picks:
+        return ""
+    lines = "\n".join(
+        f"- {q['q']} (כיוון לתשובה: {q['a']})" for q in picks)
+    return f"""
+QUESTION BANK — real Israeli QA/automation interview questions (Hebrew):
+Weave 3-5 of these classic questions into the interview, picking the ones most
+relevant to THIS job, alongside your own role-specific questions. Keep their
+original Hebrew phrasing (light touch-ups allowed). Use the answer hints only
+as direction — the candidate's spoken answers must still be grounded in their
+actual resume.
+{lines}
+"""
+
+
 def mock_interview(*, title: str, company: str, location: str = "",
                    description: str = "", resume: str | None = None,
                    language: str = "en") -> dict[str, Any]:
     """Generate a natural mock-interview Q&A simulation grounded in the resume.
 
+    Hebrew simulations also draw on the bundled bank of classic Israeli QA
+    interview questions (see question_bank.py), so every run mixes real
+    interviewer favourites with job-specific questions.
     Returns {"language": "...", "qa": [{"q": ..., "a": ...}, ...]}.
     """
     prompt = _MOCK_INTERVIEW_PROMPT.format(
         lang=_lang_name(language),
+        bank=_mock_interview_bank_block(language),
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:7000],
         resume=(resume or resume_text())[:9000],
@@ -900,6 +924,70 @@ def mock_interview(*, title: str, company: str, location: str = "",
     if not clean:
         raise AIError("Gemini didn't return any interview questions. Please try again.")
     return {"language": (language or "en").lower(), "qa": clean}
+
+
+# --------------------------------------------------------------------------- #
+_QA_EXERCISE_PROMPT = """You are a senior QA/automation interviewer. Create ONE
+realistic hands-on interview exercise ("testing scenario question") tailored to
+the JOB below — the kind of practical task this company would actually give in
+a technical QA interview, set in THEIR domain and tech stack.
+
+Follow EXACTLY the structure, depth and spirit of the EXAMPLE EXERCISE below
+(it is the gold standard). Your exercise must include, in this order:
+
+1. 📋 Problem definition: a short realistic system description for the
+   company's domain, plus 2-4 concrete business rules (with real numbers,
+   ranges and at least one timing/de-noising subtlety).
+2. 🎯 The interview task: part A — test design (ask for the right black-box
+   methodology + a full test-case suite: Happy Path, Negative Path, Boundary
+   Value Analysis, Edge/System cases); part B — automation design (data-driven
+   pseudo-code in a Playwright/Pytest style with clear layer separation).
+3. The FULL model solution: the categorised test cases with expected results
+   (boundary values spelled out exactly), a "golden tip" sentence the candidate
+   can say to impress the interviewer, and the data-driven pseudo-code with a
+   simulator/API abstraction — code identifiers in English, comments may follow
+   the output language.
+4. A short closing note on WHY this solution impresses interviewers.
+
+Ground the scenario in the job description's domain; if it is too vague,
+invent a plausible system for that company. Do NOT copy the example's fleet
+scenario — create a NEW one. Write everything in {lang} (natural, native
+{lang}); keep standard QA terms (Happy Path, BVA, etc.) in English. Output
+Markdown only (## headings, bullet lists, one ```python code block), no
+preamble.
+
+EXAMPLE EXERCISE (structure + quality bar to imitate):
+{example}
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+"""
+
+
+def qa_exercise(*, title: str, company: str, location: str = "",
+                description: str = "", language: str = "he") -> str:
+    """Generate a practical QA testing-scenario exercise for this job (Markdown).
+
+    Modeled on the bundled worked example (rule-based alerting system) so the
+    output always has the full test-design + data-driven automation structure.
+    """
+    example = question_bank.load_exercise_example()
+    prompt = _QA_EXERCISE_PROMPT.format(
+        lang=_lang_name(language),
+        example=example[:9000],
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:7000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```(?:markdown|md)?\s*\n", "", text)
+    text = re.sub(r"\n```$", "", text)
+    if not text:
+        raise AIError("The AI returned an empty exercise. Please try again.")
+    return text
 
 
 # --------------------------------------------------------------------------- #

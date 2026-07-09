@@ -1107,6 +1107,34 @@ def mock_interview(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id) + "#mock")
 
 
+@bp.route("/application/<int:app_id>/qa-exercise", methods=["POST"])
+def qa_exercise(app_id: int):
+    """Generate a practice QA testing-scenario exercise tailored to this job."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    language = request.form.get("language", "he")
+    try:
+        text = ai.qa_exercise(
+            title=r["title"], company=r["company"], location=r["location"] or "",
+            description=r["description"] or "", language=language,
+        )
+        tracker.set_qa_exercise(app_id, text)
+        flash("QA exercise generated.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#exercise")
+
+
+@bp.route("/application/<int:app_id>/qa-exercise/save", methods=["POST"])
+def qa_exercise_save(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    tracker.set_qa_exercise(app_id, request.form.get("text", ""))
+    flash("QA exercise saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#exercise")
+
+
 # Items the one-click "Generate with AI" panel can produce, in display order.
 _BATCH_ITEMS = {
     "analyze": "fit analysis",
@@ -1114,6 +1142,7 @@ _BATCH_ITEMS = {
     "note": "recruiter note",
     "prep": "interview prep",
     "mock": "mock interview",
+    "exercise": "QA exercise",
     "pitch": "about-me pitch",
     "company": "company research",
     "salary": "salary research",
@@ -1154,6 +1183,10 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
             title=title, company=company, location=location,
             description=description, language=language)
         tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
+    elif key == "exercise":
+        tracker.set_qa_exercise(app_id, ai.qa_exercise(
+            title=title, company=company, location=location,
+            description=description, language=language))
     elif key == "pitch":
         base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
         res = ai.tailor_pitch(
