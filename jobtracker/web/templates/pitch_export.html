@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="{{ 'he' if rtl else 'en' }}" dir="{{ 'rtl' if rtl else 'ltr' }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ title }}</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
+    --accent:#1a5276; --accent2:#2563eb; --line:#e5e7eb; --chip:#eef2ff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:linear-gradient(160deg,#eef2f7,#dbe4f0);
+    font-family:'Segoe UI','Arial',sans-serif; color:var(--ink);
+    line-height:1.7; padding:32px 16px;
+    {% if rtl %}direction:rtl; text-align:right;{% endif %}
+  }
+  .wrap{max-width:860px; margin:0 auto;}
+  header{
+    background:linear-gradient(135deg,#1a5276,#2563eb); color:#fff;
+    border-radius:18px; padding:28px 32px; box-shadow:0 12px 30px rgba(30,64,120,.25);
+  }
+  header h1{margin:0 0 6px; font-size:26px;}
+  header p{margin:0; opacity:.92; font-size:15px;}
+  .card{
+    background:var(--card); border-radius:16px; padding:22px 28px; margin-top:20px;
+    box-shadow:0 6px 20px rgba(15,23,42,.06); border:1px solid var(--line);
+  }
+  h2{
+    font-size:21px; color:var(--accent); margin:4px 0 14px;
+    border-bottom:2px solid var(--line); padding-bottom:8px;
+  }
+  h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; background:var(--accent2);
+    color:#fff; font-size:14px; vertical-align:middle;
+    {% if rtl %}margin-left:8px;{% else %}margin-right:8px;{% endif %}
+  }
+  p{margin:8px 0;}
+  ul{margin:8px 0; padding-inline-start:22px; list-style:none;}
+  li{margin:8px 0;}
+  li .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:24px; height:24px; border-radius:50%; background:var(--accent2);
+    color:#fff; font-size:13px; font-weight:700; vertical-align:middle;
+    {% if rtl %}margin-left:8px;{% else %}margin-right:8px;{% endif %}
+  }
+  .quote{background:#f8fafc; border-radius:10px; padding:2px 16px; border:1px solid var(--line);}
+  strong{color:#0f2f4a;}
+  footer{text-align:center; color:var(--muted); font-size:13px; margin:26px 0 4px;}
+  @media print{
+    body{background:#fff; padding:0;}
+    .card,header{box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>{{ title }}</h1>
+  </header>
+
+  {% for s in sections %}
+  <section class="card">
+    {% if s.heading %}<h2>{% if s.num %}<span class="num">{{ s.num }}</span>{% endif %}{{ s.heading }}</h2>{% endif %}
+    {% for b in s.blocks %}
+    {% if b.kind == 'list' %}
+    <ul>
+      {% for text in b['items'] %}
+      <li><span class="num">{{ loop.index }}</span>{{ text }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="quote">
+      {% for text in b.paras %}
+      <p>{{ text }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <footer>Job Tracker · My Pitch · {{ generated }} · ניתן להדפיס ל־PDF ישירות מהדפדפן (Ctrl/Cmd+P)</footer>
+
+</div>
+</body>
+</html>

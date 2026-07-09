@@ -130,33 +130,52 @@ def _find_browser() -> str | None:
 
 def _render_pdf_with_browser(html: str) -> bytes | None:
     """Render HTML to a pixel-perfect PDF using the local browser in headless
-    mode (same engine as the Print button). Returns None if unavailable."""
+    mode (same engine as the Print button). Returns None if unavailable.
+
+    Recent Chrome versions write the PDF within seconds but the process can
+    stay alive indefinitely (background updater services), so we poll for the
+    output file instead of waiting for the browser to exit — then kill it.
+    """
     browser = _find_browser()
     if not browser:
         return None
     tmp = tempfile.mkdtemp(prefix="jt-pdf-")
-    src = os.path.join(tmp, "resume.html")
-    pdf = os.path.join(tmp, "resume.pdf")
+    src = os.path.join(tmp, "doc.html")
+    pdf = os.path.join(tmp, "doc.pdf")
     profile = os.path.join(tmp, "prof")
     try:
         with open(src, "w", encoding="utf-8") as f:
             f.write(html)
         url = "file:///" + src.replace("\\", "/")
-        base = [
-            browser, "--disable-gpu", "--no-sandbox", "--no-first-run",
+        args = [
+            "--disable-gpu", "--no-sandbox", "--no-first-run",
             "--no-pdf-header-footer", f"--user-data-dir={profile}",
             f"--print-to-pdf={pdf}", url,
         ]
         for headless in ("--headless=new", "--headless"):
             try:
-                subprocess.run([browser, headless, *base[1:]], timeout=60,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               check=False)
+                proc = subprocess.Popen(
+                    [browser, headless, *args],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 continue
-            if os.path.exists(pdf) and os.path.getsize(pdf) > 0:
-                with open(pdf, "rb") as f:
-                    return f.read()
+            try:
+                deadline = time.monotonic() + 45
+                while time.monotonic() < deadline:
+                    if os.path.exists(pdf) and os.path.getsize(pdf) > 0:
+                        # Wait until the file stops growing (fully flushed).
+                        size = -1
+                        while size != os.path.getsize(pdf):
+                            size = os.path.getsize(pdf)
+                            time.sleep(0.3)
+                        with open(pdf, "rb") as f:
+                            return f.read()
+                    if proc.poll() is not None:  # browser exited without a PDF
+                        break
+                    time.sleep(0.3)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
         return None
     except Exception:
         return None
@@ -439,7 +458,7 @@ def my_pitch():
         flash("Pitch saved.", "ok")
         return redirect(url_for("main.my_pitch"))
     return render_template("pitch.html", pitch_text=pitch.load_base_pitch(),
-                           ai_on=ai.is_configured())
+                           ai_on=ai.is_configured(), has_draft=pitch.has_draft())
 
 
 @bp.route("/pitch/draft", methods=["POST"])
@@ -450,6 +469,178 @@ def my_pitch_draft():
         flash("Drafted a new pitch from your resume.", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
+    return redirect(url_for("main.my_pitch"))
+
+
+def _pitch_sections(text: str) -> tuple[str, list[dict]]:
+    """Parse the free-text pitch into (title, sections) for the styled export.
+
+    Heuristic: the first non-empty line is the document title; a short line
+    with no sentence-ending punctuation starts a new section (card); numbered
+    lines become list items; everything else is a spoken paragraph. Each
+    section's body is a list of blocks: {"kind": "list", "items": [...]} or
+    {"kind": "quote", "paras": [...]} — consecutive lines of the same type
+    are grouped so the export reads like the styled reference document.
+    """
+    title = ""
+    sections: list[dict] = []
+    cur: dict | None = None
+
+    def _new_section(heading: str = "", num: str = "") -> dict:
+        s = {"heading": heading, "num": num, "blocks": []}
+        sections.append(s)
+        return s
+
+    def _block(kind: str) -> dict:
+        nonlocal cur
+        cur = cur or _new_section()
+        if not cur["blocks"] or cur["blocks"][-1]["kind"] != kind:
+            cur["blocks"].append(
+                {"kind": kind, "items": []} if kind == "list"
+                else {"kind": kind, "paras": []})
+        return cur["blocks"][-1]
+
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if not title:
+            title = line
+            continue
+        m = re.match(r"^\d+[.)]\s+(.*)", line)
+        if m:
+            _block("list")["items"].append(m.group(1))
+            continue
+        m = re.match(r"^[-*•]\s+(.*)", line)
+        if m:
+            _block("list")["items"].append(m.group(1))
+            continue
+        looks_heading = (
+            len(line) <= 60
+            and line[-1] not in '.?!,;:"\'”'
+            and not line.startswith(('"', '”', '„')))
+        if looks_heading:
+            # "1הפתיח…" / "2 העבודה…" -> numbered station heading (circle badge)
+            m = re.match(r"^(\d+)\s*[.)]?\s*(\S.*)", line)
+            if m and not m.group(2)[0].isdigit():
+                cur = _new_section(m.group(2), num=m.group(1))
+            else:
+                cur = _new_section(line)
+        else:
+            _block("quote")["paras"].append(line)
+    return title, sections
+
+
+def _render_pitch_export() -> tuple[str, str]:
+    """Render the standalone styled pitch document. Returns (html, title)."""
+    text = pitch.load_base_pitch()
+    title, sections = _pitch_sections(text)
+    rtl = bool(re.search(r"[\u0590-\u05FF]", text))
+    html = render_template(
+        "pitch_export.html", title=title or "My Pitch", sections=sections,
+        rtl=rtl, generated=datetime.now().strftime("%Y-%m-%d %H:%M"))
+    return html, title
+
+
+@bp.route("/pitch/export.html")
+def pitch_export_html():
+    """Download the pitch as a standalone, nicely styled HTML document."""
+    html, _ = _render_pitch_export()
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Content-Disposition"] = "attachment; filename=my-pitch.html"
+    return resp
+
+
+@bp.route("/pitch/export.pdf")
+def pitch_export_pdf():
+    """Download the pitch as a PDF (rendered by the local browser engine)."""
+    import io
+    html, _ = _render_pitch_export()
+    pdf = _render_pdf_with_browser(html)
+    if not pdf:
+        flash("No local Chrome/Edge found for PDF rendering — export the HTML "
+              "instead and print it to PDF from your browser (Cmd/Ctrl+P).",
+              "error")
+        return redirect(url_for("main.my_pitch"))
+    return send_file(io.BytesIO(pdf), mimetype="application/pdf",
+                     as_attachment=True, download_name="my-pitch.pdf")
+
+
+@bp.route("/pitch/revise", methods=["POST"])
+def pitch_revise():
+    """AI-rewrite the base pitch per a free-text instruction -> pending draft."""
+    instruction = request.form.get("instruction", "").strip()
+    try:
+        draft = ai.revise_pitch(base_pitch=pitch.load_base_pitch(),
+                                instruction=instruction)
+        pitch.save_draft(draft)
+        return redirect(url_for("main.pitch_compare"))
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.my_pitch"))
+
+
+def _diff_sides(old: str, new: str) -> tuple[str, str]:
+    """Word-level diff -> two HTML strings: old with <del>, new with <ins>."""
+    import difflib
+
+    def tokens(s: str) -> list[str]:
+        return re.findall(r"\S+|\s+", s or "")
+
+    a, b = tokens(old), tokens(new)
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    left: list[str] = []
+    right: list[str] = []
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        seg_a = html_lib.escape("".join(a[i1:i2]))
+        seg_b = html_lib.escape("".join(b[j1:j2]))
+        if op == "equal":
+            left.append(seg_a)
+            right.append(seg_b)
+        else:
+            if seg_a.strip():
+                left.append(f"<del>{seg_a}</del>")
+            else:
+                left.append(seg_a)
+            if seg_b.strip():
+                right.append(f"<ins>{seg_b}</ins>")
+            else:
+                right.append(seg_b)
+    return "".join(left), "".join(right)
+
+
+@bp.route("/pitch/compare")
+def pitch_compare():
+    """Side-by-side current pitch vs pending AI revision, differences marked."""
+    draft = pitch.load_draft()
+    if not draft.strip():
+        flash("No pending AI revision to compare — generate one first.", "error")
+        return redirect(url_for("main.my_pitch"))
+    current = pitch.load_base_pitch()
+    old_html, new_html = _diff_sides(current, draft)
+    return render_template("pitch_compare.html",
+                           old_html=old_html, new_html=new_html)
+
+
+@bp.route("/pitch/draft/apply", methods=["POST"])
+def pitch_draft_apply():
+    """Accept the pending AI revision: it becomes the base pitch."""
+    draft = pitch.load_draft()
+    if draft.strip():
+        pitch.save_base_pitch(draft)
+        pitch.clear_draft()
+        flash("AI revision applied — it is now your pitch.", "ok")
+    else:
+        flash("No pending AI revision to apply.", "error")
+    return redirect(url_for("main.my_pitch"))
+
+
+@bp.route("/pitch/draft/discard", methods=["POST"])
+def pitch_draft_discard():
+    """Throw away the pending AI revision; the original pitch stays."""
+    pitch.clear_draft()
+    flash("AI revision discarded — your pitch is unchanged.", "ok")
     return redirect(url_for("main.my_pitch"))
 
 

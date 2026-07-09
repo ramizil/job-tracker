@@ -5,6 +5,12 @@
 <p class="sub">Your personal "about me" interview script — edit it, listen to it, and memorize it.
   Tailor it per job from each application's page.</p>
 
+{% if has_draft %}
+<div class="flash ok">✨ You have a pending AI revision of your pitch —
+  <a href="{{ url_for('main.pitch_compare') }}"><b>compare it side-by-side</b></a>
+  and accept or discard it.</div>
+{% endif %}
+
 <section class="panel">
   <div class="tts-player mi-player" data-lang="he-IL" data-target="#pitch-text">
     <button class="btn sm primary" type="button" data-tts="play">▶ Listen</button>
@@ -21,6 +27,8 @@
     <div class="actions">
       <button class="btn primary" type="submit">Save</button>
       <button class="btn sm" type="button" data-copy="prev">Copy</button>
+      <a class="btn sm" href="{{ url_for('main.pitch_export_html') }}">⬇ Export HTML</a>
+      <a class="btn sm" href="{{ url_for('main.pitch_export_pdf') }}">⬇ Export PDF</a>
     </div>
   </form>
 
@@ -32,6 +40,27 @@
   </form>
   {% endif %}
 </section>
+
+{% if ai_on %}
+<section class="panel">
+  <h2>🪄 Improve with AI</h2>
+  <p class="muted sm">Tell the AI what to change (e.g. “make station 3 shorter”,
+    “add a sentence about my Playwright experience”, “make the closing more confident”).
+    You'll review the result <b>side-by-side with differences highlighted</b> before
+    anything replaces your current pitch.</p>
+  <form method="post" action="{{ url_for('main.pitch_revise') }}" class="stack"
+        data-loading="Rewriting your pitch per your instruction…">
+    <textarea name="instruction" rows="3" dir="auto"
+              placeholder="What should the AI change in your pitch?" required></textarea>
+    <div class="actions">
+      <button class="btn primary" type="submit">✨ Regenerate with AI</button>
+      {% if has_draft %}
+      <a class="btn sm" href="{{ url_for('main.pitch_compare') }}">🆚 Review pending revision</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

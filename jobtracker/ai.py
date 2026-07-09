@@ -938,6 +938,49 @@ def pitch_from_resume(*, resume: str | None = None, language: str = "he") -> str
     return text
 
 
+_PITCH_REVISE_PROMPT = """You are an interview coach. The candidate has a
+personal "about me" spoken pitch — a memorized interview script. Revise it
+according to the INSTRUCTION below. Rules:
+
+- Apply ONLY what the instruction asks for; keep everything else as close to
+  the original wording as possible (the candidate has memorized it).
+- Keep the same overall structure ("stations") and the SAME LANGUAGE as the
+  original pitch, unless the instruction explicitly says otherwise.
+- Keep it natural to say aloud, and ground every claim ONLY in the original
+  pitch and the resume — invent nothing.
+- Output the FULL revised pitch as plain text. No markdown fences, no
+  commentary, no explanations — just the pitch itself.
+
+INSTRUCTION:
+{instruction}
+
+CURRENT PITCH:
+{base_pitch}
+
+CANDIDATE RESUME (for grounding only):
+{resume}
+"""
+
+
+def revise_pitch(*, base_pitch: str, instruction: str,
+                 resume: str | None = None) -> str:
+    """Rewrite the base pitch per a free-text instruction (returns plain text)."""
+    instruction = (instruction or "").strip()
+    if not instruction:
+        raise AIError("Write an instruction first (what should change in the pitch?).")
+    prompt = _PITCH_REVISE_PROMPT.format(
+        instruction=instruction[:2000],
+        base_pitch=(base_pitch or "")[:9000],
+        resume=(resume or resume_text())[:7000],
+    )
+    text = _generate(prompt, as_json=False).strip()
+    text = re.sub(r"^```\w*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    if not text:
+        raise AIError("The AI returned an empty revision. Please try again.")
+    return text
+
+
 _PITCH_TAILOR_PROMPT = """You are an interview coach. The candidate has a
 personal "about me" pitch — a memorized spoken introduction, structured in
 "stations". The candidate has already memorized it, so:

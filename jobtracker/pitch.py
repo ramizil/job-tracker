@@ -54,3 +54,31 @@ def load_base_pitch() -> str:
 
 def save_base_pitch(text: str) -> None:
     config.PITCH_PATH.write_text(text or "", encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
+# AI-revision draft: a pending rewrite of the base pitch, kept in its own file
+# so the user can review it side-by-side (with diff highlighting) before it
+# replaces the memorized original.
+
+def _draft_path():
+    return config.PITCH_PATH.with_name("pitch_draft.md")
+
+
+def load_draft() -> str:
+    try:
+        return _draft_path().read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def save_draft(text: str) -> None:
+    _draft_path().write_text(text or "", encoding="utf-8")
+
+
+def clear_draft() -> None:
+    _draft_path().unlink(missing_ok=True)
+
+
+def has_draft() -> bool:
+    return bool(load_draft().strip())

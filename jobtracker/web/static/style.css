@@ -415,6 +415,17 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .star-btn.on{color:#f5b301}
 .star-btn:hover{color:#f5b301;transform:scale(1.2)}
 
+/* Pitch: side-by-side AI-revision compare with diff highlighting */
+.diff-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+@media (max-width:900px){.diff-cols{grid-template-columns:1fr}}
+.diff-pane{min-width:0}
+.diff-text{white-space:pre-wrap;font-size:13.5px;line-height:1.7;unicode-bidi:plaintext}
+.diff-text del,.diff-key del{background:rgba(251,113,133,.22);color:#ffc0c8;
+  text-decoration:line-through;text-decoration-color:rgba(251,113,133,.6);
+  border-radius:3px;padding:0 1px}
+.diff-text ins,.diff-key ins{background:rgba(52,211,153,.2);color:#9af3c4;
+  text-decoration:none;border-radius:3px;padding:0 1px}
+
 /* Profiles: topbar switcher + management table (Settings) */
 .profile-switch{display:inline-flex;margin:0}
 .profile-switch select{
