@@ -13,6 +13,15 @@
   · <a href="#company">🔎 company insight</a>
   · <a href="{{ url_for('main.share', app_id=app.id) }}" title="Download the AI insights as a standalone HTML page you can email">📤 export analysis (HTML)</a></p>
 
+<nav class="tabbar" id="detail-tabs">
+  <button type="button" class="tab-btn active" data-tab="overview">📋 Overview</button>
+  <button type="button" class="tab-btn" data-tab="analysis">🤖 AI analysis</button>
+  <button type="button" class="tab-btn" data-tab="research">🏢 Company &amp; salary</button>
+  <button type="button" class="tab-btn" data-tab="outreach">✉️ Outreach</button>
+  <button type="button" class="tab-btn" data-tab="interview">🎓 Interview prep</button>
+</nav>
+
+<div class="tab-page active" id="tab-overview">
 <div class="grid2">
   <div>
     <section class="panel">
@@ -45,14 +54,6 @@
     <section class="panel"><h2>Job description</h2><pre class="jd">{{ app.description }}</pre></section>
     {% endif %}
 
-    <section class="panel">
-      <h2>History</h2>
-      <table class="mini"><tbody>
-        {% for h in history %}
-        <tr><td>{{ (h.changed_at or '')[:19] }}</td><td>{{ h.old_status or '—' }} → {{ h.new_status }}</td><td>{{ h.note }}</td></tr>
-        {% endfor %}
-      </tbody></table>
-    </section>
   </div>
 
   <div>
@@ -73,6 +74,19 @@
       </div>
     </section>
 
+    <section class="panel">
+      <h2>History</h2>
+      <table class="mini"><tbody>
+        {% for h in history %}
+        <tr><td>{{ (h.changed_at or '')[:19] }}</td><td>{{ h.old_status or '—' }} → {{ h.new_status }}</td><td>{{ h.note }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </section>
+  </div>
+</div>
+</div>
+
+<div class="tab-page" id="tab-research">
     <section class="panel ai" id="company">
       <div class="panel-head"><h2>🔎 Company insight</h2>
         {% if app.company_brief_at %}<span class="muted sm">researched {{ (app.company_brief_at or '')[:16].replace('T',' ') }}</span>{% endif %}
@@ -135,58 +149,9 @@
         </form>
       {% endif %}
     </section>
+</div>
 
-    <section class="panel ai" id="ats">
-      <div class="panel-head"><h2>🎯 ATS keyword check</h2>
-        {% if app.ats_check_at %}<span class="muted sm">checked {{ (app.ats_check_at or '')[:16].replace('T',' ') }}</span>{% endif %}
-      </div>
-      <p class="muted">Simulates the <b>Applicant Tracking System</b> screen recruiters run: which
-        keywords from this job description an ATS would look for, and which are <b>missing from your
-        resume</b> — fix them before applying.</p>
-      {% if not ai_on %}
-        <p class="muted">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
-      {% else %}
-        {% if ats %}
-        <div class="verdict">
-          <span class="fit big fit-{{ 'yes' if ats.ats_score >= 70 else ('maybe' if ats.ats_score >= 45 else 'no') }}">{{ ats.ats_score }}%</span>
-          <div style="flex:1">
-            {% if ats.summary_he %}
-            <div class="bi"><span dir="ltr">{{ ats.summary }}</span><span class="he">{{ ats.summary_he }}</span></div>
-            {% else %}
-            <span dir="auto">{{ ats.summary }}</span>
-            {% endif %}
-          </div>
-        </div>
-        <table class="mini reqs ats-table"><tbody>
-          {% for k in ats.keywords %}
-          <tr>
-            <td class="m-{{ 'strong' if k.in_resume else 'gap' }}">{{ '✓ found' if k.in_resume else '✗ missing' }}</td>
-            <td><b dir="auto">{{ k.keyword }}</b>{% if k.importance == 'must' %} <span class="pill must">must</span>{% endif %}</td>
-            <td>
-              {% if k.in_resume and k.evidence %}<span class="muted" dir="auto">{{ k.evidence }}</span>
-              {% elif k.fix %}
-                {% if k.fix_he %}<div class="bi"><span dir="ltr">{{ k.fix }}</span><span class="he">{{ k.fix_he }}</span></div>
-                {% else %}<span dir="auto">{{ k.fix }}</span>{% endif %}
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody></table>
-        {% if ats.tips %}
-        <h3>Tips</h3>
-        <ul class="risks">
-          {% for t in ats.tips %}
-          <li>{% if t.he %}<div class="bi"><span dir="ltr">{{ t.en }}</span><span class="he">{{ t.he }}</span></div>{% else %}<span dir="auto">{{ t.en }}</span>{% endif %}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-        {% endif %}
-        <form method="post" action="{{ url_for('main.ats_check', app_id=app.id) }}" data-loading="Screening your resume against this job's ATS keywords…" class="mt">
-          <button class="btn primary" type="submit">{{ 'Re-run ATS check' if ats else '🎯 Run ATS keyword check (AI)' }}</button>
-        </form>
-      {% endif %}
-    </section>
-
+<div class="tab-page" id="tab-analysis">
     <section class="panel ai" id="ai-generate">
       <div class="panel-head"><h2>🤖 Generate with AI</h2></div>
       {% if not ai_on %}
@@ -197,6 +162,8 @@
           <div class="gen-picks">
             <label class="gen-pick"><input type="checkbox" name="items" value="analyze" checked>
               <span><b>Fit analysis</b><br><span class="muted">how well your resume matches this job</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="resume">
+              <span><b>Tailored resume</b><br><span class="muted">rewrite your CV for this job (applies fit-analysis fixes)</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="cover">
               <span><b>Cover letter</b><br><span class="muted">tailored to the role</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="note">
@@ -229,7 +196,7 @@
       {% endif %}
     </section>
 
-    <section class="panel ai">
+    <section class="panel ai" id="analysis">
       <div class="panel-head"><h2>🤖 AI fit analysis</h2></div>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> to <code>.env</code> to enable AI analysis.</p>
@@ -332,6 +299,59 @@
       {% endif %}
     </section>
 
+    <section class="panel ai" id="ats">
+      <div class="panel-head"><h2>🎯 ATS keyword check</h2>
+        {% if app.ats_check_at %}<span class="muted sm">checked {{ (app.ats_check_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">Simulates the <b>Applicant Tracking System</b> screen recruiters run: which
+        keywords from this job description an ATS would look for, and which are <b>missing from your
+        resume</b> — fix them before applying.</p>
+      {% if not ai_on %}
+        <p class="muted">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
+      {% else %}
+        {% if ats %}
+        <div class="verdict">
+          <span class="fit big fit-{{ 'yes' if ats.ats_score >= 70 else ('maybe' if ats.ats_score >= 45 else 'no') }}">{{ ats.ats_score }}%</span>
+          <div style="flex:1">
+            {% if ats.summary_he %}
+            <div class="bi"><span dir="ltr">{{ ats.summary }}</span><span class="he">{{ ats.summary_he }}</span></div>
+            {% else %}
+            <span dir="auto">{{ ats.summary }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <table class="mini reqs ats-table"><tbody>
+          {% for k in ats.keywords %}
+          <tr>
+            <td class="m-{{ 'strong' if k.in_resume else 'gap' }}">{{ '✓ found' if k.in_resume else '✗ missing' }}</td>
+            <td><b dir="auto">{{ k.keyword }}</b>{% if k.importance == 'must' %} <span class="pill must">must</span>{% endif %}</td>
+            <td>
+              {% if k.in_resume and k.evidence %}<span class="muted" dir="auto">{{ k.evidence }}</span>
+              {% elif k.fix %}
+                {% if k.fix_he %}<div class="bi"><span dir="ltr">{{ k.fix }}</span><span class="he">{{ k.fix_he }}</span></div>
+                {% else %}<span dir="auto">{{ k.fix }}</span>{% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody></table>
+        {% if ats.tips %}
+        <h3>Tips</h3>
+        <ul class="risks">
+          {% for t in ats.tips %}
+          <li>{% if t.he %}<div class="bi"><span dir="ltr">{{ t.en }}</span><span class="he">{{ t.he }}</span></div>{% else %}<span dir="auto">{{ t.en }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% endif %}
+        <form method="post" action="{{ url_for('main.ats_check', app_id=app.id) }}" data-loading="Screening your resume against this job's ATS keywords…" class="mt">
+          <button class="btn primary" type="submit">{{ 'Re-run ATS check' if ats else '🎯 Run ATS keyword check (AI)' }}</button>
+        </form>
+      {% endif %}
+    </section>
+</div>
+
+<div class="tab-page" id="tab-outreach">
     <section class="panel ai" id="cover">
       <div class="panel-head"><h2>✉️ Cover letter</h2>
         {% if app.cover_letter_at %}<span class="muted sm">saved {{ (app.cover_letter_at or '')[:16].replace('T',' ') }}</span>{% endif %}
@@ -403,7 +423,9 @@
         </form>
       {% endif %}
     </section>
+</div>
 
+<div class="tab-page" id="tab-interview">
     <section class="panel ai" id="prep">
       <div class="panel-head"><h2>🎤 Interview &amp; test prep</h2>
         {% if app.interview_prep_at %}<span class="muted sm">saved {{ (app.interview_prep_at or '')[:16].replace('T',' ') }}</span>{% endif %}
@@ -537,7 +559,6 @@
       </form>
       {% endif %}
     </section>
-  </div>
 </div>
 
 <form method="post" action="{{ url_for('main.delete', app_id=app.id) }}" onsubmit="return confirm('Delete this application?')">
@@ -546,6 +567,45 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Tab view: one tab visible at a time; #hash links (e.g. redirects back to
+// #salary or #pitch) open the tab containing that element and scroll to it.
+(function () {
+  var btns = document.querySelectorAll('#detail-tabs .tab-btn');
+  var pages = document.querySelectorAll('.tab-page');
+
+  function activate(name) {
+    Array.prototype.forEach.call(btns, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-tab') === name);
+    });
+    Array.prototype.forEach.call(pages, function (p) {
+      p.classList.toggle('active', p.id === 'tab-' + name);
+    });
+  }
+
+  function openForHash(hash, scroll) {
+    if (!hash || hash.length < 2) return false;
+    var el = document.getElementById(hash.slice(1));
+    if (!el) return false;
+    var page = el.closest('.tab-page');
+    if (!page) return false;
+    activate(page.id.replace('tab-', ''));
+    if (scroll && el !== page) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return true;
+  }
+
+  Array.prototype.forEach.call(btns, function (b) {
+    b.addEventListener('click', function () {
+      var name = b.getAttribute('data-tab');
+      activate(name);
+      history.replaceState(null, '', '#tab-' + name);
+    });
+  });
+  window.addEventListener('hashchange', function () { openForHash(location.hash, true); });
+  if (!openForHash(location.hash, true)) activate('overview');
+})();
+</script>
+
 <script>
   // "select all" toggle for the one-click Generate-with-AI panel.
   (function () {

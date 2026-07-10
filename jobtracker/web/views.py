@@ -816,10 +816,13 @@ def paste_job():
     if ai.is_configured() and f.get("autogen"):
         r = tracker.get_application(app_id)
         # (item-key, language) — order = what the user sees populate first.
-        # ("pitch" ignores the language hint: it is always tailored in Hebrew,
-        # keeping the base pitch verbatim + a job-specific closing station.)
-        plan = [("company", "en"), ("analyze", "en"), ("salary", "en"),
-                ("note", "en"), ("cover", "en"), ("pitch", "he")]
+        # "resume" runs right after "analyze" so the tailored resume applies the
+        # fresh fit-analysis suggestions. ("pitch" ignores the language hint: it
+        # is always tailored in Hebrew, keeping the base pitch verbatim + a
+        # job-specific closing station.)
+        plan = [("company", "en"), ("analyze", "en"), ("resume", "en"),
+                ("salary", "en"), ("note", "en"), ("cover", "en"),
+                ("pitch", "he")]
         done: list[str] = []
         failed: list[str] = []
         for idx, (key, lang) in enumerate(plan):
@@ -1147,6 +1150,7 @@ def qa_exercise_save(app_id: int):
 # Items the one-click "Generate with AI" panel can produce, in display order.
 _BATCH_ITEMS = {
     "analyze": "fit analysis",
+    "resume": "tailored resume",
     "cover": "cover letter",
     "note": "recruiter note",
     "prep": "interview prep",
@@ -1216,6 +1220,25 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
         tracker.set_ats_check(app_id, ai.ats_check(
             title=title, company=company, location=location,
             description=description))
+    elif key == "resume":
+        # Auto-apply the fit-analysis suggestions (when present) as the
+        # tailoring instructions — same as ticking them all on the form.
+        analysis = tracker.get_ai_analysis(app_id) or {}
+        instructions = "\n".join(
+            f"- [{s.get('target', 'general')}] {s.get('action', '')}"
+            for s in analysis.get("suggestions") or []
+            if isinstance(s, dict) and s.get("action"))
+        if not instructions:
+            instructions = "Tailor the resume to best match this job posting."
+        html = ai.tailor_resume(
+            title=title, company=company, description=description,
+            instructions=instructions)
+        if _tailored_path(app_id).exists():
+            # Don't overwrite silently — park as a draft for side-by-side review.
+            _tailored_draft_path(app_id).write_text(html, encoding="utf-8")
+        else:
+            _tailored_path(app_id).write_text(html, encoding="utf-8")
+            tracker.mark_tailored(app_id)
 
 
 @bp.route("/application/<int:app_id>/generate", methods=["POST"])

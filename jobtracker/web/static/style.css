@@ -415,6 +415,18 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .star-btn.on{color:#f5b301}
 .star-btn:hover{color:#f5b301;transform:scale(1.2)}
 
+/* Application detail: tab view */
+.tabbar{display:flex;gap:4px;flex-wrap:wrap;margin:16px 0 18px;border-bottom:1px solid var(--rule)}
+.tab-btn{background:none;border:none;color:var(--muted);font:inherit;font-size:13.5px;font-weight:600;
+  padding:9px 15px;cursor:pointer;border-radius:10px 10px 0 0;position:relative;transition:color .15s,background .15s}
+.tab-btn:hover{color:#fff;background:rgba(34,211,238,.07)}
+.tab-btn.active{color:#fff;background:rgba(30,41,64,.6)}
+.tab-btn.active::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:2px;
+  background:var(--grad);border-radius:2px}
+.tab-page{display:none}
+.tab-page.active{display:block;animation:tabin .18s ease}
+@keyframes tabin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
 /* ATS keyword check */
 .ats-table td:first-child{white-space:nowrap;font-size:12px}
 .pill.must{background:rgba(251,113,133,.16);color:#ffb3bd;border:1px solid rgba(251,113,133,.4);
