@@ -12,6 +12,12 @@
 </div>
 <p class="muted">Click straight into the resume on the left to edit the text, then <b>Save changes</b>. Or fine-tune it with Gemini on the right. Print gives the highest-fidelity PDF.</p>
 
+{% if has_draft %}
+<div class="flash ok">✨ You have a pending AI revision of this resume —
+  <a href="{{ url_for('main.resume_compare', app_id=app.id) }}"><b>compare it side-by-side</b></a>
+  and accept or discard it.</div>
+{% endif %}
+
 <div class="review">
   <div class="preview">
     <div class="rtoolbar">

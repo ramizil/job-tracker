@@ -402,6 +402,29 @@ def get_salary_research(app_id: int) -> dict[str, Any] | None:
         return None
 
 
+def set_ats_check(app_id: int, data: dict[str, Any]) -> bool:
+    """Persist the ATS keyword-screen result (stored as JSON)."""
+    import json
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET ats_check=?, ats_check_at=?, updated_at=? WHERE id=?",
+            (json.dumps(data, ensure_ascii=False), now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
+def get_ats_check(app_id: int) -> dict[str, Any] | None:
+    import json
+    row = get_application(app_id)
+    if not row or not row["ats_check"]:
+        return None
+    try:
+        data = json.loads(row["ats_check"])
+        return data if isinstance(data, dict) else None
+    except (TypeError, ValueError):
+        return None
+
+
 def mark_tailored(app_id: int) -> bool:
     with get_connection() as conn:
         cur = conn.execute(

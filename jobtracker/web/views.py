@@ -53,6 +53,11 @@ def _tailored_path(app_id: int):
     return config.TAILORED_DIR / f"{app_id}.html"
 
 
+def _tailored_draft_path(app_id: int):
+    """Pending AI regeneration of the tailored resume, awaiting review."""
+    return config.TAILORED_DIR / f"{app_id}.draft.html"
+
+
 def _readiness() -> dict:
     """Are the mandatory settings (a usable resume + a configured AI) in place?
 
@@ -697,9 +702,11 @@ def detail(app_id: int):
         analysis=analysis, mock=mock, statuses=STATUSES, stages=REJECTION_STAGES,
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
         has_tailored=_tailored_path(app_id).exists(),
+        has_resume_draft=_tailored_draft_path(app_id).exists(),
         base_pitch=pitch.load_base_pitch(),
         salary=tracker.get_salary_research(app_id),
         company_brief=tracker.get_company_brief(app_id),
+        ats=tracker.get_ats_check(app_id),
     )
 
 
@@ -828,7 +835,8 @@ def paste_job():
         if failed:
             flash("Failed: " + "; ".join(failed) + ".", "error")
 
-    return redirect(url_for("main.detail", app_id=app_id))
+    # Back to the applications list — the new capture appears as the top row.
+    return redirect(url_for("main.applications"))
 
 
 @bp.route("/application/<int:app_id>/star", methods=["POST"])
@@ -897,6 +905,7 @@ def note(app_id: int):
 def delete(app_id: int):
     tracker.delete_application(app_id)
     _tailored_path(app_id).unlink(missing_ok=True)
+    _tailored_draft_path(app_id).unlink(missing_ok=True)
     flash(f"Deleted #{app_id}.", "ok")
     return redirect(url_for("main.applications"))
 
@@ -1146,6 +1155,7 @@ _BATCH_ITEMS = {
     "pitch": "about-me pitch",
     "company": "company research",
     "salary": "salary research",
+    "ats": "ATS keyword check",
 }
 
 # Small pause between back-to-back AI calls so a burst of auto-gen requests
@@ -1202,6 +1212,10 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
         tracker.set_salary_research(app_id, ai.salary_research(
             title=title, company=company, location=location,
             description=description))
+    elif key == "ats":
+        tracker.set_ats_check(app_id, ai.ats_check(
+            title=title, company=company, location=location,
+            description=description))
 
 
 @bp.route("/application/<int:app_id>/generate", methods=["POST"])
@@ -1239,6 +1253,24 @@ def generate_batch(app_id: int):
     if failed:
         flash("Failed: " + "; ".join(failed) + ".", "error")
     return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/ats-check", methods=["POST"])
+def ats_check(app_id: int):
+    """Simulate an ATS keyword screen of the resume against this job."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    try:
+        data = ai.ats_check(
+            title=r["title"] or "", company=r["company"] or "",
+            location=r["location"] or "", description=r["description"] or "",
+        )
+        tracker.set_ats_check(app_id, data)
+        flash("ATS keyword check complete.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#ats")
 
 
 @bp.route("/application/<int:app_id>/salary", methods=["POST"])
@@ -1346,6 +1378,13 @@ def tailor(app_id: int):
             title=r["title"], company=r["company"],
             description=r["description"] or "", instructions=instructions,
         )
+        if _tailored_path(app_id).exists():
+            # A tailored resume already exists: park the new one as a pending
+            # draft so the user reviews the differences before it replaces it.
+            _tailored_draft_path(app_id).write_text(html, encoding="utf-8")
+            flash("New tailored resume generated — review the differences and "
+                  "accept or discard it.", "ok")
+            return redirect(url_for("main.resume_compare", app_id=app_id))
         _tailored_path(app_id).write_text(html, encoding="utf-8")
         tracker.mark_tailored(app_id)
         flash("Tailored resume generated.", "ok")
@@ -1361,7 +1400,8 @@ def resume_review(app_id: int):
     if not r or not _tailored_path(app_id).exists():
         abort(404)
     html = _tailored_path(app_id).read_text(encoding="utf-8")
-    return render_template("resume_review.html", app=r, tailored_html=html)
+    return render_template("resume_review.html", app=r, tailored_html=html,
+                           has_draft=_tailored_draft_path(app_id).exists())
 
 
 @bp.route("/application/<int:app_id>/resume/save", methods=["POST"])
@@ -1390,9 +1430,12 @@ def resume_refine(app_id: int):
             description=r["description"] or "", instructions=instructions,
             original_html=current,
         )
-        _tailored_path(app_id).write_text(html, encoding="utf-8")
-        tracker.mark_tailored(app_id)
-        flash("Resume refined with Gemini.", "ok")
+        # Never overwrite directly: park the refinement as a pending draft so
+        # the user sees exactly what changed before accepting it.
+        _tailored_draft_path(app_id).write_text(html, encoding="utf-8")
+        flash("Refined resume ready — review the differences and accept or "
+              "discard it.", "ok")
+        return redirect(url_for("main.resume_compare", app_id=app_id))
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.resume_review", app_id=app_id))
@@ -1405,6 +1448,68 @@ def resume_view(app_id: int):
         abort(404)
     return Response(_tailored_path(app_id).read_text(encoding="utf-8"),
                     mimetype="text/html")
+
+
+@bp.route("/application/<int:app_id>/resume/draft/view")
+def resume_draft_view(app_id: int):
+    """Raw pending-draft HTML (shown inside the compare iframe)."""
+    if not _tailored_draft_path(app_id).exists():
+        abort(404)
+    return Response(_tailored_draft_path(app_id).read_text(encoding="utf-8"),
+                    mimetype="text/html")
+
+
+def _html_visible_text(html: str) -> str:
+    """Visible text of an HTML resume, one block element per line (for diffing)."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html or "", "html.parser")
+    for tag in soup(["style", "script", "head"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n")
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in text.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
+
+
+@bp.route("/application/<int:app_id>/resume/compare")
+def resume_compare(app_id: int):
+    """Current tailored resume vs the pending AI regeneration, side by side."""
+    r = tracker.get_application(app_id)
+    if not r or not _tailored_draft_path(app_id).exists():
+        flash("No pending resume revision to compare — generate one first.", "error")
+        return redirect(url_for("main.detail", app_id=app_id))
+    if not _tailored_path(app_id).exists():
+        # Nothing to compare against — just promote the draft.
+        _tailored_draft_path(app_id).rename(_tailored_path(app_id))
+        tracker.mark_tailored(app_id)
+        return redirect(url_for("main.resume_review", app_id=app_id))
+    old_text = _html_visible_text(_tailored_path(app_id).read_text(encoding="utf-8"))
+    new_text = _html_visible_text(_tailored_draft_path(app_id).read_text(encoding="utf-8"))
+    old_html, new_html = _diff_sides(old_text, new_text)
+    return render_template("resume_compare.html", app=r,
+                           old_html=old_html, new_html=new_html)
+
+
+@bp.route("/application/<int:app_id>/resume/draft/apply", methods=["POST"])
+def resume_draft_apply(app_id: int):
+    """Accept the pending revision: it becomes the tailored resume."""
+    draft = _tailored_draft_path(app_id)
+    if not draft.exists():
+        flash("No pending resume revision to apply.", "error")
+        return redirect(url_for("main.detail", app_id=app_id))
+    _tailored_path(app_id).write_text(draft.read_text(encoding="utf-8"),
+                                      encoding="utf-8")
+    draft.unlink(missing_ok=True)
+    tracker.mark_tailored(app_id)
+    flash("Revision applied — it is now the tailored resume.", "ok")
+    return redirect(url_for("main.resume_review", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/resume/draft/discard", methods=["POST"])
+def resume_draft_discard(app_id: int):
+    """Throw away the pending revision; the current tailored resume stays."""
+    _tailored_draft_path(app_id).unlink(missing_ok=True)
+    flash("Revision discarded — the tailored resume is unchanged.", "ok")
+    return redirect(url_for("main.resume_review", app_id=app_id))
 
 
 @bp.route("/application/<int:app_id>/resume/pdf")

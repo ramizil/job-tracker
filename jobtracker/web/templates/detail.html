@@ -136,6 +136,57 @@
       {% endif %}
     </section>
 
+    <section class="panel ai" id="ats">
+      <div class="panel-head"><h2>🎯 ATS keyword check</h2>
+        {% if app.ats_check_at %}<span class="muted sm">checked {{ (app.ats_check_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">Simulates the <b>Applicant Tracking System</b> screen recruiters run: which
+        keywords from this job description an ATS would look for, and which are <b>missing from your
+        resume</b> — fix them before applying.</p>
+      {% if not ai_on %}
+        <p class="muted">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
+      {% else %}
+        {% if ats %}
+        <div class="verdict">
+          <span class="fit big fit-{{ 'yes' if ats.ats_score >= 70 else ('maybe' if ats.ats_score >= 45 else 'no') }}">{{ ats.ats_score }}%</span>
+          <div style="flex:1">
+            {% if ats.summary_he %}
+            <div class="bi"><span dir="ltr">{{ ats.summary }}</span><span class="he">{{ ats.summary_he }}</span></div>
+            {% else %}
+            <span dir="auto">{{ ats.summary }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <table class="mini reqs ats-table"><tbody>
+          {% for k in ats.keywords %}
+          <tr>
+            <td class="m-{{ 'strong' if k.in_resume else 'gap' }}">{{ '✓ found' if k.in_resume else '✗ missing' }}</td>
+            <td><b dir="auto">{{ k.keyword }}</b>{% if k.importance == 'must' %} <span class="pill must">must</span>{% endif %}</td>
+            <td>
+              {% if k.in_resume and k.evidence %}<span class="muted" dir="auto">{{ k.evidence }}</span>
+              {% elif k.fix %}
+                {% if k.fix_he %}<div class="bi"><span dir="ltr">{{ k.fix }}</span><span class="he">{{ k.fix_he }}</span></div>
+                {% else %}<span dir="auto">{{ k.fix }}</span>{% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody></table>
+        {% if ats.tips %}
+        <h3>Tips</h3>
+        <ul class="risks">
+          {% for t in ats.tips %}
+          <li>{% if t.he %}<div class="bi"><span dir="ltr">{{ t.en }}</span><span class="he">{{ t.he }}</span></div>{% else %}<span dir="auto">{{ t.en }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% endif %}
+        <form method="post" action="{{ url_for('main.ats_check', app_id=app.id) }}" data-loading="Screening your resume against this job's ATS keywords…" class="mt">
+          <button class="btn primary" type="submit">{{ 'Re-run ATS check' if ats else '🎯 Run ATS keyword check (AI)' }}</button>
+        </form>
+      {% endif %}
+    </section>
+
     <section class="panel ai" id="ai-generate">
       <div class="panel-head"><h2>🤖 Generate with AI</h2></div>
       {% if not ai_on %}
@@ -162,6 +213,8 @@
               <span><b>Company research</b><br><span class="muted">live web brief on the company</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="salary">
               <span><b>Salary research</b><br><span class="muted">expected ₪/month gross for this role</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="ats">
+              <span><b>ATS keyword check</b><br><span class="muted">which job keywords your resume is missing</span></span></label>
           </div>
           <input name="instructions" placeholder="optional instructions (used by cover letter / recruiter note / interview prep)">
           <p class="muted sm" style="margin:2px 0 0">Language applies to cover letter / interview prep / mock. <b>Fit analysis</b> is always English + Hebrew; <b>Note to recruiter</b> always includes an English version.</p>
@@ -258,6 +311,9 @@
         {% if has_tailored %}
         <div class="tailored-links">
           <a class="btn" href="{{ url_for('main.resume_review', app_id=app.id) }}">Review tailored resume</a>
+          {% if has_resume_draft %}
+          <a class="btn primary" href="{{ url_for('main.resume_compare', app_id=app.id) }}">🆚 Pending AI revision — compare</a>
+          {% endif %}
         </div>
         {% endif %}
 

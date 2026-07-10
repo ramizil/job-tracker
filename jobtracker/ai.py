@@ -498,11 +498,48 @@ def _text_to_resume_html(text: str) -> str:
     )
 
 
+def _find_style_twin(path: Path) -> Path | None:
+    """Find a sibling .html file with (roughly) the same content as this resume.
+
+    Many people keep their CV as both a styled HTML file and the PDF exported
+    from it. When RESUME_PATH points at the PDF, using the HTML twin as the
+    tailoring template preserves the original design instead of falling back
+    to a plain-text wrapper.
+    """
+    import difflib
+    from . import resume as _resume
+
+    def _norm(t: str) -> str:
+        return re.sub(r"\s+", " ", t).strip().lower()[:6000]
+
+    try:
+        target = _norm(_resume.extract_text(path))
+    except Exception:
+        return None
+    if not target:
+        return None
+    best: tuple[float, Path] | None = None
+    for cand in sorted(path.parent.glob("*.htm*")):
+        try:
+            text = _norm(_resume.extract_text(cand))
+        except Exception:
+            continue
+        ratio = difflib.SequenceMatcher(a=target, b=text, autojunk=False).ratio()
+        if ratio > 0.6 and (best is None or ratio > best[0]):
+            best = (ratio, cand)
+    return best[1] if best else None
+
+
 def resume_html(resume_path: Path | None = None) -> str:
     from . import resume as _resume
     path = Path(resume_path) if resume_path else config.RESUME_PATH
     if path.suffix.lower() in (".html", ".htm"):
         return path.read_text(encoding="utf-8", errors="ignore")
+    # PDF/Word source: prefer a styled HTML twin in the same folder so the
+    # tailored resume (and its PDF export) keeps the original design.
+    twin = _find_style_twin(path)
+    if twin:
+        return twin.read_text(encoding="utf-8", errors="ignore")
     return _text_to_resume_html(_resume.extract_text(path))
 
 
@@ -1493,6 +1530,106 @@ def company_research(*, company: str, location: str = "", title: str = "",
     text_he = re.sub(r"\s*```$", "", text_he)
 
     return {"en": text_en, "he": text_he, "sources": sources, "grounded": grounded}
+
+
+# --------------------------------------------------------------------------- #
+_ATS_PROMPT = """You are an ATS (Applicant Tracking System) screening simulator
+and resume-optimisation expert. Companies run resumes through ATS software that
+parses them and ranks candidates by keyword match against the job description.
+
+Extract the keywords/skills/phrases an ATS (or a recruiter filtering in one)
+would realistically screen for in the JOB below — concrete technologies, tools,
+methodologies, certifications, domain terms and seniority markers. Then check
+EACH keyword against the CANDIDATE RESUME (count synonyms/close variants as a
+match, e.g. "CI/CD" ~ "Jenkins pipelines", but flag exact-word gaps where the
+exact term matters to a keyword filter).
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "ats_score": 0-100,
+  "summary": "2-4 sentences in English: how this resume would rank in an ATS for this job and the single most impactful fix",
+  "summary_he": "the same summary in Hebrew",
+  "keywords": [
+    {{"keyword": "the term as the ATS would look for it",
+      "importance": "must" | "nice",
+      "in_resume": true,
+      "evidence": "short quote/phrasing from the resume that matches, or '' if missing",
+      "fix": "if missing or weak: one concrete English sentence on where/how to add it truthfully; '' if fine",
+      "fix_he": "the same fix in Hebrew, or ''"}}
+  ],
+  "tips": [{{"en": "short general ATS tip for THIS resume+job in English", "he": "the same in Hebrew"}}]
+}}
+
+Rules:
+- 10-18 keywords, ordered by importance (must-haves first).
+- Only suggest fixes that are truthful given the resume — never invent skills;
+  a fix may say "only add if you actually have this".
+- Keep "keyword", "evidence" and JSON values other than *_he in English
+  (keywords may stay in the job's original language if not English).
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def ats_check(*, title: str, company: str, location: str = "",
+              description: str = "", resume: str | None = None) -> dict[str, Any]:
+    """Simulate an ATS keyword screen of the resume against this job.
+
+    Returns {"ats_score", "summary", "summary_he", "keywords": [...],
+    "tips": [...]} — keywords flag what is present vs missing so the user
+    knows exactly which terms to add before applying.
+    """
+    prompt = _ATS_PROMPT.format(
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:7000],
+        resume=(resume or resume_text())[:9000],
+    )
+    raw = _generate(prompt, as_json=True)
+    data = _parse_json(raw)
+    if not isinstance(data, dict) or not isinstance(data.get("keywords"), list):
+        raise AIError("The AI returned an unexpected ATS-check format. Please try again.")
+
+    keywords = []
+    for k in data["keywords"]:
+        if not isinstance(k, dict) or not str(k.get("keyword", "")).strip():
+            continue
+        keywords.append({
+            "keyword": str(k.get("keyword", "")).strip(),
+            "importance": ("must" if str(k.get("importance", "")).lower() == "must"
+                           else "nice"),
+            "in_resume": bool(k.get("in_resume")),
+            "evidence": str(k.get("evidence", "") or "").strip(),
+            "fix": str(k.get("fix", "") or "").strip(),
+            "fix_he": str(k.get("fix_he", "") or "").strip(),
+        })
+    if not keywords:
+        raise AIError("The AI didn't return any ATS keywords. Please try again.")
+
+    tips = []
+    for t in data.get("tips") or []:
+        if isinstance(t, dict) and str(t.get("en", "")).strip():
+            tips.append({"en": str(t["en"]).strip(),
+                         "he": str(t.get("he", "") or "").strip()})
+
+    try:
+        score = max(0, min(100, int(float(str(data.get("ats_score", 0))))))
+    except (TypeError, ValueError):
+        score = 0
+    return {
+        "ats_score": score,
+        "summary": str(data.get("summary", "")).strip(),
+        "summary_he": str(data.get("summary_he", "")).strip(),
+        "keywords": keywords,
+        "tips": tips,
+    }
 
 
 # --------------------------------------------------------------------------- #

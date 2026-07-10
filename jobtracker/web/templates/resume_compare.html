@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Compare resume revision · #{{ app.id }}{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.detail', app_id=app.id) }}">&larr; Back to application</a>
+<h1>🆚 Tailored resume — compare AI revision</h1>
+<p class="sub">Your current tailored resume for <b>{{ app.company }}</b> (left) vs the new AI
+  revision (right). <span class="diff-key"><del>Removed</del></span> text is highlighted on the
+  left, <span class="diff-key"><ins>added / changed</ins></span> text on the right. Nothing is
+  replaced until you accept.</p>
+
+<div class="actions">
+  <form method="post" action="{{ url_for('main.resume_draft_apply', app_id=app.id) }}" style="display:inline"
+        onsubmit="return confirm('Replace the current tailored resume with the AI revision?')">
+    <button class="btn primary" type="submit">✔ Accept revision</button>
+  </form>
+  <form method="post" action="{{ url_for('main.resume_draft_discard', app_id=app.id) }}" style="display:inline">
+    <button class="btn danger" type="submit">✖ Discard revision</button>
+  </form>
+  <a class="btn" href="{{ url_for('main.resume_review', app_id=app.id) }}">← Back to resume review</a>
+</div>
+
+<h2 class="mt">Text differences</h2>
+<div class="diff-cols">
+  <section class="panel diff-pane">
+    <h2>Current tailored resume</h2>
+    <div class="diff-text" dir="auto">{{ old_html | safe }}</div>
+  </section>
+  <section class="panel diff-pane">
+    <h2>✨ AI revision</h2>
+    <div class="diff-text" dir="auto">{{ new_html | safe }}</div>
+  </section>
+</div>
+
+<h2 class="mt">Rendered preview</h2>
+<div class="diff-cols">
+  <section class="panel diff-pane">
+    <h2>Current tailored resume</h2>
+    <iframe class="cmp-frame" src="{{ url_for('main.resume_view', app_id=app.id) }}"></iframe>
+  </section>
+  <section class="panel diff-pane">
+    <h2>✨ AI revision</h2>
+    <iframe class="cmp-frame" src="{{ url_for('main.resume_draft_view', app_id=app.id) }}"></iframe>
+  </section>
+</div>
+{% endblock %}
