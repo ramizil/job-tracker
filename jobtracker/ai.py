@@ -559,6 +559,8 @@ single string. Keep the JSON keys, the "fit_level" value (YES/MAYBE/NO), the
   "verdict": "one concise sentence in English (e.g. 'Strong match but overqualified')",
   "verdict_he": "the same sentence in Hebrew",
   "fit_score": 0-100,
+  "job_summary": "2-3 plain-language sentences in English summarising THE JOB itself: what the role is, the main responsibilities and the key must-have requirements (not the candidate)",
+  "job_summary_he": "the same job summary in Hebrew",
   "requirements": [
      {{"area": "short area label in English", "area_he": "the same in Hebrew",
        "requirement": "what the job asks (English)", "requirement_he": "the same in Hebrew",
@@ -606,6 +608,8 @@ def analyze_fit(*, title: str, company: str, location: str,
         raise AIError("Gemini returned an unexpected analysis format. Please Re-run.")
     data.setdefault("fit_level", "MAYBE")
     data.setdefault("verdict", "")
+    data.setdefault("job_summary", "")
+    data.setdefault("job_summary_he", "")
     data.setdefault("suggestions", [])
     # Normalise risks to {"en", "he"} dicts (the model occasionally returns
     # plain strings; older stored analyses did too).

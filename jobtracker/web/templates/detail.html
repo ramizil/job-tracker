@@ -215,6 +215,18 @@
           </div>
         </div>
 
+        {% if analysis.job_summary or analysis.job_summary_he %}
+        <h3>The job in short</h3>
+        {% if analysis.job_summary_he and analysis.job_summary %}
+        <div class="bi job-summary">
+          <div dir="ltr">{{ analysis.job_summary }}</div>
+          <div class="he">{{ analysis.job_summary_he }}</div>
+        </div>
+        {% else %}
+        <div class="job-summary" dir="auto">{{ analysis.job_summary_he or analysis.job_summary }}</div>
+        {% endif %}
+        {% endif %}
+
         {% if analysis.requirements %}
         <h3>Requirements</h3>
         <table class="mini reqs"><tbody>
