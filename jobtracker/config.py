@@ -115,13 +115,16 @@ EDITABLE_KEYS: dict[str, str] = {
     "JOOBLE_API_KEY": "Jooble - free job search, Israel",
     "ADZUNA_APP_ID": "Adzuna app id (optional, no Israel)",
     "ADZUNA_APP_KEY": "Adzuna app key (optional)",
-    "AI_PROVIDER": "AI provider: gemini | openai | anthropic | cursor",
+    "AI_PROVIDER": "AI provider: gemini | openai | anthropic | groq | cursor",
+    "AI_FALLBACK": "Auto-switch to another configured AI provider when one fails (1/0)",
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
     "GEMINI_MODEL": "Gemini model (default gemini-2.5-flash)",
     "OPENAI_API_KEY": "OpenAI API key (GPT models)",
     "OPENAI_MODEL": "OpenAI model (default gpt-4o-mini)",
     "ANTHROPIC_API_KEY": "Anthropic API key (Claude models)",
     "ANTHROPIC_MODEL": "Anthropic model (default claude-3-5-sonnet-latest)",
+    "GROQ_API_KEY": "Groq API key (fast open models, free tier)",
+    "GROQ_MODEL": "Groq model (default openai/gpt-oss-120b)",
     "CURSOR_API_KEY": "Cursor API key (crsr_...) - used via a local OpenAI-compatible proxy",
     "CURSOR_MODEL": "Cursor model (default auto)",
     "CURSOR_BASE_URL": "Cursor proxy base URL (default http://localhost:8080/v1)",
@@ -138,12 +141,15 @@ JOOBLE_API_KEY = ""
 ADZUNA_APP_ID = ""
 ADZUNA_APP_KEY = ""
 AI_PROVIDER = "gemini"
+AI_FALLBACK = False
 GEMINI_API_KEY = ""
 GEMINI_MODEL = "gemini-2.5-flash"
 OPENAI_API_KEY = ""
 OPENAI_MODEL = "gpt-4o-mini"
 ANTHROPIC_API_KEY = ""
 ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
+GROQ_API_KEY = ""
+GROQ_MODEL = "openai/gpt-oss-120b"
 CURSOR_API_KEY = ""
 CURSOR_MODEL = "auto"
 CURSOR_BASE_URL = "http://localhost:8080/v1"
@@ -159,8 +165,9 @@ def reload() -> None:
     global ACTIVE_PROFILE, PROFILE_DIR, ENV_PATH
     global DB_PATH, PROFILE_PATH, PITCH_PATH, BUILT_RESUME_PATH, TAILORED_DIR
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
-    global AI_PROVIDER, GEMINI_API_KEY, GEMINI_MODEL
+    global AI_PROVIDER, AI_FALLBACK, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+    global GROQ_API_KEY, GROQ_MODEL
     global CURSOR_API_KEY, CURSOR_MODEL, CURSOR_BASE_URL
     global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
     global GDRIVE_FOLDER, GOOGLE_CLIENT_SECRET
@@ -187,12 +194,15 @@ def reload() -> None:
     ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID", "").strip()
     ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY", "").strip()
     AI_PROVIDER = (os.getenv("AI_PROVIDER", "gemini").strip().lower() or "gemini")
+    AI_FALLBACK = os.getenv("AI_FALLBACK", "").strip().lower() in ("1", "true", "yes", "on")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
     GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
     ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest").strip()
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+    GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip()
     CURSOR_API_KEY = os.getenv("CURSOR_API_KEY", "").strip()
     CURSOR_MODEL = os.getenv("CURSOR_MODEL", "auto").strip()
     CURSOR_BASE_URL = os.getenv("CURSOR_BASE_URL", "http://localhost:8080/v1").strip()
@@ -212,12 +222,15 @@ def current_settings() -> dict[str, str]:
         "ADZUNA_APP_ID": ADZUNA_APP_ID,
         "ADZUNA_APP_KEY": ADZUNA_APP_KEY,
         "AI_PROVIDER": AI_PROVIDER,
+        "AI_FALLBACK": "1" if AI_FALLBACK else "",
         "GEMINI_API_KEY": GEMINI_API_KEY,
         "GEMINI_MODEL": GEMINI_MODEL,
         "OPENAI_API_KEY": OPENAI_API_KEY,
         "OPENAI_MODEL": OPENAI_MODEL,
         "ANTHROPIC_API_KEY": ANTHROPIC_API_KEY,
         "ANTHROPIC_MODEL": ANTHROPIC_MODEL,
+        "GROQ_API_KEY": GROQ_API_KEY,
+        "GROQ_MODEL": GROQ_MODEL,
         "CURSOR_API_KEY": CURSOR_API_KEY,
         "CURSOR_MODEL": CURSOR_MODEL,
         "CURSOR_BASE_URL": CURSOR_BASE_URL,

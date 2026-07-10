@@ -274,7 +274,9 @@ def settings():
         gemini_models=ai.list_models(),
         openai_models=ai.OPENAI_MODELS,
         anthropic_models=ai.ANTHROPIC_MODELS,
+        groq_models=ai.GROQ_MODELS,
         cursor_models=ai.CURSOR_MODELS,
+        fallback_providers=[ai.provider_label(p) for p in ai.fallback_providers()],
     )
 
 

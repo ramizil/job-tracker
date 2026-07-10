@@ -27,6 +27,11 @@ ANTHROPIC_MODELS = [
     "claude-3-5-haiku-latest", "claude-3-5-sonnet-latest",
     "claude-3-7-sonnet-latest", "claude-sonnet-4-latest",
 ]
+# Groq serves fast open models via an OpenAI-compatible API.
+GROQ_MODELS = [
+    "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b",
+    "groq/compound", "groq/compound-mini",
+]
 # Cursor models are served through a local OpenAI-compatible proxy (see the
 # Settings help text). "auto" lets Cursor pick (e.g. Composer); users can type
 # any id the proxy exposes via GET /v1/models or `agent --list-models`.
@@ -36,8 +41,12 @@ _PROVIDER_LABELS = {
     "gemini": "Google Gemini",
     "openai": "OpenAI (GPT)",
     "anthropic": "Anthropic (Claude)",
+    "groq": "Groq",
     "cursor": "Cursor (via local proxy)",
 }
+
+# Order in which other configured providers are tried when auto-fallback is on.
+_FALLBACK_ORDER = ["gemini", "groq", "openai", "anthropic", "cursor"]
 
 
 def active_provider() -> str:
@@ -55,13 +64,22 @@ def _provider_key(provider: str | None = None) -> str:
         "gemini": config.GEMINI_API_KEY,
         "openai": config.OPENAI_API_KEY,
         "anthropic": config.ANTHROPIC_API_KEY,
+        "groq": config.GROQ_API_KEY,
         "cursor": config.CURSOR_API_KEY,
     }.get(p, "")
 
 
+def fallback_providers() -> list[str]:
+    """Other providers (with a key set) tried when auto-fallback is enabled."""
+    primary = active_provider()
+    return [p for p in _FALLBACK_ORDER if p != primary and _provider_key(p)]
+
+
 def is_configured() -> bool:
-    """True if the currently selected AI provider has an API key set."""
-    return bool(_provider_key())
+    """True if the selected provider has a key (or fallback can cover for it)."""
+    if _provider_key():
+        return True
+    return bool(config.AI_FALLBACK and fallback_providers())
 
 
 def _lang_name(language: str | None) -> str:
@@ -216,16 +234,43 @@ _QUOTA_MSG = (
 )
 
 
-def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
-    """Generate text using the currently selected AI provider."""
-    provider = active_provider()
+def _generate_with(provider: str, prompt: str, *, as_json: bool = False,
+                   attempts: int = 2) -> str:
+    """Generate text with one specific provider."""
     if provider == "openai":
         return _generate_openai(prompt, as_json=as_json)
     if provider == "anthropic":
         return _generate_anthropic(prompt, as_json=as_json)
+    if provider == "groq":
+        return _generate_groq(prompt, as_json=as_json)
     if provider == "cursor":
         return _generate_cursor(prompt, as_json=as_json)
     return _generate_gemini(prompt, as_json=as_json, attempts=attempts)
+
+
+def _generate(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
+    """Generate text using the selected AI provider.
+
+    With auto-fallback enabled (Settings), a failure of the selected provider
+    transparently retries the same prompt on the other configured providers.
+    """
+    primary = active_provider()
+    chain = [primary]
+    if config.AI_FALLBACK:
+        chain += fallback_providers()
+        # Primary has no key at all: skip straight to the configured ones.
+        if not _provider_key(primary) and len(chain) > 1:
+            chain = chain[1:]
+
+    errors: list[str] = []
+    for provider in chain:
+        try:
+            return _generate_with(provider, prompt, as_json=as_json, attempts=attempts)
+        except AIError as exc:
+            errors.append(f"{provider_label(provider)}: {exc}")
+    if len(errors) > 1:
+        raise AIError("All configured AI providers failed. " + " | ".join(errors))
+    raise AIError(errors[0] if errors else "No AI provider is configured.")
 
 
 def _generate_gemini(prompt: str, *, as_json: bool = False, attempts: int = 2) -> str:
@@ -340,6 +385,48 @@ def _generate_openai(prompt: str, *, as_json: bool = False) -> str:
             last_exc = exc
             continue
     raise AIError(f"OpenAI request failed: {last_exc}")
+
+
+def _generate_groq(prompt: str, *, as_json: bool = False) -> str:
+    """Generate text with Groq (fast open models, OpenAI-compatible API)."""
+    if not config.GROQ_API_KEY:
+        raise AIError("No Groq API key configured. Add it on the Settings page "
+                      "(get one free at https://console.groq.com/keys).")
+    try:
+        from openai import OpenAI  # type: ignore
+    except ImportError as exc:  # pragma: no cover
+        raise AIError("openai is not installed (pip install openai).") from exc
+
+    client = OpenAI(api_key=config.GROQ_API_KEY,
+                    base_url="https://api.groq.com/openai/v1",
+                    timeout=AI_TIMEOUT_S)
+    model = config.GROQ_MODEL or "openai/gpt-oss-120b"
+    base = dict(model=model, messages=[{"role": "user", "content": prompt}])
+    # Some Groq models reject response_format / temperature; degrade gracefully.
+    attempts = [
+        {**base, "temperature": 0.4,
+         **({"response_format": {"type": "json_object"}} if as_json else {})},
+        {**base, "temperature": 0.4},
+        dict(base),
+    ]
+    last_exc: Exception | None = None
+    for kwargs in attempts:
+        try:
+            resp = client.chat.completions.create(**kwargs)
+            text = (resp.choices[0].message.content or "").strip()
+            if not text:
+                raise AIError("Groq returned an empty response.")
+            return text
+        except AIError:
+            raise
+        except Exception as exc:
+            last_exc = exc
+            continue
+    msg = str(last_exc)
+    if "429" in msg or "rate limit" in msg.lower():
+        raise AIError("Groq rate limit reached (free-tier limits reset daily). "
+                      f"Details: {last_exc}")
+    raise AIError(f"Groq request failed: {last_exc}")
 
 
 def _generate_cursor(prompt: str, *, as_json: bool = False) -> str:

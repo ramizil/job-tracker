@@ -20,9 +20,12 @@ AI output.
 - **DB migrations**: add new columns to `EXTRA_COLUMNS` in `jobtracker/db.py`
   (auto `ALTER TABLE` on `init_db()`). Never edit the base schema for additions.
 - **AI providers**: `jobtracker/ai.py` dispatches via `_generate()` to
-  gemini | openai | anthropic | cursor. Cursor has no native chat API — it goes
+  gemini | openai | anthropic | groq | cursor. With `AI_FALLBACK=1`, a failed
+  provider transparently falls back to the other configured ones
+  (`_FALLBACK_ORDER`). Cursor has no native chat API — it goes
   through a local OpenAI-compatible proxy (`cursor-agent-api`, port 8080,
   model `auto`); `start.command` auto-starts it when `AI_PROVIDER=cursor`.
+  Groq uses the OpenAI SDK against `https://api.groq.com/openai/v1`.
   Web-search grounding and voice transcription are **Gemini-only**; other
   providers must degrade gracefully (ungrounded fallback, readable `AIError`).
 - **Bilingual AI output**: never ask a model for mixed "English — עברית"

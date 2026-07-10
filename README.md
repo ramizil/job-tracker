@@ -25,7 +25,7 @@ fallback) that already index LinkedIn/Indeed/Glassdoor listings.
 - **Search**: query aggregators, rank by match, import top matches.
 - **Analytics**: pipeline funnel, response/interview rates, rejection breakdowns,
   per-source effectiveness, and a match-score signal (advanced vs rejected).
-- **AI fit analysis** (Gemini / OpenAI / Anthropic / Cursor): for any job, get a
+- **AI fit analysis** (Gemini / OpenAI / Anthropic / Groq / Cursor): for any job, get a
   recruiter-style verdict (YES/MAYBE/NO), a requirement-by-requirement match,
   risks, and concrete **resume-fix suggestions** — bilingual, rendered in
   side-by-side English/Hebrew columns.
@@ -91,11 +91,14 @@ show up in **Search**. You can also add any single LinkedIn job by hand on the
 | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/app/apikey) | Default AI provider; the only one with web grounding + voice |
 | `OPENAI_API_KEY` | [OpenAI](https://platform.openai.com/api-keys) | Alternative AI provider (GPT) |
 | `ANTHROPIC_API_KEY` | [Anthropic](https://console.anthropic.com/) | Alternative AI provider (Claude) |
+| `GROQ_API_KEY` | [Groq](https://console.groq.com/keys) | Alternative AI provider — fast open models, free tier |
 | `CURSOR_API_KEY` | [Cursor](https://cursor.com/dashboard/integrations) | Alternative AI provider — see note below |
 
 > The AI provider is selected via `AI_PROVIDER` (gemini | openai | anthropic |
-> cursor); each has its own model setting. Gemini (default `gemini-2.5-flash`)
+> groq | cursor); each has its own model setting. Gemini (default `gemini-2.5-flash`)
 > automatically falls back to other models when overloaded/out of quota.
+> With `AI_FALLBACK=1` (Settings → "Auto-switch provider on failure") a failed
+> request is transparently retried with the other providers that have a key.
 > **Company research web-grounding and voice transcription are Gemini-only** —
 > other providers fall back gracefully.
 

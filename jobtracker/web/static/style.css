@@ -339,6 +339,8 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .setting{margin:12px 0}
 .setting label{display:block;font-weight:600;margin-bottom:5px;font-size:13px}
 .setting input{width:100%}
+.setting label.check-setting{display:flex;align-items:center;gap:8px;cursor:pointer}
+.setting label.check-setting input[type=checkbox]{width:auto;accent-color:#22d3ee}
 .setting small{display:block;color:var(--muted);margin-top:5px;font-size:12px}
 .rec{background:var(--grad);color:#fff;border-radius:999px;padding:2px 9px;font-size:10px;font-weight:700;margin-left:6px}
 .steps{counter-reset:step;list-style:none;padding:0}

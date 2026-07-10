@@ -52,6 +52,7 @@
         <option value="gemini" {{ 'selected' if values.AI_PROVIDER == 'gemini' }}>Google Gemini</option>
         <option value="openai" {{ 'selected' if values.AI_PROVIDER == 'openai' }}>OpenAI (GPT)</option>
         <option value="anthropic" {{ 'selected' if values.AI_PROVIDER == 'anthropic' }}>Anthropic (Claude)</option>
+        <option value="groq" {{ 'selected' if values.AI_PROVIDER == 'groq' }}>Groq (fast open models)</option>
         <option value="cursor" {{ 'selected' if values.AI_PROVIDER == 'cursor' }}>Cursor (via local proxy)</option>
       </select>
       <small>The selected provider powers all AI features. Status:
@@ -101,6 +102,20 @@
       </div>
     </div>
 
+    <div class="provider-block" data-provider="groq">
+      <div class="setting">
+        <label for="GROQ_API_KEY">Groq API key</label>
+        <input type="text" id="GROQ_API_KEY" name="GROQ_API_KEY" value="{{ values.GROQ_API_KEY }}" placeholder="gsk_..." autocomplete="off">
+        <small>Get one free at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>. Groq runs open models (GPT-OSS, Qwen) on very fast hardware with a generous free tier.</small>
+      </div>
+      <div class="setting">
+        <label for="GROQ_MODEL">Groq model</label>
+        <input type="text" id="GROQ_MODEL" name="GROQ_MODEL" value="{{ values.GROQ_MODEL }}" placeholder="openai/gpt-oss-120b" list="groq-models" autocomplete="off">
+        <datalist id="groq-models">{% for m in groq_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>openai/gpt-oss-120b</code> (Groq's flagship), or any id from <a href="https://console.groq.com/docs/models" target="_blank" rel="noopener">their model list</a>.</small>
+      </div>
+    </div>
+
     <div class="provider-block" data-provider="cursor">
       <div class="setting">
         <label for="CURSOR_API_KEY">Cursor API key</label>
@@ -123,6 +138,16 @@
         <datalist id="cursor-models">{% for m in cursor_models %}<option value="{{ m }}">{% endfor %}</datalist>
         <small>Default <code>auto</code> (Cursor picks the model), or any id your proxy exposes (<code>GET /v1/models</code>).</small>
       </div>
+    </div>
+
+    <div class="setting">
+      <label class="check-setting" for="AI_FALLBACK">
+        <input type="checkbox" id="AI_FALLBACK" name="AI_FALLBACK" value="1" {{ 'checked' if values.AI_FALLBACK }}>
+        Auto-switch provider on failure
+      </label>
+      <small>If the selected provider errors out (quota, overload, proxy down…), the same request is
+        automatically retried with your other configured providers
+        {% if fallback_providers %}(currently: <b>{{ fallback_providers | join(' → ') }}</b>){% else %}(add more API keys above to enable a chain){% endif %}.</small>
     </div>
   </section>
   <script>
