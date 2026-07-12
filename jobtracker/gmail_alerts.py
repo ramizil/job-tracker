@@ -24,9 +24,6 @@ from .db import get_connection, now_iso
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-# How many recent emails to look at per fetch (already-parsed ones are skipped).
-FETCH_LIMIT = 50
-
 
 class AlertsError(Exception):
     """User-readable Gmail job-alerts failure."""
@@ -226,9 +223,19 @@ def fetch_alerts() -> dict:
 
     try:
         label = _label_id(svc, config.GMAIL_LABEL)
-        listing = svc.users().messages().list(
-            userId="me", labelIds=[label], maxResults=FETCH_LIMIT).execute()
-        message_ids = [m["id"] for m in listing.get("messages", [])]
+        # Walk the WHOLE label (paginated). Listing only returns message ids —
+        # cheap — and already-parsed emails are skipped below, so every fetch
+        # after the first only downloads what's new.
+        message_ids: list[str] = []
+        page_token = None
+        while True:
+            listing = svc.users().messages().list(
+                userId="me", labelIds=[label], maxResults=100,
+                pageToken=page_token).execute()
+            message_ids.extend(m["id"] for m in listing.get("messages", []))
+            page_token = listing.get("nextPageToken")
+            if not page_token or len(message_ids) >= 2000:
+                break
 
         with get_connection() as conn:
             seen = {r["gmail_id"] for r in
