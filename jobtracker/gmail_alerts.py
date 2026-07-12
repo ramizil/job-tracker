@@ -95,15 +95,26 @@ def _service():
     return build("gmail", "v1", credentials=_credentials())
 
 
+def _label_key(name: str) -> str:
+    """Normalise a label name the way Gmail search does: 'LinkedIn Jobs',
+    'linkedin-jobs' and 'linkedin_jobs' all refer to the same label."""
+    return re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower()).strip("-")
+
+
 def _label_id(svc, name: str) -> str:
     labels = svc.users().labels().list(userId="me").execute().get("labels", [])
+    want = _label_key(name)
     for lab in labels:
-        if lab.get("name", "").strip().lower() == name.strip().lower():
+        if _label_key(lab.get("name", "")) == want:
             return lab["id"]
+    user_labels = sorted(lab["name"] for lab in labels
+                         if lab.get("type") == "user")
+    hint = ("Labels in this mailbox: " + ", ".join(user_labels) + ". "
+            if user_labels else "")
     raise AlertsError(
-        f"Gmail label \u201c{name}\u201d wasn't found in the connected mailbox — "
-        "create it in Gmail (and point your LinkedIn alert filter at it), or "
-        "change the label name in Settings.")
+        f"Gmail label \u201c{name}\u201d wasn't found in the connected mailbox. "
+        f"{hint}Fix the label name in Settings (or create the label in Gmail "
+        "and point your LinkedIn alert filter at it).")
 
 
 # --------------------------------------------------------------------------- #
