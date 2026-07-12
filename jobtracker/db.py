@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS job_alerts (
     matched_app_id INTEGER,              -- application this alert matches (if any)
     dismissed      INTEGER DEFAULT 0,
     seen           INTEGER DEFAULT 0,    -- acknowledged in the UI (badge reset)
+    times_seen     INTEGER DEFAULT 1,    -- how many alert emails contained this job
+    last_alert_at  TEXT,                 -- most recent email that mentioned it
+    ignored        INTEGER DEFAULT 0,    -- ignore list: hidden, never notifies again
     created_at     TEXT NOT NULL
 );
 
@@ -116,12 +119,22 @@ EXTRA_COLUMNS: dict[str, str] = {
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    # job_alerts.seen was added after the alerts feature shipped. Alerts that
-    # existed before the column are treated as already acknowledged.
+    # Columns added to job_alerts after the alerts feature shipped.
     alert_cols = {r["name"] for r in conn.execute("PRAGMA table_info(job_alerts)")}
-    if alert_cols and "seen" not in alert_cols:
-        conn.execute("ALTER TABLE job_alerts ADD COLUMN seen INTEGER DEFAULT 0")
-        conn.execute("UPDATE job_alerts SET seen = 1")
+    if alert_cols:
+        if "seen" not in alert_cols:
+            # Pre-existing alerts are treated as already acknowledged.
+            conn.execute("ALTER TABLE job_alerts ADD COLUMN seen INTEGER DEFAULT 0")
+            conn.execute("UPDATE job_alerts SET seen = 1")
+        if "times_seen" not in alert_cols:
+            conn.execute(
+                "ALTER TABLE job_alerts ADD COLUMN times_seen INTEGER DEFAULT 1")
+        if "last_alert_at" not in alert_cols:
+            conn.execute("ALTER TABLE job_alerts ADD COLUMN last_alert_at TEXT")
+            conn.execute("UPDATE job_alerts SET last_alert_at = alert_at")
+        if "ignored" not in alert_cols:
+            conn.execute(
+                "ALTER TABLE job_alerts ADD COLUMN ignored INTEGER DEFAULT 0")
 
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)")}
     added = []

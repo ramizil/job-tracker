@@ -719,21 +719,25 @@ def applications():
 def alerts():
     """Job postings collected from Gmail alert emails, vs. what you applied to."""
     show_all = request.args.get("all") == "1"
+    show_ignored = request.args.get("ignored") == "1"
     connected = gmail_alerts.is_connected()
     if connected:
         try:  # keep 'applied' badges fresh (cheap: local fuzzy matching only)
             gmail_alerts.refresh_matches()
         except Exception:
             pass
-    rows = gmail_alerts.list_alerts(include_dismissed=show_all)
+    rows = gmail_alerts.list_alerts(include_dismissed=show_all,
+                                    ignored=show_ignored)
     apps = tracker.list_applications()
     app_names = {r["id"]: f"{r['company']} — {r['title']}" for r in apps}
     app_dates = {r["id"]: (r["date_applied"] or "")[:10] for r in apps}
     return render_template(
-        "alerts.html", rows=rows, show_all=show_all, connected=connected,
-        app_names=app_names, app_dates=app_dates, label=config.GMAIL_LABEL,
+        "alerts.html", rows=rows, show_all=show_all, show_ignored=show_ignored,
+        connected=connected, app_names=app_names, app_dates=app_dates,
+        label=config.GMAIL_LABEL,
         pending=sum(1 for r in rows
-                    if not r["dismissed"] and not r["matched_app_id"]))
+                    if not r["dismissed"] and not r["matched_app_id"]
+                    and not r["ignored"]))
 
 
 @bp.route("/alerts/status")
@@ -778,6 +782,19 @@ def alert_dismiss(alert_id: int):
 def alert_restore(alert_id: int):
     gmail_alerts.set_dismissed(alert_id, False)
     return redirect(url_for("main.alerts", all=1))
+
+
+@bp.route("/alerts/<int:alert_id>/ignore", methods=["POST"])
+def alert_ignore(alert_id: int):
+    gmail_alerts.set_ignored(alert_id, True)
+    flash("Added to the ignore list — this job won't notify you again.", "ok")
+    return redirect(url_for("main.alerts", **request.args))
+
+
+@bp.route("/alerts/<int:alert_id>/unignore", methods=["POST"])
+def alert_unignore(alert_id: int):
+    gmail_alerts.set_ignored(alert_id, False)
+    return redirect(url_for("main.alerts", ignored=1))
 
 
 @bp.route("/application/<int:app_id>")

@@ -267,11 +267,21 @@ def fetch_alerts() -> dict:
                     cur = conn.execute(
                         """INSERT OR IGNORE INTO job_alerts
                              (job_key, title, company, location, url,
-                              gmail_id, alert_at, created_at)
-                           VALUES (?,?,?,?,?,?,?,?)""",
+                              gmail_id, alert_at, last_alert_at, created_at)
+                           VALUES (?,?,?,?,?,?,?,?,?)""",
                         (job["job_key"], job["title"], job["company"],
-                         job["location"], job["url"], mid, ts, now_iso()))
+                         job["location"], job["url"], mid, ts, ts, now_iso()))
                     new_jobs += cur.rowcount
+                    if not cur.rowcount:
+                        # Known job resurfacing in a new email: count the
+                        # repeat notification (dismissed/ignored state kept).
+                        conn.execute(
+                            """UPDATE job_alerts
+                                  SET times_seen = times_seen + 1,
+                                      last_alert_at = MAX(COALESCE(last_alert_at,
+                                                                   alert_at, ''), ?)
+                                WHERE job_key = ?""",
+                            (ts, job["job_key"]))
                 conn.execute(
                     "INSERT OR IGNORE INTO alert_emails (gmail_id, fetched_at) "
                     "VALUES (?,?)", (mid, now_iso()))
@@ -337,21 +347,26 @@ def refresh_matches() -> None:
 # --------------------------------------------------------------------------- #
 # Queries for the UI
 # --------------------------------------------------------------------------- #
-def list_alerts(include_dismissed: bool = False):
-    q = "SELECT * FROM job_alerts"
-    if not include_dismissed:
-        q += " WHERE dismissed = 0"
+def list_alerts(include_dismissed: bool = False, ignored: bool = False):
+    """Alerts for the UI. ignored=True returns the ignore list instead."""
+    if ignored:
+        q = "SELECT * FROM job_alerts WHERE ignored = 1"
+    elif include_dismissed:
+        q = "SELECT * FROM job_alerts WHERE ignored = 0"
+    else:
+        q = "SELECT * FROM job_alerts WHERE ignored = 0 AND dismissed = 0"
     q += " ORDER BY alert_at DESC, id DESC"
     with get_connection() as conn:
         return conn.execute(q).fetchall()
 
 
 def new_alert_count() -> int:
-    """Unseen, non-dismissed, unmatched alerts (nav badge)."""
+    """Unseen, non-dismissed, non-ignored, unmatched alerts (nav badge)."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT COUNT(*) AS n FROM job_alerts "
-            "WHERE seen = 0 AND dismissed = 0 AND matched_app_id IS NULL"
+            "WHERE seen = 0 AND dismissed = 0 AND ignored = 0 "
+            "AND matched_app_id IS NULL"
         ).fetchone()
         return int(row["n"])
 
@@ -366,6 +381,13 @@ def set_dismissed(alert_id: int, dismissed: bool) -> None:
     with get_connection() as conn:
         conn.execute("UPDATE job_alerts SET dismissed=? WHERE id=?",
                      (1 if dismissed else 0, alert_id))
+
+
+def set_ignored(alert_id: int, ignored: bool) -> None:
+    """Ignore list: the job stays counted but is hidden and never notifies."""
+    with get_connection() as conn:
+        conn.execute("UPDATE job_alerts SET ignored=?, seen=1 WHERE id=?",
+                     (1 if ignored else 0, alert_id))
 
 
 def max_alert_id() -> int:

@@ -34,8 +34,9 @@
 <p class="muted">Jobs from LinkedIn alert emails under the Gmail label
   <code>{{ label }}</code>.
   {% if pending %}<b>{{ pending }}</b> not applied yet — check them out.{% endif %}
-  <a class="chip {{ '' if show_all else 'on' }}" href="{{ url_for('main.alerts') }}">active</a>
+  <a class="chip {{ 'on' if not show_all and not show_ignored else '' }}" href="{{ url_for('main.alerts') }}">active</a>
   <a class="chip {{ 'on' if show_all else '' }}" href="{{ url_for('main.alerts', all=1) }}">+ dismissed</a>
+  <a class="chip {{ 'on' if show_ignored else '' }}" href="{{ url_for('main.alerts', ignored=1) }}">🔕 ignored</a>
 </p>
 
 <div class="tablebar" data-table-filter="#alerts-table">
@@ -45,7 +46,8 @@
 </div>
 
 <table id="alerts-table" class="grid">
-  <thead><tr><th data-sort="desc" class="sorted-desc">Alert date</th><th>Title</th><th>Company</th><th>Location</th><th>Status</th><th></th></tr></thead>
+  <thead><tr><th data-sort="desc" class="sorted-desc">Alert date</th><th>Title</th><th>Company</th><th>Location</th>
+    <th title="How many alert emails mentioned this job">🔔</th><th>Status</th><th></th></tr></thead>
   <tbody>
     {% for r in rows %}
     <tr {% if r.dismissed %}class="muted"{% endif %}>
@@ -53,6 +55,9 @@
       <td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title }} ↗</a></td>
       <td>{{ r.company }}</td>
       <td>{{ r.location }}</td>
+      <td data-val="{{ r.times_seen or 1 }}"
+          {% if r.last_alert_at %}title="Last alert: {{ r.last_alert_at[:10] }}"{% endif %}>
+        {{ r.times_seen or 1 }}×</td>
       <td>
         {% if r.matched_app_id %}
           <a class="fit fit-yes" href="{{ url_for('main.detail', app_id=r.matched_app_id) }}"
@@ -67,24 +72,34 @@
         {% endif %}
       </td>
       <td class="actions-cell">
-        {% if not r.matched_app_id %}
-          <a class="btn sm" href="{{ url_for('main.paste_job', url=r.url, title=r.title, company=r.company, location=r.location) }}"
-             title="Open the Paste-a-job form prefilled with this alert">📋 Capture</a>
-        {% endif %}
-        {% if r.dismissed %}
-          <form method="post" action="{{ url_for('main.alert_restore', alert_id=r.id) }}" style="display:inline">
-            <button class="btn sm" type="submit" title="Bring this alert back to the active list">↩ Restore</button>
+        {% if r.ignored %}
+          <form method="post" action="{{ url_for('main.alert_unignore', alert_id=r.id) }}" style="display:inline">
+            <button class="btn sm" type="submit" title="Remove from the ignore list">🔔 Unignore</button>
           </form>
         {% else %}
-          <form method="post" action="{{ url_for('main.alert_dismiss', alert_id=r.id, all=1 if show_all else none) }}" style="display:inline">
-            <button class="btn sm" type="submit" title="Not interested — hide this alert">✕ Dismiss</button>
+          {% if not r.matched_app_id %}
+            <a class="btn sm" href="{{ url_for('main.paste_job', url=r.url, title=r.title, company=r.company, location=r.location) }}"
+               title="Open the Paste-a-job form prefilled with this alert">📋 Capture</a>
+          {% endif %}
+          {% if r.dismissed %}
+            <form method="post" action="{{ url_for('main.alert_restore', alert_id=r.id) }}" style="display:inline">
+              <button class="btn sm" type="submit" title="Bring this alert back to the active list">↩ Restore</button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('main.alert_dismiss', alert_id=r.id, all=1 if show_all else none) }}" style="display:inline">
+              <button class="btn sm" type="submit" title="Not interested — hide this alert">✕ Dismiss</button>
+            </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('main.alert_ignore', alert_id=r.id, all=1 if show_all else none) }}" style="display:inline">
+            <button class="btn sm" type="submit" title="Ignore forever — hide and never notify about this job again">🔕 Ignore</button>
           </form>
         {% endif %}
       </td>
     </tr>
     {% else %}
-    <tr><td colspan="6" class="muted">No alerts yet — press
-      “Fetch new alerts from Gmail” above.</td></tr>
+    <tr><td colspan="7" class="muted">
+      {% if show_ignored %}The ignore list is empty.{% else %}No alerts yet —
+      press “Fetch new alerts from Gmail” above.{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
