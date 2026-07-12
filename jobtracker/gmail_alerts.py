@@ -347,12 +347,19 @@ def list_alerts(include_dismissed: bool = False):
 
 
 def new_alert_count() -> int:
-    """Non-dismissed alerts with no matching application (nav badge)."""
+    """Unseen, non-dismissed, unmatched alerts (nav badge)."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT COUNT(*) AS n FROM job_alerts "
-            "WHERE dismissed = 0 AND matched_app_id IS NULL").fetchone()
+            "WHERE seen = 0 AND dismissed = 0 AND matched_app_id IS NULL"
+        ).fetchone()
         return int(row["n"])
+
+
+def mark_all_seen() -> None:
+    """Reset the nav badge: acknowledge every alert currently in the list."""
+    with get_connection() as conn:
+        conn.execute("UPDATE job_alerts SET seen = 1 WHERE seen = 0")
 
 
 def set_dismissed(alert_id: int, dismissed: bool) -> None:

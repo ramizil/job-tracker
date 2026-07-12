@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS job_alerts (
     alert_at       TEXT,                 -- when the alert email arrived
     matched_app_id INTEGER,              -- application this alert matches (if any)
     dismissed      INTEGER DEFAULT 0,
+    seen           INTEGER DEFAULT 0,    -- acknowledged in the UI (badge reset)
     created_at     TEXT NOT NULL
 );
 
@@ -115,6 +116,13 @@ EXTRA_COLUMNS: dict[str, str] = {
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
+    # job_alerts.seen was added after the alerts feature shipped. Alerts that
+    # existed before the column are treated as already acknowledged.
+    alert_cols = {r["name"] for r in conn.execute("PRAGMA table_info(job_alerts)")}
+    if alert_cols and "seen" not in alert_cols:
+        conn.execute("ALTER TABLE job_alerts ADD COLUMN seen INTEGER DEFAULT 0")
+        conn.execute("UPDATE job_alerts SET seen = 1")
+
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)")}
     added = []
     for name, decl in EXTRA_COLUMNS.items():

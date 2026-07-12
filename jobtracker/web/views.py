@@ -760,6 +760,14 @@ def alerts_fetch():
     return redirect(url_for("main.alerts"))
 
 
+@bp.route("/alerts/seen", methods=["POST"])
+def alerts_seen():
+    """Reset the Alerts nav badge without dismissing anything."""
+    gmail_alerts.mark_all_seen()
+    flash("Alerts counter reset — the badge now counts only new alerts.", "ok")
+    return redirect(url_for("main.alerts", **request.args))
+
+
 @bp.route("/alerts/<int:alert_id>/dismiss", methods=["POST"])
 def alert_dismiss(alert_id: int):
     gmail_alerts.set_dismissed(alert_id, True)

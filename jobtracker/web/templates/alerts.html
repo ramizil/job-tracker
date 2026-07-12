@@ -2,12 +2,21 @@
 {% block title %}Job Alerts · Job Tracker{% endblock %}
 {% block content %}
 <div class="panel-head"><h1>📬 Job Alerts</h1>
-  {% if connected %}
-  <form method="post" action="{{ url_for('main.alerts_fetch') }}"
-        data-loading="Checking Gmail for new job alerts…">
-    <button class="btn primary" type="submit">📥 Fetch new alerts from Gmail</button>
-  </form>
-  {% endif %}
+  <div style="display:flex; gap:.5rem; align-items:center">
+    {% if alerts_badge %}
+    <form method="post" action="{{ url_for('main.alerts_seen', all=1 if show_all else none) }}">
+      <button class="btn" type="submit"
+              title="Reset the {{ alerts_badge }} counter on the Alerts badge — nothing is dismissed">
+        ✓ Mark all as seen</button>
+    </form>
+    {% endif %}
+    {% if connected %}
+    <form method="post" action="{{ url_for('main.alerts_fetch') }}"
+          data-loading="Checking Gmail for new job alerts…">
+      <button class="btn primary" type="submit">📥 Fetch new alerts from Gmail</button>
+    </form>
+    {% endif %}
+  </div>
 </div>
 
 {% if not connected %}
