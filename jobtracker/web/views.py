@@ -726,11 +726,12 @@ def alerts():
         except Exception:
             pass
     rows = gmail_alerts.list_alerts(include_dismissed=show_all)
-    app_names = {r["id"]: f"{r['company']} — {r['title']}"
-                 for r in tracker.list_applications()}
+    apps = tracker.list_applications()
+    app_names = {r["id"]: f"{r['company']} — {r['title']}" for r in apps}
+    app_dates = {r["id"]: (r["date_applied"] or "")[:10] for r in apps}
     return render_template(
         "alerts.html", rows=rows, show_all=show_all, connected=connected,
-        app_names=app_names, label=config.GMAIL_LABEL,
+        app_names=app_names, app_dates=app_dates, label=config.GMAIL_LABEL,
         pending=sum(1 for r in rows
                     if not r["dismissed"] and not r["matched_app_id"]))
 

@@ -48,6 +48,9 @@
         {% if r.matched_app_id %}
           <a class="fit fit-yes" href="{{ url_for('main.detail', app_id=r.matched_app_id) }}"
              title="{{ app_names.get(r.matched_app_id, '') }}">✓ applied</a>
+          {% if app_dates.get(r.matched_app_id) %}
+            <span class="muted sm">{{ app_dates[r.matched_app_id] }}</span>
+          {% endif %}
         {% elif r.dismissed %}
           <span class="pill">dismissed</span>
         {% else %}
