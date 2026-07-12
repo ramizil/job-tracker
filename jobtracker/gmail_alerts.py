@@ -17,12 +17,17 @@ from __future__ import annotations
 import base64
 import json
 import re
+import threading
+import time
 from difflib import SequenceMatcher
 
 from . import config
 from .db import get_connection, now_iso
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+# Background auto-fetch cadence while the server is running.
+AUTO_FETCH_INTERVAL_S = 600  # 10 minutes
 
 
 class AlertsError(Exception):
@@ -354,3 +359,39 @@ def set_dismissed(alert_id: int, dismissed: bool) -> None:
     with get_connection() as conn:
         conn.execute("UPDATE job_alerts SET dismissed=? WHERE id=?",
                      (1 if dismissed else 0, alert_id))
+
+
+def max_alert_id() -> int:
+    """Highest alert row id — lets the UI detect that new alerts arrived."""
+    with get_connection() as conn:
+        row = conn.execute("SELECT MAX(id) AS m FROM job_alerts").fetchone()
+        return int(row["m"] or 0)
+
+
+# --------------------------------------------------------------------------- #
+# Background auto-fetch (every AUTO_FETCH_INTERVAL_S while the server runs)
+# --------------------------------------------------------------------------- #
+_auto_started = False
+_auto_lock = threading.Lock()
+
+
+def start_auto_fetch() -> None:
+    """Fetch alerts periodically in the background. Safe to call repeatedly."""
+    global _auto_started
+    with _auto_lock:
+        if _auto_started:
+            return
+        _auto_started = True
+    threading.Thread(target=_auto_loop, name="jobtracker-alerts-fetch",
+                     daemon=True).start()
+
+
+def _auto_loop() -> None:
+    time.sleep(30)  # let the server finish starting first
+    while True:
+        try:
+            if is_connected():
+                fetch_alerts()
+        except Exception:
+            pass  # best-effort; the manual Fetch button surfaces errors
+        time.sleep(AUTO_FETCH_INTERVAL_S)

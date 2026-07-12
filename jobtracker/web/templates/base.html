@@ -117,6 +117,42 @@
   </script>
 
   <script>
+    // Live job-alert popup: the server auto-fetches Gmail alerts every 10 min;
+    // every open page polls a tiny status endpoint and pops a toast when new
+    // alerts landed since this browser session last saw them.
+    (function () {
+      var URL = '{{ url_for('main.alerts_status') }}';
+      var PAGE = '{{ url_for('main.alerts') }}';
+      var KEY = 'jt-alerts-max-id';
+
+      function toast(count) {
+        var el = document.createElement('a');
+        el.className = 'toast';
+        el.href = PAGE;
+        el.innerHTML = '📬 <b>' + count + '</b> new job alert' +
+                       (count > 1 ? 's' : '') + ' just came in — view';
+        document.body.appendChild(el);
+        setTimeout(function () { el.classList.add('show'); }, 30);
+        setTimeout(function () {
+          el.classList.remove('show');
+          setTimeout(function () { el.remove(); }, 400);
+        }, 12000);
+      }
+
+      function poll() {
+        fetch(URL).then(function (r) { return r.json(); }).then(function (d) {
+          if (!d || !d.max_id) return;
+          var last = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+          if (last && d.max_id > last) toast(d.max_id - last);
+          sessionStorage.setItem(KEY, String(d.max_id));
+        }).catch(function () {});
+      }
+      poll();
+      setInterval(poll, 60000);
+    })();
+  </script>
+
+  <script>
     // Liveness heartbeat: keeps the local server alive only while a tab is open.
     // When the window/tab is closed, pings stop and the server auto-shuts down.
     (function () {

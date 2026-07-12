@@ -735,6 +735,16 @@ def alerts():
                     if not r["dismissed"] and not r["matched_app_id"]))
 
 
+@bp.route("/alerts/status")
+def alerts_status():
+    """Polled by every page: lets the UI pop a toast when new alerts arrive."""
+    try:
+        return {"max_id": gmail_alerts.max_alert_id(),
+                "new_count": gmail_alerts.new_alert_count()}
+    except Exception:
+        return {"max_id": 0, "new_count": 0}
+
+
 @bp.route("/alerts/fetch", methods=["POST"])
 def alerts_fetch():
     try:

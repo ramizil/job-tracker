@@ -15,4 +15,9 @@ def create_app() -> Flask:
     from .views import bp, md_to_html
     app.register_blueprint(bp)
     app.jinja_env.filters["md"] = md_to_html
+
+    # Pull new Gmail job alerts every 10 minutes while the server is up
+    # (no-op until Gmail is connected in Settings).
+    from ..gmail_alerts import start_auto_fetch
+    start_auto_fetch()
     return app
