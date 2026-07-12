@@ -20,7 +20,7 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                pitch, tracker, tts, usage)
+                gmail_alerts, pitch, tracker, tts, usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
@@ -38,6 +38,15 @@ def inject_saved_alert():
         return {"saved_alert": {"count": rem["count"], "stale": rem["stale"]}}
     except Exception:
         return {"saved_alert": {"count": 0, "stale": 0}}
+
+
+@bp.app_context_processor
+def inject_alerts_badge():
+    """Unhandled job alerts (not applied, not dismissed) — nav badge count."""
+    try:
+        return {"alerts_badge": gmail_alerts.new_alert_count()}
+    except Exception:
+        return {"alerts_badge": 0}
 
 
 @bp.app_context_processor
@@ -266,6 +275,7 @@ def settings():
         sources=[s.name for s in get_sources()],
         ai_on=ai.is_configured(),
         gs_connected=gsheets.is_connected(),
+        gmail_connected=gmail_alerts.is_connected(),
         gs_secret_found=Path(str(config.GOOGLE_CLIENT_SECRET)).exists(),
         env_path=str(config.ENV_PATH),
         backup_dir=str(config.BACKUP_DIR),
@@ -396,6 +406,24 @@ def gsheet_sync():
 def gsheet_disconnect():
     gsheets.disconnect()
     flash("Google account disconnected.", "ok")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gmail-connect", methods=["POST"])
+def gmail_connect():
+    """One-time Gmail sign-in (use the job-alerts mailbox account)."""
+    try:
+        gmail_alerts.connect()
+        flash("Gmail connected — open Job Alerts and fetch.", "ok")
+    except Exception as exc:
+        flash(f"Gmail connection failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gmail-disconnect", methods=["POST"])
+def gmail_disconnect():
+    gmail_alerts.disconnect()
+    flash("Gmail disconnected.", "ok")
     return redirect(url_for("main.settings"))
 
 
@@ -687,6 +715,52 @@ def applications():
                            active=status, seq=seq)
 
 
+@bp.route("/alerts")
+def alerts():
+    """Job postings collected from Gmail alert emails, vs. what you applied to."""
+    show_all = request.args.get("all") == "1"
+    connected = gmail_alerts.is_connected()
+    if connected:
+        try:  # keep 'applied' badges fresh (cheap: local fuzzy matching only)
+            gmail_alerts.refresh_matches()
+        except Exception:
+            pass
+    rows = gmail_alerts.list_alerts(include_dismissed=show_all)
+    app_names = {r["id"]: f"{r['company']} — {r['title']}"
+                 for r in tracker.list_applications()}
+    return render_template(
+        "alerts.html", rows=rows, show_all=show_all, connected=connected,
+        app_names=app_names, label=config.GMAIL_LABEL,
+        pending=sum(1 for r in rows
+                    if not r["dismissed"] and not r["matched_app_id"]))
+
+
+@bp.route("/alerts/fetch", methods=["POST"])
+def alerts_fetch():
+    try:
+        res = gmail_alerts.fetch_alerts()
+        if res["emails"]:
+            flash(f"Checked {res['emails']} new email(s) — "
+                  f"{res['jobs']} new job(s) found.", "ok")
+        else:
+            flash("No new alert emails since the last fetch.", "ok")
+    except Exception as exc:
+        flash(f"Could not fetch alerts: {exc}", "error")
+    return redirect(url_for("main.alerts"))
+
+
+@bp.route("/alerts/<int:alert_id>/dismiss", methods=["POST"])
+def alert_dismiss(alert_id: int):
+    gmail_alerts.set_dismissed(alert_id, True)
+    return redirect(url_for("main.alerts", **request.args))
+
+
+@bp.route("/alerts/<int:alert_id>/restore", methods=["POST"])
+def alert_restore(alert_id: int):
+    gmail_alerts.set_dismissed(alert_id, False)
+    return redirect(url_for("main.alerts", all=1))
+
+
 @bp.route("/application/<int:app_id>")
 def detail(app_id: int):
     r = tracker.get_application(app_id)
@@ -740,9 +814,12 @@ def paste_job():
     """
     rd = _readiness()
     if request.method == "GET":
+        # Query params (from a Job Alerts "Capture" link) prefill the form.
+        prefill = {k: request.args.get(k, "")
+                   for k in ("url", "title", "company", "location", "salary")}
         return render_template("paste.html", statuses=STATUSES,
                                ai_on=ai.is_configured(), ready=rd,
-                               form={}, duplicates=None)
+                               form=prefill, duplicates=None)
 
     if not rd["ready"]:
         for msg in rd["issues"]:

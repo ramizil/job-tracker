@@ -15,6 +15,7 @@
       <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">Dashboard</a>
       <a href="{{ url_for('main.applications') }}" class="{{ 'active' if ep in ['main.applications', 'main.detail'] }}">Applications{% if saved_alert and saved_alert.count %}<span class="nav-badge{{ ' hot' if saved_alert.stale }}" title="{{ saved_alert.count }} saved job(s) not applied yet{% if saved_alert.stale %} — {{ saved_alert.stale }} waiting 3+ days{% endif %}">{{ saved_alert.count }}</span>{% endif %}</a>
       <a href="{{ url_for('main.search') }}" class="{{ 'active' if ep == 'main.search' }}">Search</a>
+      <a href="{{ url_for('main.alerts') }}" class="{{ 'active' if ep == 'main.alerts' }}">📬 Alerts{% if alerts_badge %}<span class="nav-badge" title="{{ alerts_badge }} job alert(s) you haven't applied to yet">{{ alerts_badge }}</span>{% endif %}</a>
       <a href="{{ url_for('main.paste_job') }}" class="{{ 'active' if ep == 'main.paste_job' }}">📋 Paste Job</a>
       <a href="{{ url_for('main.my_pitch') }}" class="{{ 'active' if ep == 'main.my_pitch' }}">🎤 My Pitch</a>
       <a href="{{ url_for('main.resume_builder') }}" class="{{ 'active' if ep in ['main.resume_builder', 'main.resume_builder_review'] }}">🗣️ Resume Builder</a>

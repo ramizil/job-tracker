@@ -43,6 +43,27 @@ CREATE TABLE IF NOT EXISTS status_history (
 
 CREATE INDEX IF NOT EXISTS idx_app_status ON applications(status);
 CREATE INDEX IF NOT EXISTS idx_hist_app ON status_history(application_id);
+
+-- Job postings extracted from Gmail job-alert emails (see gmail_alerts.py).
+CREATE TABLE IF NOT EXISTS job_alerts (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_key        TEXT UNIQUE,          -- LinkedIn job id (stable dedupe key)
+    title          TEXT NOT NULL,
+    company        TEXT,
+    location       TEXT,
+    url            TEXT,
+    gmail_id       TEXT,                 -- source email (Gmail message id)
+    alert_at       TEXT,                 -- when the alert email arrived
+    matched_app_id INTEGER,              -- application this alert matches (if any)
+    dismissed      INTEGER DEFAULT 0,
+    created_at     TEXT NOT NULL
+);
+
+-- Alert emails already parsed, so a fetch never re-processes them.
+CREATE TABLE IF NOT EXISTS alert_emails (
+    gmail_id   TEXT PRIMARY KEY,
+    fetched_at TEXT NOT NULL
+);
 """
 
 

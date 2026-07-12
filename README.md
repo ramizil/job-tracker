@@ -35,6 +35,11 @@ fallback) that already index LinkedIn/Indeed/Glassdoor listings.
 - **AI resume tailoring**: pick the suggestions, generate a tailored CV (same
   styling), review/edit it, and export to **PDF** (browser Print = pixel-perfect;
   server-side PDF as a fallback).
+- **Gmail job alerts**: point your LinkedIn job-alert emails at a Gmail label
+  (default `linkedin-jobs`), connect the mailbox once (read-only OAuth), and the
+  **Job Alerts** page lists every job from those emails, flags the ones you
+  haven't applied to yet (fuzzy company+title matching against your
+  applications), and prefills the Paste-a-job form for one-click capture.
 - **CSV / Excel export** of all applications.
 
 ## Setup

@@ -203,6 +203,22 @@
     </div>
   </section>
 
+  <section class="panel">
+    <h2>📬 Gmail job alerts</h2>
+    <div class="setting">
+      <label for="GMAIL_LABEL">Gmail label to scan</label>
+      <input type="text" id="GMAIL_LABEL" name="GMAIL_LABEL" value="{{ values.GMAIL_LABEL }}" placeholder="linkedin-jobs" autocomplete="off">
+      <small>Point your LinkedIn job-alert emails at a Gmail label (e.g. a filter
+        that applies <code>{{ values.GMAIL_LABEL or 'linkedin-jobs' }}</code>).
+        The <b>Job Alerts</b> page reads emails under this label (read-only),
+        extracts the jobs and flags the ones you haven't applied to yet.
+        Uses the same OAuth client JSON as Google Sheets — also <b>enable the
+        Gmail API</b> for that Cloud project, then connect below with the
+        alerts mailbox account.
+        Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</small>
+    </div>
+  </section>
+
   <div class="actions">
     <button class="btn primary" type="submit">💾 Save settings</button>
   </div>
@@ -304,6 +320,25 @@
     <p class="muted sm">Paste your Drive folder URL in <b>Google Sheets sync</b>
       above and save settings to enable this.</p>
   {% endif %}
+</section>
+
+<section class="panel">
+  <h2>📬 Gmail job alerts — connect</h2>
+  <p class="muted sm">Sign in with the mailbox that receives your LinkedIn job
+    alerts (label: <code>{{ values.GMAIL_LABEL }}</code>). Access is
+    <b>read-only</b> — the app can only read emails, never send or delete.</p>
+  <div class="actions">
+    {% if not gmail_connected %}
+      <form method="post" action="{{ url_for('main.gmail_connect') }}">
+        <button class="btn primary" type="submit">🔑 Connect Gmail (opens a sign-in window)</button>
+      </form>
+    {% else %}
+      <a class="btn primary" href="{{ url_for('main.alerts') }}">📬 Open Job Alerts</a>
+      <form method="post" action="{{ url_for('main.gmail_disconnect') }}">
+        <button class="btn danger" type="submit">Disconnect Gmail</button>
+      </form>
+    {% endif %}
+  </div>
 </section>
 
 <section class="panel">
