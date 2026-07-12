@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Rejection insights · Job Tracker{% endblock %}
+{% block content %}
+<div class="panel-head"><h1>🧠 Rejection insights</h1>
+  <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap">
+    <a class="btn" href="{{ url_for('main.rejections_export') }}"
+       title="Download a standalone HTML dashboard — shareable by email">💾 Export HTML</a>
+    {% if ai_on and rows %}
+    <form method="post" action="{{ url_for('main.rejections_analyze') }}"
+          data-loading="Analyzing rejections with AI (only new ones — cached results are kept)…">
+      <button class="btn primary" type="submit"
+              title="Runs AI only on rejections without a cached analysis, then refreshes the overall picture">
+        🤖 Analyze{% if pending %} {{ pending }} new{% endif %} rejection{{ 's' if pending != 1 }}</button>
+    </form>
+    <form method="post" action="{{ url_for('main.rejections_analyze') }}"
+          data-loading="Re-analyzing ALL rejections from scratch…"
+          onsubmit="return confirm('Re-run the AI analysis for ALL {{ rows|length }} rejections? This ignores the cache and costs one AI call per rejection.')">
+      <input type="hidden" name="force" value="1">
+      <button class="btn" type="submit" title="Ignore the cache and re-analyze everything">↻ Re-run all</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if not ai_on %}
+<div class="banner">AI is not configured — add a provider key in Settings to run the rejection analysis.</div>
+{% endif %}
+
+<section class="cards">
+  <div class="metric"><span class="num">{{ rows|length }}</span><span class="lbl">Rejections</span></div>
+  <div class="metric"><span class="num">{{ baseline.totals.rejection_rate_pct }}%</span><span class="lbl">Rejection rate</span></div>
+  {% if baseline.avg_fit_rejected is not none %}
+  <div class="metric" title="Average AI fit score of rejected applications"><span class="num">{{ baseline.avg_fit_rejected }}%</span><span class="lbl">Avg fit · rejected</span></div>
+  {% endif %}
+  {% if baseline.avg_fit_advanced is not none %}
+  <div class="metric" title="Average AI fit score of applications that reached screening/interview/offer"><span class="num">{{ baseline.avg_fit_advanced }}%</span><span class="lbl">Avg fit · advanced</span></div>
+  {% endif %}
+  <div class="metric" title="Rejections with a cached AI post-mortem"><span class="num">{{ (rows|length) - pending }}/{{ rows|length }}</span><span class="lbl">Analyzed</span></div>
+</section>
+
+{% if overall %}
+<section class="panel">
+  <h2>📊 Overall analysis
+    <span class="muted sm">— {{ overall.rejections_analyzed }} rejection(s), generated {{ overall.generated_at }}</span></h2>
+  {% if overall.summary_he %}
+  <div class="bi"><div dir="ltr">{{ overall.summary }}</div><div class="he">{{ overall.summary_he }}</div></div>
+  {% else %}<p dir="auto">{{ overall.summary }}</p>{% endif %}
+
+  {% if overall.patterns %}
+  <h3>🔁 Recurring patterns</h3>
+  <ul>{% for p in overall.patterns %}
+    <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
+  {% endfor %}</ul>
+  {% endif %}
+
+  {% if overall.working %}
+  <h3>✅ What's working — keep doing</h3>
+  <ul>{% for p in overall.working %}
+    <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
+  {% endfor %}</ul>
+  {% endif %}
+
+  {% if overall.actions %}
+  <h3>🎯 Action plan (most important first)</h3>
+  <ol>{% for p in overall.actions %}
+    <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
+  {% endfor %}</ol>
+  {% endif %}
+</section>
+{% elif rows and ai_on %}
+<div class="panel"><p class="muted">No overall analysis yet — press
+  “🤖 Analyze” above. Results are cached: only new rejections cost AI calls.</p></div>
+{% endif %}
+
+<div class="grid2">
+  <section class="panel">
+    <h2>By stage</h2>
+    <table class="mini"><tbody>
+    {% for s, n in baseline.by_stage %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+  <section class="panel">
+    <h2>By reason</h2>
+    <table class="mini"><tbody>
+    {% for s, n in baseline.by_reason %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+</div>
+
+<h2 style="margin:18px 0 10px">Per-rejection post-mortems</h2>
+{% for r in rows %}
+{% set a = analyses[r.id] %}
+<section class="panel">
+  <div class="panel-head">
+    <h3><a href="{{ url_for('main.detail', app_id=r.id) }}">{{ r.company }} — {{ r.title }}</a>
+      {% if r.ai_fit_score is not none %}<span class="fit fit-{{ (r.ai_fit_level or 'maybe')|lower }}" title="AI fit score">{{ r.ai_fit_score }}%</span>{% endif %}
+    </h3>
+    {% if ai_on %}
+    <form method="post" action="{{ url_for('main.rejection_reanalyze', app_id=r.id) }}"
+          data-loading="Re-analyzing this rejection…">
+      <button class="btn sm" type="submit" title="Re-run the AI post-mortem for this rejection (e.g. after editing the note)">↻ Re-analyze</button>
+    </form>
+    {% endif %}
+  </div>
+  <p class="muted sm">
+    {% if r.rejection_date %}rejected {{ r.rejection_date[:10] }} · {% endif %}
+    stage: <b>{{ r.rejection_stage or '—' }}</b> · reason: <b>{{ r.rejection_reason or '—' }}</b>
+    {% if r.rejection_note %} · note: “{{ r.rejection_note }}”{% endif %}
+  </p>
+
+  {% if a %}
+  <p>
+    <span class="pill" title="Most likely cause">{{ a.cause_label or a.cause }}</span>
+    {% if a.cause_label_he %}<span class="pill he" dir="rtl">{{ a.cause_label_he }}</span>{% endif %}
+    <span class="pill" title="How confident the AI is — low usually means the rejection gave no feedback">confidence: {{ a.confidence }}</span>
+    <span class="pill" title="Could this rejection have been avoided?">avoidable: {{ a.avoidable }}</span>
+  </p>
+  {% if a.explanation_he %}
+  <div class="bi"><div dir="ltr">{{ a.explanation }}</div><div class="he">{{ a.explanation_he }}</div></div>
+  {% else %}<p dir="auto">{{ a.explanation }}</p>{% endif %}
+
+  {% if a.missed_requirements %}
+  <h3>Requirements that likely hurt</h3>
+  <ul>{% for m in a.missed_requirements %}
+    <li>{% if m.he %}<div class="bi"><span dir="ltr">{{ m.en }}</span><span class="he">{{ m.he }}</span></div>{% else %}{{ m.en }}{% endif %}</li>
+  {% endfor %}</ul>
+  {% endif %}
+
+  {% if a.improvement %}
+  <h3>💡 Improvement for next time</h3>
+  {% if a.improvement_he %}
+  <div class="bi"><div dir="ltr"><b>{{ a.improvement }}</b></div><div class="he"><b>{{ a.improvement_he }}</b></div></div>
+  {% else %}<p><b>{{ a.improvement }}</b></p>{% endif %}
+  {% endif %}
+  {% else %}
+  <p class="muted">Not analyzed yet — press “🤖 Analyze” above.</p>
+  {% endif %}
+</section>
+{% else %}
+<div class="panel"><p class="muted">No rejected applications — nothing to analyze (long may it last).</p></div>
+{% endfor %}
+{% endblock %}

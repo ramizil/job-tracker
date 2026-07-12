@@ -111,6 +111,8 @@ EXTRA_COLUMNS: dict[str, str] = {
     "salary_research_at": "TEXT",
     "ats_check": "TEXT",           # ATS keyword screen of resume vs job (JSON)
     "ats_check_at": "TEXT",
+    "rejection_analysis": "TEXT",  # AI post-mortem of why this app was rejected (JSON)
+    "rejection_analysis_at": "TEXT",
     "feedback_request": "TEXT",    # polite letter asking why I was rejected
     "feedback_request_at": "TEXT",
     "rejection_note": "TEXT",      # free-text note captured on rejection

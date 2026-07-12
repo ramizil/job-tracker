@@ -700,6 +700,177 @@ def dashboard():
     )
 
 
+# --------------------------------------------------------------------------- #
+# Rejection insights: AI post-mortem per rejection + overall pattern analysis.
+# Per-rejection verdicts are cached in the DB and the overall analysis in a
+# profile-level JSON file, so AI runs only for NEW rejections.
+# --------------------------------------------------------------------------- #
+def _rejection_insights_path() -> Path:
+    return Path(config.PROFILE_DIR) / "rejection_insights.json"
+
+
+def _load_rejection_insights() -> dict | None:
+    try:
+        data = json.loads(_rejection_insights_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _fit_summary_for_prompt(r) -> str:
+    """Compact text digest of the stored fit analysis for the AI prompt."""
+    try:
+        a = json.loads(r["ai_analysis_json"]) if r["ai_analysis_json"] else None
+    except (TypeError, ValueError):
+        a = None
+    if not isinstance(a, dict):
+        return ""
+    parts = [f"Fit score: {a.get('fit_score', '?')}/100",
+             f"Verdict: {a.get('verdict', '')}"]
+    gaps = [f"- {q.get('requirement', '')} (evidence: {q.get('evidence', '')})"
+            for q in a.get("requirements") or []
+            if isinstance(q, dict) and q.get("match") == "gap"]
+    if gaps:
+        parts.append("Requirements flagged as GAPS:\n" + "\n".join(gaps))
+    return "\n".join(parts)
+
+
+def _rejection_verdicts_digest(rows, analyses) -> str:
+    """Compact JSON of all cached per-rejection verdicts for the overall prompt."""
+    items = []
+    for r in rows:
+        a = analyses.get(r["id"])
+        if not a:
+            continue
+        items.append({
+            "company": r["company"], "title": r["title"],
+            "stage": r["rejection_stage"], "reason": r["rejection_reason"],
+            "ai_fit_score": r["ai_fit_score"],
+            "cause": a.get("cause"), "confidence": a.get("confidence"),
+            "avoidable": a.get("avoidable"),
+            "explanation": a.get("explanation"),
+            "missed_requirements": [m.get("en") for m in
+                                    a.get("missed_requirements") or []],
+            "improvement": a.get("improvement"),
+        })
+    return json.dumps(items, ensure_ascii=False, indent=1)
+
+
+@bp.route("/rejections")
+def rejections():
+    rows = tracker.list_applications(status="rejected")
+    analyses = {r["id"]: tracker.get_rejection_analysis(r["id"]) for r in rows}
+    return render_template(
+        "rejections.html", rows=rows, analyses=analyses,
+        overall=_load_rejection_insights(),
+        baseline=analytics.rejection_baseline(),
+        pending=sum(1 for r in rows if not analyses[r["id"]]),
+        ai_on=ai.is_configured(),
+    )
+
+
+@bp.route("/rejections/analyze", methods=["POST"])
+def rejections_analyze():
+    """Analyze rejections. Cached: only NEW (unanalyzed) rejections cost AI
+    calls; force=1 re-runs everything from scratch."""
+    force = request.form.get("force") == "1"
+    rows = tracker.list_applications(status="rejected")
+    if not rows:
+        flash("No rejected applications to analyze.", "error")
+        return redirect(url_for("main.rejections"))
+    try:
+        resume_txt = ai.resume_text()
+    except Exception:
+        resume_txt = ""
+    done, errors = 0, []
+    for r in rows:
+        if not force and tracker.get_rejection_analysis(r["id"]):
+            continue
+        try:
+            data = ai.analyze_rejection(
+                title=r["title"], company=r["company"],
+                description=r["description"] or "",
+                stage=r["rejection_stage"] or "",
+                reason=r["rejection_reason"] or "",
+                note=r["rejection_note"] or "",
+                fit_summary=_fit_summary_for_prompt(r),
+                resume=resume_txt or None,
+            )
+            tracker.set_rejection_analysis(r["id"], data)
+            done += 1
+        except ai.AIError as exc:
+            errors.append(f"{r['company']}: {exc}")
+
+    # Overall pattern analysis — regenerated from the cached verdicts whenever
+    # anything changed (or it doesn't exist yet). One AI call.
+    analyses = {r["id"]: tracker.get_rejection_analysis(r["id"]) for r in rows}
+    overall_err = None
+    if any(analyses.values()) and (done or force or not _load_rejection_insights()):
+        try:
+            overall = ai.analyze_rejections_overall(
+                verdicts=_rejection_verdicts_digest(rows, analyses),
+                baseline=json.dumps(analytics.rejection_baseline(),
+                                    ensure_ascii=False, indent=1))
+            overall["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            overall["rejections_analyzed"] = sum(1 for v in analyses.values() if v)
+            _rejection_insights_path().write_text(
+                json.dumps(overall, ensure_ascii=False, indent=2),
+                encoding="utf-8")
+        except ai.AIError as exc:
+            overall_err = str(exc)
+
+    if done:
+        flash(f"Analyzed {done} rejection(s) — cached; future runs only "
+              "process new rejections.", "ok")
+    elif not errors:
+        flash("All rejections were already analyzed (cached).", "ok")
+    for e in errors[:3]:
+        flash(f"Analysis failed for {e}", "error")
+    if overall_err:
+        flash(f"Overall analysis failed: {overall_err}", "error")
+    return redirect(url_for("main.rejections"))
+
+
+@bp.route("/rejections/<int:app_id>/analyze", methods=["POST"])
+def rejection_reanalyze(app_id: int):
+    """Re-run the post-mortem for one rejection (e.g. after editing the note)."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    try:
+        data = ai.analyze_rejection(
+            title=r["title"], company=r["company"],
+            description=r["description"] or "",
+            stage=r["rejection_stage"] or "", reason=r["rejection_reason"] or "",
+            note=r["rejection_note"] or "",
+            fit_summary=_fit_summary_for_prompt(r),
+        )
+        tracker.set_rejection_analysis(app_id, data)
+        flash(f"Rejection analysis updated for {r['company']}.", "ok")
+    except ai.AIError as exc:
+        flash(f"Analysis failed: {exc}", "error")
+    return redirect(url_for("main.rejections"))
+
+
+@bp.route("/rejections/export")
+def rejections_export():
+    """Standalone HTML dashboard of the rejection insights — email-shareable."""
+    rows = tracker.list_applications(status="rejected")
+    analyses = {r["id"]: tracker.get_rejection_analysis(r["id"]) for r in rows}
+    html = render_template(
+        "rejections_export.html", rows=rows, analyses=analyses,
+        overall=_load_rejection_insights(),
+        baseline=analytics.rejection_baseline(),
+        generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Content-Disposition"] = (
+        f"attachment; filename=rejection-insights-"
+        f"{datetime.now().strftime('%Y%m%d')}.html")
+    return resp
+
+
 @bp.route("/applications")
 def applications():
     status = request.args.get("status") or None

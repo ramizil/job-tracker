@@ -48,7 +48,9 @@
   </section>
 
   <section class="panel">
-    <h2>Why rejected</h2>
+    <div class="panel-head"><h2>Why rejected</h2>
+      <a class="btn sm" href="{{ url_for('main.rejections') }}"
+         title="AI post-mortem of every rejection + overall patterns and action plan">🧠 Rejection insights</a></div>
     {% if rej_stage %}
       <h3>By stage</h3>
       <table class="mini"><tbody>

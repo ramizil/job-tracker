@@ -122,6 +122,33 @@ def source_stats() -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def rejection_baseline() -> dict[str, Any]:
+    """Pipeline context for the AI rejection analysis (and its dashboard page).
+
+    Compares AI fit scores of rejected vs. advancing applications so the
+    overall analysis can judge whether rejections track fit or something else.
+    """
+    with get_connection() as conn:
+        fit_rej = conn.execute(
+            "SELECT AVG(ai_fit_score) FROM applications "
+            "WHERE status='rejected' AND ai_fit_score IS NOT NULL").fetchone()[0]
+        fit_adv = conn.execute(
+            """SELECT AVG(ai_fit_score) FROM applications
+               WHERE status IN ('screening','interview','offer','accepted')
+                 AND ai_fit_score IS NOT NULL""").fetchone()[0]
+        fit_all = conn.execute(
+            "SELECT AVG(ai_fit_score) FROM applications "
+            "WHERE ai_fit_score IS NOT NULL").fetchone()[0]
+    return {
+        "totals": totals(),
+        "by_stage": rejection_by_stage(),
+        "by_reason": rejection_by_reason(),
+        "avg_fit_rejected": round(fit_rej, 1) if fit_rej is not None else None,
+        "avg_fit_advanced": round(fit_adv, 1) if fit_adv is not None else None,
+        "avg_fit_overall": round(fit_all, 1) if fit_all is not None else None,
+    }
+
+
 def match_score_insight() -> dict[str, float | None]:
     """Compare average match score of rejected vs interview-reaching apps.
 

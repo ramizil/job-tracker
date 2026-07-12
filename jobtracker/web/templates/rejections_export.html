@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+{# Standalone, self-contained rejection-insights dashboard. Served as a
+   download by /rejections/export — no app CSS/JS, safe to attach to email. #}
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rejection insights · Job Tracker</title>
+<style>
+  :root{--ink:#22303f;--muted:#6b7788;--rule:#dfe5ec;--accent:#2263a6;
+        --ok:#1f9d55;--warn:#c9861a;--bad:#c0392b;--bg:#f5f7fa;--card:#fff;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,
+       "Noto Sans Hebrew",sans-serif;background:var(--bg);color:var(--ink);
+       padding:28px 16px;line-height:1.55;}
+  .page{max-width:980px;margin:0 auto;}
+  h1{font-size:26px;margin-bottom:2px;}
+  .sub{color:var(--muted);margin-bottom:20px;}
+  .panel{background:var(--card);border:1px solid var(--rule);border-radius:12px;
+         padding:18px 20px;margin-bottom:18px;}
+  .panel h2{font-size:17px;margin-bottom:10px;color:var(--accent);}
+  h3{font-size:14px;margin:14px 0 6px;}
+  .muted{color:var(--muted);font-size:13px;}
+  .pill{display:inline-block;background:#e8eef5;border-radius:99px;
+        padding:2px 12px;font-size:12.5px;font-weight:600;margin-right:4px;}
+  .fit{display:inline-block;border-radius:8px;padding:2px 10px;color:#fff;
+       font-weight:800;font-size:13px;}
+  .fit-yes{background:var(--ok);} .fit-maybe{background:var(--warn);}
+  .fit-no{background:var(--bad);}
+  .bi{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;align-items:start;}
+  .he{direction:rtl;text-align:right;unicode-bidi:plaintext;}
+  .cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
+  .metric{background:var(--card);border:1px solid var(--rule);border-radius:12px;
+          padding:12px 18px;text-align:center;min-width:110px;}
+  .metric .num{display:block;font-size:22px;font-weight:800;color:var(--accent);}
+  .metric .lbl{display:block;font-size:12px;color:var(--muted);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  td{border-top:1px solid var(--rule);padding:6px 8px;vertical-align:top;}
+  td.r{text-align:right;font-weight:700;}
+  ul,ol{padding-left:20px;font-size:13.5px;}
+  li{margin-bottom:6px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .footer{color:var(--muted);font-size:12px;text-align:center;margin-top:8px;}
+  @media(max-width:640px){.bi,.grid2{grid-template-columns:1fr}
+    .he{border-top:1px dashed var(--rule);padding-top:4px}}
+  @media print{body{background:#fff;padding:6px}.panel{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>🧠 Rejection insights</h1>
+  <p class="sub">{{ rows|length }} rejected application(s) · generated {{ generated }}</p>
+
+  <div class="cards">
+    <div class="metric"><span class="num">{{ rows|length }}</span><span class="lbl">Rejections</span></div>
+    <div class="metric"><span class="num">{{ baseline.totals.rejection_rate_pct }}%</span><span class="lbl">Rejection rate</span></div>
+    {% if baseline.avg_fit_rejected is not none %}
+    <div class="metric"><span class="num">{{ baseline.avg_fit_rejected }}%</span><span class="lbl">Avg fit · rejected</span></div>
+    {% endif %}
+    {% if baseline.avg_fit_advanced is not none %}
+    <div class="metric"><span class="num">{{ baseline.avg_fit_advanced }}%</span><span class="lbl">Avg fit · advanced</span></div>
+    {% endif %}
+  </div>
+
+  {% if overall %}
+  <div class="panel">
+    <h2>📊 Overall analysis</h2>
+    {% if overall.summary_he %}
+    <div class="bi"><div dir="ltr">{{ overall.summary }}</div><div class="he">{{ overall.summary_he }}</div></div>
+    {% else %}<p dir="auto">{{ overall.summary }}</p>{% endif %}
+
+    {% if overall.patterns %}
+    <h3>🔁 Recurring patterns</h3>
+    <ul>{% for p in overall.patterns %}
+      <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
+    {% endfor %}</ul>
+    {% endif %}
+
+    {% if overall.working %}
+    <h3>✅ What's working</h3>
+    <ul>{% for p in overall.working %}
+      <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
+    {% endfor %}</ul>
+    {% endif %}
+
+    {% if overall.actions %}
+    <h3>🎯 Action plan (most important first)</h3>
+    <ol>{% for p in overall.actions %}
+      <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
+    {% endfor %}</ol>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>By stage</h2>
+      <table><tbody>
+      {% for s, n in baseline.by_stage %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+    <div class="panel">
+      <h2>By reason</h2>
+      <table><tbody>
+      {% for s, n in baseline.by_reason %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
+      </tbody></table>
+    </div>
+  </div>
+
+  {% for r in rows %}
+  {% set a = analyses[r.id] %}
+  {% if a %}
+  <div class="panel">
+    <h2>{{ r.company }} — {{ r.title }}
+      {% if r.ai_fit_score is not none %}<span class="fit fit-{{ (r.ai_fit_level or 'maybe')|lower }}">{{ r.ai_fit_score }}%</span>{% endif %}</h2>
+    <p class="muted">
+      {% if r.rejection_date %}rejected {{ r.rejection_date[:10] }} · {% endif %}
+      stage: <b>{{ r.rejection_stage or '—' }}</b> · reason: <b>{{ r.rejection_reason or '—' }}</b>
+      {% if r.rejection_note %} · note: “{{ r.rejection_note }}”{% endif %}
+    </p>
+    <p>
+      <span class="pill">{{ a.cause_label or a.cause }}</span>
+      {% if a.cause_label_he %}<span class="pill he" dir="rtl">{{ a.cause_label_he }}</span>{% endif %}
+      <span class="pill">confidence: {{ a.confidence }}</span>
+      <span class="pill">avoidable: {{ a.avoidable }}</span>
+    </p>
+    {% if a.explanation_he %}
+    <div class="bi"><div dir="ltr">{{ a.explanation }}</div><div class="he">{{ a.explanation_he }}</div></div>
+    {% else %}<p dir="auto">{{ a.explanation }}</p>{% endif %}
+
+    {% if a.missed_requirements %}
+    <h3>Requirements that likely hurt</h3>
+    <ul>{% for m in a.missed_requirements %}
+      <li>{% if m.he %}<div class="bi"><span dir="ltr">{{ m.en }}</span><span class="he">{{ m.he }}</span></div>{% else %}{{ m.en }}{% endif %}</li>
+    {% endfor %}</ul>
+    {% endif %}
+
+    {% if a.improvement %}
+    <h3>💡 Improvement for next time</h3>
+    {% if a.improvement_he %}
+    <div class="bi"><div dir="ltr"><b>{{ a.improvement }}</b></div><div class="he"><b>{{ a.improvement_he }}</b></div></div>
+    {% else %}<p><b>{{ a.improvement }}</b></p>{% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <p class="footer">Generated by Job Tracker · {{ generated }}</p>
+</div>
+</body>
+</html>

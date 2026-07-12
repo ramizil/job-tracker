@@ -1817,3 +1817,143 @@ def salary_research(*, title: str, company: str, location: str = "",
         "sources": sources,
         "grounded": grounded,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Rejection post-mortem: per-application analysis + overall pattern analysis
+# --------------------------------------------------------------------------- #
+def _bi_list(items) -> list[dict[str, str]]:
+    """Normalise a model list to [{"en", "he"}, ...] (tolerates plain strings)."""
+    out = []
+    for item in items or []:
+        if isinstance(item, dict):
+            en = str(item.get("en", "")).strip()
+            he = str(item.get("he", "")).strip()
+            if en or he:
+                out.append({"en": en, "he": he})
+        elif str(item).strip():
+            out.append({"en": str(item).strip(), "he": ""})
+    return out
+
+
+_REJECTION_PROMPT = """You are a senior technical recruiter doing an honest
+post-mortem of ONE rejected job application. Using the job posting, the
+candidate's resume, the earlier AI fit analysis and the rejection details the
+candidate recorded, determine the MOST LIKELY real cause of the rejection and
+what (if anything) the candidate could do differently.
+
+Be honest, specific and constructive — no generic advice. If the rejection
+details give no feedback (e.g. reason "no_feedback" or a form-letter note),
+you may only speculate: set "confidence" to "low" and say so explicitly.
+
+LANGUAGE (bilingual, REQUIRED): every human-readable text value TWICE, in
+SEPARATE fields — English in the base field, Hebrew in the matching "*_he"
+field (or "he" key). NEVER mix the two languages in one string. Keep the
+"cause", "confidence" and "avoidable" values in English only.
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "cause": "skill_gap" | "resume_presentation" | "seniority_mismatch" | "domain_mismatch" | "competition" | "salary_or_logistics" | "no_signal" | "other",
+  "cause_label": "short human label for the cause (English)",
+  "cause_label_he": "the same label in Hebrew",
+  "confidence": "high" | "medium" | "low",
+  "avoidable": "yes" | "partially" | "no" | "unclear",
+  "explanation": "3-5 sentences in English: what most likely happened and why, citing the concrete job requirements / resume evidence",
+  "explanation_he": "the same explanation in Hebrew",
+  "missed_requirements": [{{"en": "job requirement that likely hurt (English)", "he": "the same in Hebrew"}}],
+  "improvement": "the ONE most concrete, actionable improvement for similar future applications (English)",
+  "improvement_he": "the same improvement in Hebrew"
+}}
+
+JOB POSTING:
+Title: {title}
+Company: {company}
+Description:
+{description}
+
+REJECTION DETAILS RECORDED BY THE CANDIDATE:
+Stage reached: {stage}
+Stated reason: {reason}
+Candidate's note: {note}
+
+EARLIER AI FIT ANALYSIS OF THIS APPLICATION:
+{fit_summary}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
+
+def analyze_rejection(*, title: str, company: str, description: str,
+                      stage: str, reason: str, note: str,
+                      fit_summary: str, resume: str | None = None
+                      ) -> dict[str, Any]:
+    """Post-mortem of a single rejected application (bilingual, structured)."""
+    prompt = _REJECTION_PROMPT.format(
+        title=title or "", company=company or "",
+        description=(description or "")[:6000],
+        stage=stage or "unknown", reason=reason or "none given",
+        note=note or "none", fit_summary=(fit_summary or "not available")[:3000],
+        resume=(resume or resume_text())[:9000],
+    )
+    data = _parse_json(_generate(prompt, as_json=True))
+    if not isinstance(data, dict):
+        raise AIError("The AI returned an unexpected rejection-analysis format. "
+                      "Please try again.")
+    data["cause"] = str(data.get("cause", "other")).strip().lower()
+    data["confidence"] = str(data.get("confidence", "low")).strip().lower()
+    data["avoidable"] = str(data.get("avoidable", "unclear")).strip().lower()
+    for key in ("cause_label", "cause_label_he", "explanation", "explanation_he",
+                "improvement", "improvement_he"):
+        data[key] = str(data.get(key, "")).strip()
+    data["missed_requirements"] = _bi_list(data.get("missed_requirements"))
+    return data
+
+
+_REJECTION_OVERALL_PROMPT = """You are a career coach reviewing a candidate's
+ENTIRE job-search rejection history to find patterns and give a prioritised
+improvement plan. You get one post-mortem verdict per rejected application
+(produced earlier) plus baseline stats about the whole pipeline (including
+applications that were NOT rejected, for comparison).
+
+Look for what repeats: requirements that keep killing applications at CV
+screen, resume presentation issues, fit-score patterns (is the candidate
+applying to low-fit roles?), seniority/domain mismatches. Distinguish signal
+from noise: rejections with no feedback carry little information — weigh them
+lightly. Also say what is WORKING (kept interviews, high response areas) so
+the candidate doesn't fix what isn't broken.
+
+LANGUAGE (bilingual, REQUIRED): every human-readable text value TWICE —
+English in the base field / "en" key, Hebrew in "*_he" / "he". NEVER mix
+languages in one string.
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "summary": "4-6 sentence executive summary of the rejection story (English)",
+  "summary_he": "the same summary in Hebrew",
+  "patterns": [{{"en": "recurring pattern across rejections, with counts where possible (English)", "he": "the same in Hebrew"}}],
+  "working": [{{"en": "something that is going well and should continue (English)", "he": "the same in Hebrew"}}],
+  "actions": [{{"en": "concrete prioritised action, most important first (English)", "he": "the same in Hebrew"}}]
+}}
+
+BASELINE PIPELINE STATS:
+{baseline}
+
+PER-REJECTION POST-MORTEM VERDICTS:
+{verdicts}
+"""
+
+
+def analyze_rejections_overall(*, verdicts: str, baseline: str) -> dict[str, Any]:
+    """Cross-rejection pattern analysis over the cached per-rejection verdicts."""
+    prompt = _REJECTION_OVERALL_PROMPT.format(
+        verdicts=(verdicts or "")[:24000], baseline=(baseline or "")[:4000])
+    data = _parse_json(_generate(prompt, as_json=True))
+    if not isinstance(data, dict):
+        raise AIError("The AI returned an unexpected overall-analysis format. "
+                      "Please try again.")
+    data["summary"] = str(data.get("summary", "")).strip()
+    data["summary_he"] = str(data.get("summary_he", "")).strip()
+    for key in ("patterns", "working", "actions"):
+        data[key] = _bi_list(data.get(key))
+    return data
