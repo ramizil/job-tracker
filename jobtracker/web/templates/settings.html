@@ -3,30 +3,159 @@
 {% block content %}
 <h1>⚙ Settings</h1>
 <p class="muted">All values are saved to your local <code>{{ env_path }}</code>
-   (git-ignored) and applied immediately — no restart needed.</p>
+   (git-ignored) and applied immediately — no restart needed. Stuck on a key or
+   Google setup? Open the <a href="#tab-guide">📖 Setup guide</a> tab.</p>
 
-<div class="banner">
-  <b>Want LinkedIn jobs?</b> LinkedIn has no public jobs API, so this app pulls
-  LinkedIn postings through <b>JSearch</b> (Google-for-Jobs). Add a
-  <code>RAPIDAPI_KEY</code> below — free at
-  <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a>
-  (Subscribe to the free Basic plan, then copy your <i>X-RapidAPI-Key</i>).
-  You can always add a single LinkedIn job by hand on the
-  <a href="{{ url_for('main.applications') }}">Applications</a> page too.
+{# One save form for every editable field; inputs on all tabs join it via the
+   form="settings-form" attribute, so standalone action forms (connect, backup,
+   profiles…) can live next to them without illegal form nesting. #}
+<form id="settings-form" method="post" action="{{ url_for('main.settings') }}"></form>
+
+<nav class="tabbar" id="settings-tabs">
+  <button type="button" class="tab-btn active" data-tab="ai">🤖 AI provider</button>
+  <button type="button" class="tab-btn" data-tab="sources">🔎 Job sources</button>
+  <button type="button" class="tab-btn" data-tab="resume">📄 Resume</button>
+  <button type="button" class="tab-btn" data-tab="google">☁️ Google</button>
+  <button type="button" class="tab-btn" data-tab="backup">💾 Backups</button>
+  <button type="button" class="tab-btn" data-tab="profiles">👤 Profiles</button>
+  <button type="button" class="tab-btn" data-tab="guide">📖 Setup guide</button>
+</nav>
+
+{# ------------------------------------------------ AI provider ------------ #}
+<div class="tab-page active" id="tab-ai">
+  <section class="panel">
+    <h2>🤖 AI provider</h2>
+    <div class="setting">
+      <label for="AI_PROVIDER">Provider</label>
+      <select id="AI_PROVIDER" name="AI_PROVIDER" form="settings-form">
+        <option value="gemini" {{ 'selected' if values.AI_PROVIDER == 'gemini' }}>Google Gemini</option>
+        <option value="openai" {{ 'selected' if values.AI_PROVIDER == 'openai' }}>OpenAI (GPT)</option>
+        <option value="anthropic" {{ 'selected' if values.AI_PROVIDER == 'anthropic' }}>Anthropic (Claude)</option>
+        <option value="groq" {{ 'selected' if values.AI_PROVIDER == 'groq' }}>Groq (fast open models)</option>
+        <option value="cursor" {{ 'selected' if values.AI_PROVIDER == 'cursor' }}>Cursor (via local proxy)</option>
+      </select>
+      <small>The selected provider powers all AI features. Status:
+        {% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off — add the API key for the selected provider</span>{% endif %}.
+        <b>Company research</b> web-grounding works only with Gemini (other providers fall back to an ungrounded answer).
+        No key yet? <a href="#rb-gemini">📖 How to get one (step by step)</a>.</small>
+    </div>
+
+    <div class="provider-block" data-provider="gemini">
+      <div class="setting">
+        <label for="GEMINI_API_KEY">Gemini API key</label>
+        <input type="text" id="GEMINI_API_KEY" name="GEMINI_API_KEY" form="settings-form" value="{{ values.GEMINI_API_KEY }}" placeholder="AIza..." autocomplete="off">
+        <small>Get it at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>
+          — <a href="#rb-gemini">📖 step-by-step guide</a>.</small>
+      </div>
+      <div class="setting">
+        <label for="GEMINI_MODEL">Gemini model</label>
+        <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" form="settings-form" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash" list="gemini-models" autocomplete="off">
+        <datalist id="gemini-models">{% for m in gemini_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>gemini-2.5-flash</code>; falls back automatically if a model is busy.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="openai">
+      <div class="setting">
+        <label for="OPENAI_API_KEY">OpenAI API key</label>
+        <input type="text" id="OPENAI_API_KEY" name="OPENAI_API_KEY" form="settings-form" value="{{ values.OPENAI_API_KEY }}" placeholder="sk-..." autocomplete="off">
+        <small>Get it at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>
+          — <a href="#rb-openai">📖 step-by-step guide</a>.</small>
+      </div>
+      <div class="setting">
+        <label for="OPENAI_MODEL">OpenAI model</label>
+        <input type="text" id="OPENAI_MODEL" name="OPENAI_MODEL" form="settings-form" value="{{ values.OPENAI_MODEL }}" placeholder="gpt-4o-mini" list="openai-models" autocomplete="off">
+        <datalist id="openai-models">{% for m in openai_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>gpt-4o-mini</code>, or type any model id available on your account.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="anthropic">
+      <div class="setting">
+        <label for="ANTHROPIC_API_KEY">Anthropic API key</label>
+        <input type="text" id="ANTHROPIC_API_KEY" name="ANTHROPIC_API_KEY" form="settings-form" value="{{ values.ANTHROPIC_API_KEY }}" placeholder="sk-ant-..." autocomplete="off">
+        <small>Get it at <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>
+          — <a href="#rb-anthropic">📖 step-by-step guide</a>.</small>
+      </div>
+      <div class="setting">
+        <label for="ANTHROPIC_MODEL">Anthropic model</label>
+        <input type="text" id="ANTHROPIC_MODEL" name="ANTHROPIC_MODEL" form="settings-form" value="{{ values.ANTHROPIC_MODEL }}" placeholder="claude-3-5-sonnet-latest" list="anthropic-models" autocomplete="off">
+        <datalist id="anthropic-models">{% for m in anthropic_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>claude-3-5-sonnet-latest</code>, or type any current Claude model id.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="groq">
+      <div class="setting">
+        <label for="GROQ_API_KEY">Groq API key</label>
+        <input type="text" id="GROQ_API_KEY" name="GROQ_API_KEY" form="settings-form" value="{{ values.GROQ_API_KEY }}" placeholder="gsk_..." autocomplete="off">
+        <small>Get one free at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>
+          — <a href="#rb-groq">📖 step-by-step guide</a>. Groq runs open models (GPT-OSS, Qwen) on very fast hardware with a generous free tier.</small>
+      </div>
+      <div class="setting">
+        <label for="GROQ_MODEL">Groq model</label>
+        <input type="text" id="GROQ_MODEL" name="GROQ_MODEL" form="settings-form" value="{{ values.GROQ_MODEL }}" placeholder="openai/gpt-oss-120b" list="groq-models" autocomplete="off">
+        <datalist id="groq-models">{% for m in groq_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>openai/gpt-oss-120b</code> (Groq's flagship), or any id from <a href="https://console.groq.com/docs/models" target="_blank" rel="noopener">their model list</a>.</small>
+      </div>
+    </div>
+
+    <div class="provider-block" data-provider="cursor">
+      <div class="setting">
+        <label for="CURSOR_API_KEY">Cursor API key</label>
+        <input type="text" id="CURSOR_API_KEY" name="CURSOR_API_KEY" form="settings-form" value="{{ values.CURSOR_API_KEY }}" placeholder="crsr_..." autocomplete="off">
+        <small>Get it at <a href="https://cursor.com/dashboard/integrations" target="_blank" rel="noopener">cursor.com/dashboard/integrations</a>
+          — <a href="#rb-cursor">📖 step-by-step guide</a> (needs a local proxy).</small>
+      </div>
+      <div class="setting">
+        <label for="CURSOR_BASE_URL">Cursor proxy base URL</label>
+        <input type="text" id="CURSOR_BASE_URL" name="CURSOR_BASE_URL" form="settings-form" value="{{ values.CURSOR_BASE_URL }}" placeholder="http://localhost:8080/v1" autocomplete="off">
+        <small>The <code>/v1</code> URL your local proxy listens on. Default <code>http://localhost:8080/v1</code>.</small>
+      </div>
+      <div class="setting">
+        <label for="CURSOR_MODEL">Cursor model</label>
+        <input type="text" id="CURSOR_MODEL" name="CURSOR_MODEL" form="settings-form" value="{{ values.CURSOR_MODEL }}" placeholder="auto" list="cursor-models" autocomplete="off">
+        <datalist id="cursor-models">{% for m in cursor_models %}<option value="{{ m }}">{% endfor %}</datalist>
+        <small>Default <code>auto</code> (Cursor picks the model), or any id your proxy exposes (<code>GET /v1/models</code>).</small>
+      </div>
+    </div>
+
+    <div class="setting">
+      <label class="check-setting" for="AI_FALLBACK">
+        <input type="checkbox" id="AI_FALLBACK" name="AI_FALLBACK" form="settings-form" value="1" {{ 'checked' if values.AI_FALLBACK }}>
+        Auto-switch provider on failure
+      </label>
+      <small>If the selected provider errors out (quota, overload, proxy down…), the same request is
+        automatically retried with your other configured providers
+        {% if fallback_providers %}(currently: <b>{{ fallback_providers | join(' → ') }}</b>){% else %}(add more API keys above to enable a chain){% endif %}.</small>
+    </div>
+  </section>
 </div>
 
-<form method="post" action="{{ url_for('main.settings') }}">
+{# ------------------------------------------------ Job sources ------------ #}
+<div class="tab-page" id="tab-sources">
+  <div class="banner">
+    <b>Want LinkedIn jobs?</b> LinkedIn has no public jobs API, so this app pulls
+    LinkedIn postings through <b>JSearch</b> (Google-for-Jobs). Add a
+    <code>RAPIDAPI_KEY</code> below — free at
+    <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a>
+    (<a href="#rb-jsearch">📖 how</a>).
+    You can always add a single LinkedIn job by hand on the
+    <a href="{{ url_for('main.applications') }}">Applications</a> page too.
+  </div>
   <section class="panel">
     <h2>🔎 Job search sources</h2>
     <div class="setting">
       <label for="RAPIDAPI_KEY">RapidAPI key — JSearch (LinkedIn + Israel) <span class="rec">recommended</span></label>
-      <input type="text" id="RAPIDAPI_KEY" name="RAPIDAPI_KEY" value="{{ values.RAPIDAPI_KEY }}" placeholder="paste your X-RapidAPI-Key" autocomplete="off">
-      <small>Get it at <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a> (free tier).</small>
+      <input type="text" id="RAPIDAPI_KEY" name="RAPIDAPI_KEY" form="settings-form" value="{{ values.RAPIDAPI_KEY }}" placeholder="paste your X-RapidAPI-Key" autocomplete="off">
+      <small>Get it at <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a>
+        (free tier) — <a href="#rb-jsearch">📖 step-by-step guide</a>.</small>
     </div>
     <div class="setting">
       <label for="JOOBLE_API_KEY">Jooble API key (free, Israel)</label>
-      <input type="text" id="JOOBLE_API_KEY" name="JOOBLE_API_KEY" value="{{ values.JOOBLE_API_KEY }}" placeholder="optional" autocomplete="off">
-      <small>Request free at <a href="https://jooble.org/api/about" target="_blank" rel="noopener">jooble.org/api/about</a>.
+      <input type="text" id="JOOBLE_API_KEY" name="JOOBLE_API_KEY" form="settings-form" value="{{ values.JOOBLE_API_KEY }}" placeholder="optional" autocomplete="off">
+      <small>Request free at <a href="https://jooble.org/api/about" target="_blank" rel="noopener">jooble.org/api/about</a>
+        — <a href="#rb-jooble">📖 how</a>.
         {% if jooble_usage and jooble_usage.tracked %}
           Usage: <b class="{{ 'fit fit-no' if jooble_usage.low else '' }}">{{ jooble_usage.count }}/{{ jooble_usage.limit }}</b>
           ({{ jooble_usage.remaining }} left).
@@ -37,136 +166,21 @@
     </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
-        <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>
+        <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" form="settings-form" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>
       <div class="setting"><label for="ADZUNA_APP_KEY">Adzuna app key</label>
-        <input type="text" id="ADZUNA_APP_KEY" name="ADZUNA_APP_KEY" value="{{ values.ADZUNA_APP_KEY }}" placeholder="optional" autocomplete="off"></div>
+        <input type="text" id="ADZUNA_APP_KEY" name="ADZUNA_APP_KEY" form="settings-form" value="{{ values.ADZUNA_APP_KEY }}" placeholder="optional" autocomplete="off"></div>
     </div>
     <p class="muted">Currently active sources: <b>{{ sources | join(', ') if sources else 'none' }}</b></p>
   </section>
+</div>
 
-  <section class="panel">
-    <h2>🤖 AI provider</h2>
-    <div class="setting">
-      <label for="AI_PROVIDER">Provider</label>
-      <select id="AI_PROVIDER" name="AI_PROVIDER">
-        <option value="gemini" {{ 'selected' if values.AI_PROVIDER == 'gemini' }}>Google Gemini</option>
-        <option value="openai" {{ 'selected' if values.AI_PROVIDER == 'openai' }}>OpenAI (GPT)</option>
-        <option value="anthropic" {{ 'selected' if values.AI_PROVIDER == 'anthropic' }}>Anthropic (Claude)</option>
-        <option value="groq" {{ 'selected' if values.AI_PROVIDER == 'groq' }}>Groq (fast open models)</option>
-        <option value="cursor" {{ 'selected' if values.AI_PROVIDER == 'cursor' }}>Cursor (via local proxy)</option>
-      </select>
-      <small>The selected provider powers all AI features. Status:
-        {% if ai_on %}<span class="fit fit-yes">enabled</span>{% else %}<span class="fit fit-no">off — add the API key for the selected provider</span>{% endif %}.
-        <b>Company research</b> web-grounding works only with Gemini (other providers fall back to an ungrounded answer).</small>
-    </div>
-
-    <div class="provider-block" data-provider="gemini">
-      <div class="setting">
-        <label for="GEMINI_API_KEY">Gemini API key</label>
-        <input type="text" id="GEMINI_API_KEY" name="GEMINI_API_KEY" value="{{ values.GEMINI_API_KEY }}" placeholder="AIza..." autocomplete="off">
-        <small>Get it at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a>.</small>
-      </div>
-      <div class="setting">
-        <label for="GEMINI_MODEL">Gemini model</label>
-        <input type="text" id="GEMINI_MODEL" name="GEMINI_MODEL" value="{{ values.GEMINI_MODEL }}" placeholder="gemini-2.5-flash" list="gemini-models" autocomplete="off">
-        <datalist id="gemini-models">{% for m in gemini_models %}<option value="{{ m }}">{% endfor %}</datalist>
-        <small>Default <code>gemini-2.5-flash</code>; falls back automatically if a model is busy.</small>
-      </div>
-    </div>
-
-    <div class="provider-block" data-provider="openai">
-      <div class="setting">
-        <label for="OPENAI_API_KEY">OpenAI API key</label>
-        <input type="text" id="OPENAI_API_KEY" name="OPENAI_API_KEY" value="{{ values.OPENAI_API_KEY }}" placeholder="sk-..." autocomplete="off">
-        <small>Get it at <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>.</small>
-      </div>
-      <div class="setting">
-        <label for="OPENAI_MODEL">OpenAI model</label>
-        <input type="text" id="OPENAI_MODEL" name="OPENAI_MODEL" value="{{ values.OPENAI_MODEL }}" placeholder="gpt-4o-mini" list="openai-models" autocomplete="off">
-        <datalist id="openai-models">{% for m in openai_models %}<option value="{{ m }}">{% endfor %}</datalist>
-        <small>Default <code>gpt-4o-mini</code>, or type any model id available on your account.</small>
-      </div>
-    </div>
-
-    <div class="provider-block" data-provider="anthropic">
-      <div class="setting">
-        <label for="ANTHROPIC_API_KEY">Anthropic API key</label>
-        <input type="text" id="ANTHROPIC_API_KEY" name="ANTHROPIC_API_KEY" value="{{ values.ANTHROPIC_API_KEY }}" placeholder="sk-ant-..." autocomplete="off">
-        <small>Get it at <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>.</small>
-      </div>
-      <div class="setting">
-        <label for="ANTHROPIC_MODEL">Anthropic model</label>
-        <input type="text" id="ANTHROPIC_MODEL" name="ANTHROPIC_MODEL" value="{{ values.ANTHROPIC_MODEL }}" placeholder="claude-3-5-sonnet-latest" list="anthropic-models" autocomplete="off">
-        <datalist id="anthropic-models">{% for m in anthropic_models %}<option value="{{ m }}">{% endfor %}</datalist>
-        <small>Default <code>claude-3-5-sonnet-latest</code>, or type any current Claude model id.</small>
-      </div>
-    </div>
-
-    <div class="provider-block" data-provider="groq">
-      <div class="setting">
-        <label for="GROQ_API_KEY">Groq API key</label>
-        <input type="text" id="GROQ_API_KEY" name="GROQ_API_KEY" value="{{ values.GROQ_API_KEY }}" placeholder="gsk_..." autocomplete="off">
-        <small>Get one free at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>. Groq runs open models (GPT-OSS, Qwen) on very fast hardware with a generous free tier.</small>
-      </div>
-      <div class="setting">
-        <label for="GROQ_MODEL">Groq model</label>
-        <input type="text" id="GROQ_MODEL" name="GROQ_MODEL" value="{{ values.GROQ_MODEL }}" placeholder="openai/gpt-oss-120b" list="groq-models" autocomplete="off">
-        <datalist id="groq-models">{% for m in groq_models %}<option value="{{ m }}">{% endfor %}</datalist>
-        <small>Default <code>openai/gpt-oss-120b</code> (Groq's flagship), or any id from <a href="https://console.groq.com/docs/models" target="_blank" rel="noopener">their model list</a>.</small>
-      </div>
-    </div>
-
-    <div class="provider-block" data-provider="cursor">
-      <div class="setting">
-        <label for="CURSOR_API_KEY">Cursor API key</label>
-        <input type="text" id="CURSOR_API_KEY" name="CURSOR_API_KEY" value="{{ values.CURSOR_API_KEY }}" placeholder="crsr_..." autocomplete="off">
-        <small>Get it at <a href="https://cursor.com/dashboard/integrations" target="_blank" rel="noopener">cursor.com/dashboard/integrations</a>.
-          <b>Note:</b> Cursor has no native chat API — you must run a local
-          OpenAI-compatible proxy (e.g.
-          <a href="https://github.com/Randomblock1/cursor-openai-api" target="_blank" rel="noopener">cursor-openai-api</a>
-          or <a href="https://github.com/tageecc/cursor-agent-api-proxy" target="_blank" rel="noopener">cursor-agent-api-proxy</a>)
-          that wraps the Cursor Agent CLI.</small>
-      </div>
-      <div class="setting">
-        <label for="CURSOR_BASE_URL">Cursor proxy base URL</label>
-        <input type="text" id="CURSOR_BASE_URL" name="CURSOR_BASE_URL" value="{{ values.CURSOR_BASE_URL }}" placeholder="http://localhost:8080/v1" autocomplete="off">
-        <small>The <code>/v1</code> URL your local proxy listens on. Default <code>http://localhost:8080/v1</code>.</small>
-      </div>
-      <div class="setting">
-        <label for="CURSOR_MODEL">Cursor model</label>
-        <input type="text" id="CURSOR_MODEL" name="CURSOR_MODEL" value="{{ values.CURSOR_MODEL }}" placeholder="auto" list="cursor-models" autocomplete="off">
-        <datalist id="cursor-models">{% for m in cursor_models %}<option value="{{ m }}">{% endfor %}</datalist>
-        <small>Default <code>auto</code> (Cursor picks the model), or any id your proxy exposes (<code>GET /v1/models</code>).</small>
-      </div>
-    </div>
-
-    <div class="setting">
-      <label class="check-setting" for="AI_FALLBACK">
-        <input type="checkbox" id="AI_FALLBACK" name="AI_FALLBACK" value="1" {{ 'checked' if values.AI_FALLBACK }}>
-        Auto-switch provider on failure
-      </label>
-      <small>If the selected provider errors out (quota, overload, proxy down…), the same request is
-        automatically retried with your other configured providers
-        {% if fallback_providers %}(currently: <b>{{ fallback_providers | join(' → ') }}</b>){% else %}(add more API keys above to enable a chain){% endif %}.</small>
-    </div>
-  </section>
-  <script>
-    (function () {
-      var sel = document.getElementById('AI_PROVIDER');
-      function sync() {
-        document.querySelectorAll('.provider-block').forEach(function (b) {
-          b.style.display = (b.getAttribute('data-provider') === sel.value) ? '' : 'none';
-        });
-      }
-      if (sel) { sel.addEventListener('change', sync); sync(); }
-    })();
-  </script>
-
+{# ------------------------------------------------ Resume ----------------- #}
+<div class="tab-page" id="tab-resume">
   <section class="panel">
     <h2>📄 Resume</h2>
     <div class="setting">
       <label for="RESUME_PATH">Resume file path</label>
-      <input type="text" id="RESUME_PATH" name="RESUME_PATH" value="{{ values.RESUME_PATH }}" placeholder="C:\path\to\your-cv.pdf">
+      <input type="text" id="RESUME_PATH" name="RESUME_PATH" form="settings-form" value="{{ values.RESUME_PATH }}" placeholder="C:\path\to\your-cv.pdf">
       <small>Supports <b>HTML, PDF, Word (.docx)</b> and plain text/Markdown. Used for
         match scoring &amp; AI tailoring. After changing it, rebuild the profile below.
         <em>Tip: an HTML resume produces the best-looking tailored CV; PDF/Word are
@@ -175,11 +189,31 @@
   </section>
 
   <section class="panel">
-    <h2>💾 Backup location</h2>
+    <h2>Match profile</h2>
+    <p class="muted">Rebuild the weighted skill profile from your resume (do this after changing the resume path — save settings first).</p>
+    <form method="post" action="{{ url_for('main.rebuild_profile') }}">
+      <button class="btn" type="submit">🔁 Rebuild match profile from resume</button>
+    </form>
+  </section>
+</div>
+
+{# ------------------------------------------------ Google ----------------- #}
+<div class="tab-page" id="tab-google">
+  <div class="banner">
+    Both features below share <b>one</b> Google Cloud OAuth client (a JSON file) —
+    a one-time, free setup. Never done it?
+    <a href="#rb-google-cloud">📖 Follow the Google Cloud one-time setup guide</a>.
+  </div>
+
+  <section class="panel">
+    <h2>🔑 Google OAuth client (shared)</h2>
     <div class="setting">
-      <label for="BACKUP_DIR">Backup folder</label>
-      <input type="text" id="BACKUP_DIR" name="BACKUP_DIR" value="{{ values.BACKUP_DIR }}" placeholder="C:\Users\...\OneDrive\JobTrackerBackups">
-      <small>Tip: point this at a <b>OneDrive</b> folder so backups are private and auto-synced to the cloud. Save settings first, then use “Back up now” below.</small>
+      <label for="GOOGLE_CLIENT_SECRET">Google OAuth client JSON (path)</label>
+      <input type="text" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" form="settings-form" value="{{ values.GOOGLE_CLIENT_SECRET }}" autocomplete="off">
+      <small>Path to the <b>Desktop app</b> OAuth client JSON downloaded from
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>
+        (<a href="#rb-google-cloud">📖 setup guide</a>).
+        Status: {% if gs_secret_found %}<span class="fit fit-yes">file found</span>{% else %}<span class="fit fit-no">file not found</span>{% endif %}.</small>
     </div>
   </section>
 
@@ -187,195 +221,369 @@
     <h2>📊 Google Sheets sync</h2>
     <div class="setting">
       <label for="GDRIVE_FOLDER">Google Drive folder (URL)</label>
-      <input type="text" id="GDRIVE_FOLDER" name="GDRIVE_FOLDER" value="{{ values.GDRIVE_FOLDER }}" placeholder="https://drive.google.com/drive/u/0/folders/..." autocomplete="off">
+      <input type="text" id="GDRIVE_FOLDER" name="GDRIVE_FOLDER" form="settings-form" value="{{ values.GDRIVE_FOLDER }}" placeholder="https://drive.google.com/drive/u/0/folders/..." autocomplete="off">
       <small>A spreadsheet named <b>“Job Tracker Applications”</b> is created in this
         folder (same columns as the Excel export) and kept up to date automatically
         after every change. Save settings, then connect &amp; sync below.</small>
     </div>
-    <div class="setting">
-      <label for="GOOGLE_CLIENT_SECRET">Google OAuth client JSON (path)</label>
-      <input type="text" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" value="{{ values.GOOGLE_CLIENT_SECRET }}" autocomplete="off">
-      <small>One-time setup: in <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>
-        create an OAuth client of type <b>Desktop app</b> (and enable the
-        <b>Drive API</b> + <b>Sheets API</b>), download its JSON and put it at this path.
-        Status: {% if gs_secret_found %}<span class="fit fit-yes">file found</span>{% else %}<span class="fit fit-no">file not found</span>{% endif %},
-        {% if gs_connected %}<span class="fit fit-yes">Google connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</small>
-    </div>
+    {% if values.GDRIVE_FOLDER %}
+      <div class="actions">
+        {% if not gs_connected %}
+          <form method="post" action="{{ url_for('main.gsheet_connect') }}">
+            <button class="btn primary" type="submit">🔑 Connect Google (opens a sign-in window)</button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('main.gsheet_sync') }}">
+            <button class="btn primary" type="submit">🔄 Sync to Google Sheet now</button>
+          </form>
+          <form method="post" action="{{ url_for('main.gsheet_disconnect') }}">
+            <button class="btn danger" type="submit">Disconnect Google</button>
+          </form>
+        {% endif %}
+      </div>
+      <p class="muted sm mt">Status:
+        {% if gs_connected %}<span class="fit fit-yes">Google connected</span> — the sheet
+        also updates by itself a few seconds after you add, edit, reject or delete an
+        application.{% else %}<span class="fit fit-no">not connected</span>{% endif %}</p>
+    {% else %}
+      <p class="muted sm">Paste your Drive folder URL above and save settings to enable connect &amp; sync.</p>
+    {% endif %}
   </section>
 
   <section class="panel">
     <h2>📬 Gmail job alerts</h2>
     <div class="setting">
       <label for="GMAIL_LABEL">Gmail label to scan</label>
-      <input type="text" id="GMAIL_LABEL" name="GMAIL_LABEL" value="{{ values.GMAIL_LABEL }}" placeholder="linkedin-jobs" autocomplete="off">
+      <input type="text" id="GMAIL_LABEL" name="GMAIL_LABEL" form="settings-form" value="{{ values.GMAIL_LABEL }}" placeholder="linkedin-jobs" autocomplete="off">
       <small>Point your LinkedIn job-alert emails at a Gmail label (e.g. a filter
         that applies <code>{{ values.GMAIL_LABEL or 'linkedin-jobs' }}</code>).
-        The <b>Job Alerts</b> page reads emails under this label (read-only),
-        extracts the jobs and flags the ones you haven't applied to yet.
-        Uses the same OAuth client JSON as Google Sheets — also <b>enable the
-        Gmail API</b> for that Cloud project, then connect below with the
-        alerts mailbox account.
-        Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</small>
+        The <b>Job Alerts</b> page reads emails under this label (<b>read-only</b> —
+        the app can never send or delete mail), extracts the jobs and flags the ones
+        you haven't applied to yet. Requires the <b>Gmail API</b> enabled on the same
+        Cloud project (<a href="#rb-google-cloud">📖 setup guide</a>).</small>
     </div>
-  </section>
-
-  <div class="actions">
-    <button class="btn primary" type="submit">💾 Save settings</button>
-  </div>
-</form>
-
-<section class="panel">
-  <h2>👤 Profiles</h2>
-  <p class="muted">Each profile has its <b>own applications database and settings</b>
-    (API keys, resume, Google Sheet…). Active profile:
-    <span class="pill">{{ active_profile }}</span> — switch from the top bar or here.</p>
-  <table class="profiles-table">
-    <tbody>
-      {% for p in profiles %}
-      <tr>
-        <td>{% if p == active_profile %}<b>👤 {{ p }}</b> <span class="muted sm">(active)</span>{% else %}👤 {{ p }}{% endif %}</td>
-        <td class="actions-cell">
-          {% if p != active_profile %}
-          <form method="post" action="{{ url_for('main.profile_switch') }}" style="display:inline">
-            <input type="hidden" name="name" value="{{ p }}">
-            <button class="btn sm" type="submit">Switch to</button>
-          </form>
-          {% if p != 'default' %}
-          <form method="post" action="{{ url_for('main.profile_delete') }}" style="display:inline"
-                onsubmit="return confirm('Delete profile “{{ p }}” and ALL its data (applications, settings, resumes)? This cannot be undone.')">
-            <input type="hidden" name="name" value="{{ p }}">
-            <button class="btn sm danger" type="submit">Delete</button>
-          </form>
-          {% endif %}
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <details class="mt">
-    <summary class="btn sm">➕ New profile…</summary>
-    <form method="post" action="{{ url_for('main.profile_create') }}" class="stack mt">
-      <input name="name" placeholder="profile name (letters, digits, - and _)" required pattern="[A-Za-z0-9][A-Za-z0-9_-]*" maxlength="40">
-      <label class="muted sm">Import settings from
-        <select name="import_from">
-          <option value="">— start blank —</option>
-          {% for p in profiles %}
-          <option value="{{ p }}">{{ p }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <small>Importing copies the source profile's settings (API keys, resume path…),
-        match profile and pitch — the applications list starts <b>empty</b>.
-        The new profile is activated right away.</small>
-      <button class="btn primary" type="submit">Create profile</button>
-    </form>
-  </details>
-</section>
-
-<section class="panel">
-  <h2>🗄️ Backup &amp; restore</h2>
-  <p class="muted">A backup copies <b>all profiles</b>: each profile's database
-    (applications + AI analyses, cover letters, recruiter notes), match profile,
-    settings (<code>.env</code>) and tailored resumes. The active profile's live
-    data lives in <code>{{ data_dir }}</code>.</p>
-  <div class="actions">
-    <form method="post" action="{{ url_for('main.backup_now') }}">
-      <button class="btn primary" type="submit">📦 Back up now → {{ backup_dir }}</button>
-    </form>
-    <a class="btn" href="{{ url_for('main.backup_download') }}">⬇️ Download backup (.zip)</a>
-  </div>
-  <details class="mt">
-    <summary class="btn sm danger">Restore from a backup folder…</summary>
-    <form method="post" action="{{ url_for('main.restore') }}" class="stack mt"
-          onsubmit="return confirm('Restore will OVERWRITE your current database and settings. Continue?')">
-      <input name="folder" placeholder="path to a jobtracker-backup-YYYYMMDD-HHMMSS folder">
-      <small>Overwrites the current DB, profile, settings and tailored resumes with the backup's contents.</small>
-      <button class="btn danger" type="submit">Restore (overwrite current data)</button>
-    </form>
-  </details>
-</section>
-
-<section class="panel">
-  <h2>📊 Google Sheets — connect &amp; sync</h2>
-  {% if values.GDRIVE_FOLDER %}
-    <p class="muted sm">Folder: <code>{{ values.GDRIVE_FOLDER }}</code></p>
     <div class="actions">
-      {% if not gs_connected %}
-        <form method="post" action="{{ url_for('main.gsheet_connect') }}">
-          <button class="btn primary" type="submit">🔑 Connect Google (opens a sign-in window)</button>
+      {% if not gmail_connected %}
+        <form method="post" action="{{ url_for('main.gmail_connect') }}">
+          <button class="btn primary" type="submit">🔑 Connect Gmail (opens a sign-in window)</button>
         </form>
       {% else %}
-        <form method="post" action="{{ url_for('main.gsheet_sync') }}">
-          <button class="btn primary" type="submit">🔄 Sync to Google Sheet now</button>
-        </form>
-        <form method="post" action="{{ url_for('main.gsheet_disconnect') }}">
-          <button class="btn danger" type="submit">Disconnect Google</button>
+        <a class="btn primary" href="{{ url_for('main.alerts') }}">📬 Open Job Alerts</a>
+        <form method="post" action="{{ url_for('main.gmail_disconnect') }}">
+          <button class="btn danger" type="submit">Disconnect Gmail</button>
         </form>
       {% endif %}
     </div>
-    <p class="muted sm mt">Once connected, the sheet also updates by itself a few
-      seconds after you add, edit, reject or delete an application.</p>
-  {% else %}
-    <p class="muted sm">Paste your Drive folder URL in <b>Google Sheets sync</b>
-      above and save settings to enable this.</p>
-  {% endif %}
-</section>
+    <p class="muted sm mt">Sign in with the mailbox that receives the alerts.
+      Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
+  </section>
+</div>
 
-<section class="panel">
-  <h2>📬 Gmail job alerts — connect</h2>
-  <p class="muted sm">Sign in with the mailbox that receives your LinkedIn job
-    alerts (label: <code>{{ values.GMAIL_LABEL }}</code>). Access is
-    <b>read-only</b> — the app can only read emails, never send or delete.</p>
-  <div class="actions">
-    {% if not gmail_connected %}
-      <form method="post" action="{{ url_for('main.gmail_connect') }}">
-        <button class="btn primary" type="submit">🔑 Connect Gmail (opens a sign-in window)</button>
-      </form>
-    {% else %}
-      <a class="btn primary" href="{{ url_for('main.alerts') }}">📬 Open Job Alerts</a>
-      <form method="post" action="{{ url_for('main.gmail_disconnect') }}">
-        <button class="btn danger" type="submit">Disconnect Gmail</button>
-      </form>
-    {% endif %}
-  </div>
-</section>
-
-<section class="panel">
-  <h2>☁️ GitHub backup</h2>
-  <p class="muted">Mirror your data to a <b>private</b> git repo. Set the repo URL
-    below (in <code>DATA_BACKUP_REMOTE</code>) and <b>Save settings</b> first, then
-    push. Uses your existing git credentials — no token is stored by the app.</p>
-  {% if values.DATA_BACKUP_REMOTE %}
-    <p class="muted sm">Remote: <code>{{ values.DATA_BACKUP_REMOTE }}</code></p>
-    <div class="actions">
-      <form method="post" action="{{ url_for('main.git_backup') }}">
-        <button class="btn primary" type="submit">⬆️ Back up to GitHub</button>
-      </form>
+{# ------------------------------------------------ Backups ---------------- #}
+<div class="tab-page" id="tab-backup">
+  <section class="panel">
+    <h2>💾 Backup location</h2>
+    <div class="setting">
+      <label for="BACKUP_DIR">Backup folder</label>
+      <input type="text" id="BACKUP_DIR" name="BACKUP_DIR" form="settings-form" value="{{ values.BACKUP_DIR }}" placeholder="C:\Users\...\OneDrive\JobTrackerBackups">
+      <small>Tip: point this at a <b>OneDrive</b> folder so backups are private and auto-synced to the cloud. Save settings first, then use “Back up now” below.</small>
     </div>
-    <p class="muted sm mt">⚠️ This includes your <code>.env</code> (API keys). Make
-      sure the repo is private — anything pushed stays in its git history.</p>
+  </section>
+
+  <section class="panel">
+    <h2>🗄️ Backup &amp; restore</h2>
+    <p class="muted">A backup copies <b>all profiles</b>: each profile's database
+      (applications + AI analyses, cover letters, recruiter notes), match profile,
+      settings (<code>.env</code>) and tailored resumes. The active profile's live
+      data lives in <code>{{ data_dir }}</code>.</p>
+    <div class="actions">
+      <form method="post" action="{{ url_for('main.backup_now') }}">
+        <button class="btn primary" type="submit">📦 Back up now → {{ backup_dir }}</button>
+      </form>
+      <a class="btn" href="{{ url_for('main.backup_download') }}">⬇️ Download backup (.zip)</a>
+    </div>
     <details class="mt">
-      <summary class="btn sm danger">Restore from GitHub…</summary>
-      <form method="post" action="{{ url_for('main.git_restore') }}" class="stack mt"
-            onsubmit="return confirm('Restore from GitHub will OVERWRITE your current database, settings and resumes with the latest backup. Continue?')">
-        <small>Pulls the latest backup and overwrites your current DB, profile,
-          pitch, settings and tailored resumes.</small>
-        <button class="btn danger" type="submit">Restore from GitHub (overwrite current data)</button>
+      <summary class="btn sm danger">Restore from a backup folder…</summary>
+      <form method="post" action="{{ url_for('main.restore') }}" class="stack mt"
+            onsubmit="return confirm('Restore will OVERWRITE your current database and settings. Continue?')">
+        <input name="folder" placeholder="path to a jobtracker-backup-YYYYMMDD-HHMMSS folder">
+        <small>Overwrites the current DB, profile, settings and tailored resumes with the backup's contents.</small>
+        <button class="btn danger" type="submit">Restore (overwrite current data)</button>
       </form>
     </details>
-  {% else %}
-    <p class="muted sm">Add a repo URL to <code>DATA_BACKUP_REMOTE</code> above and
-      save settings to enable GitHub backup
-      (e.g. <code>https://github.com/&lt;you&gt;/job-tracker-data.git</code>).</p>
-  {% endif %}
-</section>
+  </section>
 
-<section class="panel">
-  <h2>Match profile</h2>
-  <p class="muted">Rebuild the weighted skill profile from your resume (do this after changing the resume path).</p>
-  <form method="post" action="{{ url_for('main.rebuild_profile') }}">
-    <button class="btn" type="submit">🔁 Rebuild match profile from resume</button>
-  </form>
-</section>
+  <section class="panel">
+    <h2>☁️ GitHub backup</h2>
+    <div class="setting">
+      <label for="DATA_BACKUP_REMOTE">Private git repo URL</label>
+      <input type="text" id="DATA_BACKUP_REMOTE" name="DATA_BACKUP_REMOTE" form="settings-form" value="{{ values.DATA_BACKUP_REMOTE }}" placeholder="git@github.com:you/job-tracker-data.git" autocomplete="off">
+      <small>Mirror your data to a <b>private</b> git repo. Save settings first, then
+        push below. Uses your existing git credentials — no token is stored by the app.</small>
+    </div>
+    {% if values.DATA_BACKUP_REMOTE %}
+      <div class="actions">
+        <form method="post" action="{{ url_for('main.git_backup') }}">
+          <button class="btn primary" type="submit">⬆️ Back up to GitHub</button>
+        </form>
+      </div>
+      <p class="muted sm mt">⚠️ This includes your <code>.env</code> (API keys). Make
+        sure the repo is private — anything pushed stays in its git history.</p>
+      <details class="mt">
+        <summary class="btn sm danger">Restore from GitHub…</summary>
+        <form method="post" action="{{ url_for('main.git_restore') }}" class="stack mt"
+              onsubmit="return confirm('Restore from GitHub will OVERWRITE your current database, settings and resumes with the latest backup. Continue?')">
+          <small>Pulls the latest backup and overwrites your current DB, profile,
+            pitch, settings and tailored resumes.</small>
+          <button class="btn danger" type="submit">Restore from GitHub (overwrite current data)</button>
+        </form>
+      </details>
+    {% else %}
+      <p class="muted sm">Add a repo URL above and save settings to enable GitHub backup.</p>
+    {% endif %}
+  </section>
+</div>
+
+{# ------------------------------------------------ Profiles --------------- #}
+<div class="tab-page" id="tab-profiles">
+  <section class="panel">
+    <h2>👤 Profiles</h2>
+    <p class="muted">Each profile has its <b>own applications database and settings</b>
+      (API keys, resume, Google Sheet…). Active profile:
+      <span class="pill">{{ active_profile }}</span> — switch from the top bar or here.</p>
+    <table class="profiles-table">
+      <tbody>
+        {% for p in profiles %}
+        <tr>
+          <td>{% if p == active_profile %}<b>👤 {{ p }}</b> <span class="muted sm">(active)</span>{% else %}👤 {{ p }}{% endif %}</td>
+          <td class="actions-cell">
+            {% if p != active_profile %}
+            <form method="post" action="{{ url_for('main.profile_switch') }}" style="display:inline">
+              <input type="hidden" name="name" value="{{ p }}">
+              <button class="btn sm" type="submit">Switch to</button>
+            </form>
+            {% if p != 'default' %}
+            <form method="post" action="{{ url_for('main.profile_delete') }}" style="display:inline"
+                  onsubmit="return confirm('Delete profile “{{ p }}” and ALL its data (applications, settings, resumes)? This cannot be undone.')">
+              <input type="hidden" name="name" value="{{ p }}">
+              <button class="btn sm danger" type="submit">Delete</button>
+            </form>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <details class="mt">
+      <summary class="btn sm">➕ New profile…</summary>
+      <form method="post" action="{{ url_for('main.profile_create') }}" class="stack mt">
+        <input name="name" placeholder="profile name (letters, digits, - and _)" required pattern="[A-Za-z0-9][A-Za-z0-9_-]*" maxlength="40">
+        <label class="muted sm">Import settings from
+          <select name="import_from">
+            <option value="">— start blank —</option>
+            {% for p in profiles %}
+            <option value="{{ p }}">{{ p }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <small>Importing copies the source profile's settings (API keys, resume path…),
+          match profile and pitch — the applications list starts <b>empty</b>.
+          The new profile is activated right away.</small>
+        <button class="btn primary" type="submit">Create profile</button>
+      </form>
+    </details>
+  </section>
+</div>
+
+{# ------------------------------------------------ Setup guide ------------ #}
+<div class="tab-page" id="tab-guide">
+  <section class="panel">
+    <h2>📖 Setup guide</h2>
+    <p class="muted">Step-by-step runbooks for every key this app can use. All of the
+      recommended options (<b>Gemini, Groq, JSearch, Jooble, Google Cloud</b>) are free.</p>
+
+    <h3 class="rb-group">🤖 AI providers</h3>
+
+    <details class="runbook" id="rb-gemini">
+      <summary>Google Gemini <span class="pill">free · recommended</span></summary>
+      <ol>
+        <li>Open <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> and sign in with any Google account.</li>
+        <li>Click <b>Create API key</b> (pick “create in new project” if asked).</li>
+        <li>Copy the key — it starts with <code>AIza…</code></li>
+        <li>Paste it in the <a href="#GEMINI_API_KEY">AI provider tab → Gemini API key</a>, set Provider to <b>Google Gemini</b> and save.</li>
+      </ol>
+      <p class="muted sm">Why Gemini first: it's the only provider that supports
+        <b>web-grounded company research</b> and <b>voice transcription</b> here, and the
+        free tier covers normal daily use.</p>
+    </details>
+
+    <details class="runbook" id="rb-groq">
+      <summary>Groq <span class="pill">free · fast</span></summary>
+      <ol>
+        <li>Open <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> and sign up (Google or GitHub login works).</li>
+        <li>Click <b>Create API Key</b>, give it any name.</li>
+        <li>Copy the key — it starts with <code>gsk_…</code> (shown only once).</li>
+        <li>Paste it in the <a href="#GROQ_API_KEY">AI provider tab → Groq API key</a>. Great as a fallback provider even if Gemini stays primary.</li>
+      </ol>
+    </details>
+
+    <details class="runbook" id="rb-openai">
+      <summary>OpenAI (GPT) <span class="pill">paid</span></summary>
+      <ol>
+        <li>Sign up at <a href="https://platform.openai.com/" target="_blank" rel="noopener">platform.openai.com</a> (this is the API platform — separate from ChatGPT Plus).</li>
+        <li>Add billing: <b>Settings → Billing → Add payment details</b> and load a small credit (e.g. $5) — new accounts have no free API credit.</li>
+        <li>Go to <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">API keys</a> → <b>Create new secret key</b>.</li>
+        <li>Copy the key (<code>sk-…</code>, shown only once) into the <a href="#OPENAI_API_KEY">AI provider tab → OpenAI API key</a>.</li>
+      </ol>
+    </details>
+
+    <details class="runbook" id="rb-anthropic">
+      <summary>Anthropic (Claude) <span class="pill">paid</span></summary>
+      <ol>
+        <li>Sign up at <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>.</li>
+        <li>Buy prepaid credits under <b>Billing</b> (minimum ~$5).</li>
+        <li>Go to <b>API keys</b> → <b>Create key</b>.</li>
+        <li>Copy the key (<code>sk-ant-…</code>) into the <a href="#ANTHROPIC_API_KEY">AI provider tab → Anthropic API key</a>.</li>
+      </ol>
+    </details>
+
+    <details class="runbook" id="rb-cursor">
+      <summary>Cursor <span class="pill">needs a local proxy</span></summary>
+      <ol>
+        <li>Get a key at <a href="https://cursor.com/dashboard/integrations" target="_blank" rel="noopener">cursor.com/dashboard → Integrations</a> (<code>crsr_…</code>).</li>
+        <li>Cursor has <b>no native chat API</b>, so a local OpenAI-compatible proxy must
+          wrap the Cursor Agent CLI (e.g.
+          <a href="https://github.com/tageecc/cursor-agent-api-proxy" target="_blank" rel="noopener">cursor-agent-api-proxy</a>).</li>
+        <li>On this machine, <code>start.command</code> auto-starts the proxy on port 8080
+          whenever the provider is set to Cursor — usually nothing to do.</li>
+        <li>Paste the key in the <a href="#CURSOR_API_KEY">AI provider tab → Cursor API key</a> and keep the base URL <code>http://localhost:8080/v1</code>.</li>
+      </ol>
+    </details>
+
+    <h3 class="rb-group">🔎 Job search sources</h3>
+
+    <details class="runbook" id="rb-jsearch">
+      <summary>JSearch / RapidAPI — LinkedIn listings <span class="pill">free tier</span></summary>
+      <ol>
+        <li>Sign up at <a href="https://rapidapi.com/" target="_blank" rel="noopener">rapidapi.com</a>.</li>
+        <li>Open the <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">JSearch API page</a> → <b>Pricing</b> → subscribe to the free <b>Basic</b> plan.</li>
+        <li>Back on the API's <b>Endpoints</b> tab, copy the value of <code>X-RapidAPI-Key</code> from the code snippet on the right.</li>
+        <li>Paste it in the <a href="#RAPIDAPI_KEY">Job sources tab → RapidAPI key</a>.</li>
+      </ol>
+    </details>
+
+    <details class="runbook" id="rb-jooble">
+      <summary>Jooble <span class="pill">free</span></summary>
+      <ol>
+        <li>Open <a href="https://jooble.org/api/about" target="_blank" rel="noopener">jooble.org/api/about</a> and fill in the short request form.</li>
+        <li>The API key arrives by email (usually within a day).</li>
+        <li>Paste it in the <a href="#JOOBLE_API_KEY">Job sources tab → Jooble API key</a>. The free quota is limited — the app tracks your remaining calls next to the field.</li>
+      </ol>
+    </details>
+
+    <details class="runbook" id="rb-adzuna">
+      <summary>Adzuna <span class="pill">optional · no Israel coverage</span></summary>
+      <ol>
+        <li>Register at <a href="https://developer.adzuna.com/" target="_blank" rel="noopener">developer.adzuna.com</a> and create an application.</li>
+        <li>Copy the <b>Application ID</b> and <b>Application Key</b> shown on your dashboard.</li>
+        <li>Paste both in the <a href="#ADZUNA_APP_ID">Job sources tab → Adzuna fields</a>.</li>
+      </ol>
+    </details>
+
+    <h3 class="rb-group">☁️ Google Cloud — one-time setup (Sheets sync + Gmail alerts)</h3>
+
+    <details class="runbook" id="rb-google-cloud">
+      <summary>Create the OAuth client JSON <span class="pill">free · ~5 minutes · done once</span></summary>
+      <ol>
+        <li><b>Create a project:</b> open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>,
+          click the project picker (top bar) → <b>New project</b> → name it e.g. <code>job-tracker</code> → Create.</li>
+        <li><b>Enable the APIs:</b> go to <b>APIs &amp; Services → Library</b> and enable, one by one:
+          <b>Google Drive API</b>, <b>Google Sheets API</b> (for the sheet sync) and
+          <b>Gmail API</b> (for job alerts).</li>
+        <li><b>Consent screen:</b> <b>APIs &amp; Services → OAuth consent screen</b> →
+          user type <b>External</b> → fill only app name + your email → save. The app can
+          stay in <b>Testing</b> mode forever.</li>
+        <li><b>Test users:</b> on the consent screen page open <b>Audience → Test users → + Add users</b>
+          and add <i>every</i> Google account you'll sign in with — your main account for
+          Sheets <b>and</b> the alerts mailbox (e.g. <code>ramizil1@gmail.com</code>). Without
+          this, sign-in fails with “access blocked”.</li>
+        <li><b>Create the client:</b> <b>APIs &amp; Services → Credentials → + Create credentials →
+          OAuth client ID</b> → application type <b>Desktop app</b> → Create → <b>Download JSON</b>.</li>
+        <li><b>Install it:</b> save the downloaded file at the path shown in the
+          <a href="#GOOGLE_CLIENT_SECRET">Google tab → OAuth client JSON</a> (default
+          <code>data/google_client_secret.json</code>) — the status there should flip to “file found”.</li>
+        <li><b>Connect:</b> in the Google tab press <b>Connect Google</b> (Sheets) and/or
+          <b>Connect Gmail</b>. A browser sign-in window opens; on the “Google hasn't verified
+          this app” warning click <b>Continue</b> — it's your own app. Sheets and Gmail can use
+          <i>different</i> accounts; each connection stores its own token.</li>
+      </ol>
+      <p class="muted sm">Costs nothing at this usage level. Gmail access is requested
+        <b>read-only</b>; the app can never send or delete mail. To revoke access later,
+        use the Disconnect buttons or
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>.</p>
+    </details>
+  </section>
+</div>
+
+<div class="savebar">
+  <button class="btn primary" type="submit" form="settings-form">💾 Save settings</button>
+  <span class="muted sm">Saves the fields on all tabs at once.</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Tab view (same pattern as the application detail page): #hash links open the
+// tab containing that element — and pop open its <details> runbook if needed.
+(function () {
+  var btns = document.querySelectorAll('#settings-tabs .tab-btn');
+  var pages = document.querySelectorAll('.tab-page');
+
+  function activate(name) {
+    Array.prototype.forEach.call(btns, function (b) {
+      b.classList.toggle('active', b.getAttribute('data-tab') === name);
+    });
+    Array.prototype.forEach.call(pages, function (p) {
+      p.classList.toggle('active', p.id === 'tab-' + name);
+    });
+  }
+
+  function openForHash(hash, scroll) {
+    if (!hash || hash.length < 2) return false;
+    var el = document.getElementById(hash.slice(1));
+    if (!el) return false;
+    var page = el.closest('.tab-page');
+    if (!page) return false;
+    activate(page.id.replace('tab-', ''));
+    var det = el.closest('details') || (el.tagName === 'DETAILS' ? el : null);
+    if (det) det.open = true;
+    if (scroll && el !== page) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (el.tagName === 'INPUT') el.focus({ preventScroll: true });
+    return true;
+  }
+
+  Array.prototype.forEach.call(btns, function (b) {
+    b.addEventListener('click', function () {
+      var name = b.getAttribute('data-tab');
+      activate(name);
+      history.replaceState(null, '', '#tab-' + name);
+    });
+  });
+  window.addEventListener('hashchange', function () { openForHash(location.hash, true); });
+  if (!openForHash(location.hash, false)) activate('ai');
+})();
+</script>
+<script>
+  // Show only the model/key fields of the selected AI provider.
+  (function () {
+    var sel = document.getElementById('AI_PROVIDER');
+    function sync() {
+      document.querySelectorAll('.provider-block').forEach(function (b) {
+        b.style.display = (b.getAttribute('data-provider') === sel.value) ? '' : 'none';
+      });
+    }
+    if (sel) { sel.addEventListener('change', sync); sync(); }
+  })();
+</script>
 {% endblock %}

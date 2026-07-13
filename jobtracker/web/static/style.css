@@ -459,6 +459,24 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .diff-text ins,.diff-key ins{background:rgba(52,211,153,.2);color:#9af3c4;
   text-decoration:none;border-radius:3px;padding:0 1px}
 
+/* Settings: sticky save bar + setup-guide runbooks */
+.savebar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;
+  margin-top:18px;padding:12px 14px;border:1px solid var(--rule);border-radius:12px;
+  background:rgba(10,14,26,.92);backdrop-filter:blur(8px);z-index:5}
+.rb-group{margin:22px 0 8px;font-size:13px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.6px}
+.runbook{border:1px solid var(--rule);border-radius:10px;margin:8px 0;
+  background:rgba(30,41,64,.35)}
+.runbook summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px;
+  list-style:none;display:flex;align-items:center;gap:10px}
+.runbook summary::-webkit-details-marker{display:none}
+.runbook summary::before{content:'▸';color:var(--muted);font-size:12px;transition:transform .15s}
+.runbook[open] summary::before{transform:rotate(90deg)}
+.runbook summary .pill{margin-left:auto;font-size:10.5px}
+.runbook ol{margin:0;padding:2px 18px 12px 36px;font-size:13.5px;line-height:1.75}
+.runbook li{margin:4px 0}
+.runbook p{padding:0 14px 12px;margin:0}
+
 /* Profiles: topbar switcher + management table (Settings) */
 .profile-switch{display:inline-flex;margin:0}
 .profile-switch select{
