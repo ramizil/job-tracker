@@ -476,6 +476,10 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .runbook ol{margin:0;padding:2px 18px 12px 36px;font-size:13.5px;line-height:1.75}
 .runbook li{margin:4px 0}
 .runbook p{padding:0 14px 12px;margin:0}
+.runbook ul{margin:4px 0;padding-left:20px}
+.rb-shot{display:block;max-width:340px;width:100%;margin:8px 0 4px;border:1px solid var(--rule);
+  border-radius:8px;background:#fff;cursor:zoom-in;transition:transform .15s}
+.rb-shot:hover{transform:scale(1.02)}
 
 /* Profiles: topbar switcher + management table (Settings) */
 .profile-switch{display:inline-flex;margin:0}
