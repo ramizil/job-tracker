@@ -165,23 +165,13 @@
       </small>
     </div>
     <div class="setting">
-      <label for="GOOGLE_CSE_KEY">Google search — Custom Search API key</label>
-      <input type="text" id="GOOGLE_CSE_KEY" name="GOOGLE_CSE_KEY" form="settings-form" value="{{ values.GOOGLE_CSE_KEY }}" placeholder="AIza..." autocomplete="off">
-      <small>Finds jobs on ATS career pages (Comeet, Greenhouse, Lever…) via Google
-        <code>site:</code> searches — postings the aggregators often miss.
-        Free (100 queries/day) — <a href="#rb-google-cse">📖 step-by-step guide</a>.</small>
-    </div>
-    <div class="setting">
-      <label for="GOOGLE_CSE_CX">Google search — engine id (cx)</label>
-      <input type="text" id="GOOGLE_CSE_CX" name="GOOGLE_CSE_CX" form="settings-form" value="{{ values.GOOGLE_CSE_CX }}" placeholder="e.g. 4238a2ab5c3d94e71" autocomplete="off">
-      <small>The <b>Search engine ID</b> of your Programmable Search Engine
-        (<a href="#rb-google-cse">📖 guide</a>).</small>
-    </div>
-    <div class="setting">
-      <label for="GOOGLE_CSE_SITES">Google search — sites to search</label>
-      <input type="text" id="GOOGLE_CSE_SITES" name="GOOGLE_CSE_SITES" form="settings-form" value="{{ values.GOOGLE_CSE_SITES }}" placeholder="comeet.com/jobs, boards.greenhouse.io, jobs.lever.co" autocomplete="off">
-      <small>Comma-separated <code>site:</code> filters. Each search queries every
-        site listed here, so more sites = more API quota per search.</small>
+      <label for="WEB_SEARCH_SITES">Web search over ATS job pages — sites <span class="rec">no key needed</span></label>
+      <input type="text" id="WEB_SEARCH_SITES" name="WEB_SEARCH_SITES" form="settings-form" value="{{ values.WEB_SEARCH_SITES }}" placeholder="comeet.com/jobs, boards.greenhouse.io, jobs.lever.co" autocomplete="off">
+      <small>Finds jobs on ATS career pages (Comeet, Greenhouse, Lever…) via
+        <code>site:</code> web searches (DuckDuckGo) — postings the aggregators often
+        miss. <b>Free, no API key or signup.</b> Comma-separated <code>site:</code>
+        filters; clear the field to disable the source.
+        <a href="#rb-websearch">📖 details</a>.</small>
     </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
@@ -501,64 +491,25 @@
       </ol>
     </details>
 
-    <details class="runbook" id="rb-google-cse">
-      <summary>Google search over ATS job pages (Comeet, Greenhouse, Lever…) <span class="pill">free · 100 searches/day</span></summary>
+    <details class="runbook" id="rb-websearch">
+      <summary>Web search over ATS job pages (Comeet, Greenhouse, Lever…) <span class="pill">free · no key · works out of the box</span></summary>
       <ol>
-        <li><b>Create the search engine:</b> open
-          <a href="https://programmablesearchengine.google.com/controlpanel/create" target="_blank" rel="noopener">programmablesearchengine.google.com</a>
-          and name it e.g. <code>job-tracker</code>.
-          <br>⚠️ The create form <b>requires at least one site</b> — there is no
-          “search the entire web” choice at this stage. In the sites box add these,
-          one at a time (paste → <b>Add</b>, repeat):
-          <br><code>www.comeet.com/jobs/*</code> · <code>boards.greenhouse.io/*</code> ·
-          <code>jobs.lever.co/*</code> · <code>careers.smartrecruiters.com/*</code>
-          <br>Leave the image-search / safe-search toggles as they are, tick the
-          captcha and press <b>Create</b>.
-          <a href="{{ url_for('static', filename='guide/cse-create.png') }}" target="_blank" rel="noopener">
-            <img class="rb-shot" src="{{ url_for('static', filename='guide/cse-create.png') }}"
-                 alt="Programmable Search Engine create form with the sites box" loading="lazy"></a></li>
-        <li><b>Copy the engine id (cx):</b> after creating, Google shows an HTML embed
-          snippet like
-          <code>&lt;script src="https://cse.google.com/cse.js?cx=<b>273c4c50e2d4c41e8</b>"&gt;</code> —
-          you don't need the snippet itself, only the value after <code>cx=</code>.
-          Paste it into the <a href="#GOOGLE_CSE_CX">Job sources tab → engine id (cx)</a> field.
-          (It's also shown later under <b>Overview → Basic → Search engine ID</b>.)</li>
-        <li><b>“Search the entire web” greyed out?</b> That's fine — <b>skip it</b>.
-          The tracker only queries the sites in its list anyway, and they're already in
-          the engine. Just remember the two lists live in two places: if you ever add a
-          site in the <a href="#GOOGLE_CSE_SITES">tracker's sites field</a>, add it to the
-          engine's site list too (Overview → the <b>Sites to search</b> table).
-          <a href="{{ url_for('static', filename='guide/cse-overview.png') }}" target="_blank" rel="noopener">
-            <img class="rb-shot" src="{{ url_for('static', filename='guide/cse-overview.png') }}"
-                 alt="Engine overview page with the four ATS sites listed" loading="lazy"></a></li>
-        <li><b>Enable the API first:</b> open
-          <a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noopener">Google Cloud Console → Custom Search API</a>,
-          make sure the <code>job-tracker</code> project (from the Google setup above) is
-          selected in the top bar, and press <b>Enable</b>. Do this <i>before</i> creating
-          the key — otherwise the API won't appear in the key form's dropdown.</li>
-        <li><b>Create the API key:</b> <b>APIs &amp; Services → Credentials → + Create
-          credentials → API key</b>. Google's form blocks with
-          <span class="fit fit-no">“Make sure all fields are correct”</span> until you fill it:
-          <ul>
-            <li><b>Select API restrictions</b> (red “No APIs selected”): open the dropdown
-              and tick <b>Custom Search API</b>. Missing from the list? Go back to step 4.</li>
-            <li>Leave <b>“Authenticate API calls through a service account”</b> unchecked.</li>
-            <li><b>Application restrictions:</b> keep <b>None</b> (the key is only used
-              locally by this app).</li>
-          </ul>
-          Press <b>Create</b> and copy the <code>AIza…</code> key into the
-          <a href="#GOOGLE_CSE_KEY">Job sources tab → Custom Search API key</a> field.
-          (A plain API key — not the Gemini key and not the OAuth client JSON, even though
-          Gemini keys also start with <code>AIza</code>.)
-          <a href="{{ url_for('static', filename='guide/cse-apikey.png') }}" target="_blank" rel="noopener">
-            <img class="rb-shot" src="{{ url_for('static', filename='guide/cse-apikey.png') }}"
-                 alt="Create API key form: API restrictions set to Custom Search API, application restrictions None" loading="lazy"></a></li>
-        <li><b>Save settings</b> and run a search from the <b>Search</b> page — results from
-          this source are labeled <code>google</code>.</li>
+        <li><b>Nothing to set up.</b> This source runs <code>site:</code> web searches
+          (e.g. <code>site:comeet.com/jobs automation Israel</code>) through DuckDuckGo —
+          no API key, no signup, no quota.</li>
+        <li>The default <a href="#WEB_SEARCH_SITES">sites list</a> covers the ATS platforms
+          most Israeli companies host jobs on: <b>Comeet, Greenhouse, Lever,
+          SmartRecruiters</b>. Add or remove sites freely (comma-separated); clear the
+          field to disable the source.</li>
+        <li>Run a search from the <b>Search</b> page — results from this source are
+          labeled <code>websearch</code>.</li>
       </ol>
-      <p class="muted sm">Free tier is 100 API queries/day; one tracker search uses one query
-        <i>per site</i> in your list (4 by default) — roughly 25 searches a day. No billing
-        account needed. If the quota runs out the search reports it instead of failing silently.</p>
+      <p class="muted sm">ℹ️ Why not Google? Google's Custom Search JSON API is
+        <b>closed to new customers</b> (new projects get a permanent
+        “project does not have access” 403, and the API retires in Jan 2027), so a
+        Google Cloud key can't be used for this anymore. DuckDuckGo's results for
+        <code>site:</code> queries are close to Google's for these job pages, with
+        zero setup.</p>
     </details>
 
     <details class="runbook" id="rb-adzuna">

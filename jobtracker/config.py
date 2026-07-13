@@ -115,9 +115,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "JOOBLE_API_KEY": "Jooble - free job search, Israel",
     "ADZUNA_APP_ID": "Adzuna app id (optional, no Israel)",
     "ADZUNA_APP_KEY": "Adzuna app key (optional)",
-    "GOOGLE_CSE_KEY": "Google Custom Search API key (site: searches over ATS job pages)",
-    "GOOGLE_CSE_CX": "Google Programmable Search Engine id (cx)",
-    "GOOGLE_CSE_SITES": "Comma-separated site filters searched via Google (ATS job boards)",
+    "WEB_SEARCH_SITES": "Comma-separated site: filters for the web-search source (ATS job boards)",
     "AI_PROVIDER": "AI provider: gemini | openai | anthropic | groq | cursor",
     "AI_FALLBACK": "Auto-switch to another configured AI provider when one fails (1/0)",
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
@@ -144,12 +142,10 @@ RAPIDAPI_KEY = ""
 JOOBLE_API_KEY = ""
 ADZUNA_APP_ID = ""
 ADZUNA_APP_KEY = ""
-# ATS platforms popular with Israeli companies, searched via Google `site:`.
-DEFAULT_CSE_SITES = ("comeet.com/jobs, boards.greenhouse.io, jobs.lever.co, "
-                     "careers.smartrecruiters.com")
-GOOGLE_CSE_KEY = ""
-GOOGLE_CSE_CX = ""
-GOOGLE_CSE_SITES = DEFAULT_CSE_SITES
+# ATS platforms popular with Israeli companies, searched via `site:` queries.
+DEFAULT_WEB_SEARCH_SITES = ("comeet.com/jobs, boards.greenhouse.io, jobs.lever.co, "
+                            "careers.smartrecruiters.com")
+WEB_SEARCH_SITES = DEFAULT_WEB_SEARCH_SITES
 AI_PROVIDER = "gemini"
 AI_FALLBACK = False
 GEMINI_API_KEY = ""
@@ -176,7 +172,7 @@ def reload() -> None:
     global ACTIVE_PROFILE, PROFILE_DIR, ENV_PATH
     global DB_PATH, PROFILE_PATH, PITCH_PATH, BUILT_RESUME_PATH, TAILORED_DIR
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
-    global GOOGLE_CSE_KEY, GOOGLE_CSE_CX, GOOGLE_CSE_SITES
+    global WEB_SEARCH_SITES
     global AI_PROVIDER, AI_FALLBACK, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
     global GROQ_API_KEY, GROQ_MODEL
@@ -205,9 +201,10 @@ def reload() -> None:
     JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "").strip()
     ADZUNA_APP_ID = os.getenv("ADZUNA_APP_ID", "").strip()
     ADZUNA_APP_KEY = os.getenv("ADZUNA_APP_KEY", "").strip()
-    GOOGLE_CSE_KEY = os.getenv("GOOGLE_CSE_KEY", "").strip()
-    GOOGLE_CSE_CX = os.getenv("GOOGLE_CSE_CX", "").strip()
-    GOOGLE_CSE_SITES = os.getenv("GOOGLE_CSE_SITES", "").strip() or DEFAULT_CSE_SITES
+    # GOOGLE_CSE_SITES is honoured as a legacy fallback (pre-DuckDuckGo backend).
+    WEB_SEARCH_SITES = (os.getenv("WEB_SEARCH_SITES", "").strip()
+                        or os.getenv("GOOGLE_CSE_SITES", "").strip()
+                        or DEFAULT_WEB_SEARCH_SITES)
     AI_PROVIDER = (os.getenv("AI_PROVIDER", "gemini").strip().lower() or "gemini")
     AI_FALLBACK = os.getenv("AI_FALLBACK", "").strip().lower() in ("1", "true", "yes", "on")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -237,9 +234,7 @@ def current_settings() -> dict[str, str]:
         "JOOBLE_API_KEY": JOOBLE_API_KEY,
         "ADZUNA_APP_ID": ADZUNA_APP_ID,
         "ADZUNA_APP_KEY": ADZUNA_APP_KEY,
-        "GOOGLE_CSE_KEY": GOOGLE_CSE_KEY,
-        "GOOGLE_CSE_CX": GOOGLE_CSE_CX,
-        "GOOGLE_CSE_SITES": GOOGLE_CSE_SITES,
+        "WEB_SEARCH_SITES": WEB_SEARCH_SITES,
         "AI_PROVIDER": AI_PROVIDER,
         "AI_FALLBACK": "1" if AI_FALLBACK else "",
         "GEMINI_API_KEY": GEMINI_API_KEY,
