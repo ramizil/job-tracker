@@ -164,6 +164,25 @@
         {% else %}<i>Usage tracked after your first search.</i>{% endif %}
       </small>
     </div>
+    <div class="setting">
+      <label for="GOOGLE_CSE_KEY">Google search — Custom Search API key</label>
+      <input type="text" id="GOOGLE_CSE_KEY" name="GOOGLE_CSE_KEY" form="settings-form" value="{{ values.GOOGLE_CSE_KEY }}" placeholder="AIza..." autocomplete="off">
+      <small>Finds jobs on ATS career pages (Comeet, Greenhouse, Lever…) via Google
+        <code>site:</code> searches — postings the aggregators often miss.
+        Free (100 queries/day) — <a href="#rb-google-cse">📖 step-by-step guide</a>.</small>
+    </div>
+    <div class="setting">
+      <label for="GOOGLE_CSE_CX">Google search — engine id (cx)</label>
+      <input type="text" id="GOOGLE_CSE_CX" name="GOOGLE_CSE_CX" form="settings-form" value="{{ values.GOOGLE_CSE_CX }}" placeholder="e.g. 4238a2ab5c3d94e71" autocomplete="off">
+      <small>The <b>Search engine ID</b> of your Programmable Search Engine
+        (<a href="#rb-google-cse">📖 guide</a>).</small>
+    </div>
+    <div class="setting">
+      <label for="GOOGLE_CSE_SITES">Google search — sites to search</label>
+      <input type="text" id="GOOGLE_CSE_SITES" name="GOOGLE_CSE_SITES" form="settings-form" value="{{ values.GOOGLE_CSE_SITES }}" placeholder="comeet.com/jobs, boards.greenhouse.io, jobs.lever.co" autocomplete="off">
+      <small>Comma-separated <code>site:</code> filters. Each search queries every
+        site listed here, so more sites = more API quota per search.</small>
+    </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
         <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" form="settings-form" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>
@@ -480,6 +499,31 @@
         <li>The API key arrives by email (usually within a day).</li>
         <li>Paste it in the <a href="#JOOBLE_API_KEY">Job sources tab → Jooble API key</a>. The free quota is limited — the app tracks your remaining calls next to the field.</li>
       </ol>
+    </details>
+
+    <details class="runbook" id="rb-google-cse">
+      <summary>Google search over ATS job pages (Comeet, Greenhouse, Lever…) <span class="pill">free · 100 searches/day</span></summary>
+      <ol>
+        <li><b>Create the search engine:</b> open
+          <a href="https://programmablesearchengine.google.com/controlpanel/create" target="_blank" rel="noopener">programmablesearchengine.google.com</a>,
+          name it e.g. <code>job-tracker</code>, choose <b>Search the entire web</b>, and press Create.</li>
+        <li><b>Copy the engine id:</b> on the engine's <b>Overview → Basic</b> page copy the
+          <b>Search engine ID</b> (a short code like <code>4238a2ab5c3d94e71</code>) into the
+          <a href="#GOOGLE_CSE_CX">Job sources tab → engine id (cx)</a> field.</li>
+        <li><b>Enable the API:</b> in <a href="https://console.cloud.google.com/apis/library/customsearch.googleapis.com" target="_blank" rel="noopener">Google Cloud Console → Custom Search API</a>
+          press <b>Enable</b> (use the same <code>job-tracker</code> project from the Google setup above).</li>
+        <li><b>Create an API key:</b> <b>APIs &amp; Services → Credentials → + Create credentials →
+          API key</b>, copy the <code>AIza…</code> key into the
+          <a href="#GOOGLE_CSE_KEY">Job sources tab → Custom Search API key</a> field.
+          (This is a plain API key — different from the Gemini key and from the OAuth client JSON.)</li>
+        <li><b>Pick the sites</b> (optional): the default list covers Comeet, Greenhouse, Lever and
+          SmartRecruiters — the ATS platforms most Israeli companies use. Add or remove
+          <code>site:</code> filters in the <a href="#GOOGLE_CSE_SITES">sites field</a>.</li>
+        <li><b>Save settings</b> and run a search from the <b>Search</b> page — results from this
+          source are labeled <code>google</code>.</li>
+      </ol>
+      <p class="muted sm">Free tier is 100 API queries/day; one tracker search uses one query
+        <i>per site</i> in your list (4 by default). No billing account needed.</p>
     </details>
 
     <details class="runbook" id="rb-adzuna">

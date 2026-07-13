@@ -9,8 +9,10 @@ from .base import JobResult, JobSource
 from .jsearch import JSearchSource
 from .jooble import JoobleSource
 from .adzuna import AdzunaSource
+from .googlesearch import GoogleSearchSource
 
-ALL_SOURCES: list[JobSource] = [JSearchSource(), JoobleSource(), AdzunaSource()]
+ALL_SOURCES: list[JobSource] = [JSearchSource(), JoobleSource(), AdzunaSource(),
+                                GoogleSearchSource()]
 
 
 def get_sources(only: str | None = None) -> list[JobSource]:
