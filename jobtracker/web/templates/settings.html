@@ -306,6 +306,74 @@
     <p class="muted sm mt">Sign in with the mailbox that receives the alerts.
       Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
   </section>
+
+  <section class="panel">
+    <h2>📭 Gmail rejections</h2>
+    <div class="setting">
+      <label for="GMAIL_REJECTION_LABEL">Gmail label to scan</label>
+      <input type="text" id="GMAIL_REJECTION_LABEL" name="GMAIL_REJECTION_LABEL" form="settings-form"
+             value="{{ values.GMAIL_REJECTION_LABEL }}" placeholder="job-rejections" autocomplete="off">
+      <small>Rejection emails from your applications mailbox (e.g.
+        <code>zilber.rami@gmail.com</code>). Point them at a Gmail label
+        <code>{{ values.GMAIL_REJECTION_LABEL or 'job-rejections' }}</code>
+        using the filter guide below — or skip the label for now: the tracker can
+        scan your inbox with a built-in rejection search on the first fetch.
+        <b>Read-only</b> access; nothing is auto-marked rejected until you confirm
+        on the <b>Rej.</b> page.</small>
+    </div>
+    <div class="actions">
+      {% if not gmail_rejections_connected %}
+        <form method="post" action="{{ url_for('main.gmail_rejections_connect') }}">
+          <button class="btn primary" type="submit">🔑 Connect rejections Gmail</button>
+        </form>
+      {% else %}
+        <a class="btn primary" href="{{ url_for('main.rejection_inbox') }}">📭 Open Rejection inbox</a>
+        <form method="post" action="{{ url_for('main.gmail_rejections_disconnect') }}">
+          <button class="btn danger" type="submit">Disconnect</button>
+        </form>
+      {% endif %}
+    </div>
+    <p class="muted sm mt">Sign in with the mailbox that receives rejection emails
+      (can differ from the alerts mailbox).
+      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
+
+    <details class="runbook" id="rb-gmail-rejections">
+      <summary>📖 How to create the Gmail filter (step-by-step)</summary>
+      <div class="rb-body">
+        <p>In <b>zilber.rami@gmail.com</b> (or whichever mailbox gets rejection
+          replies), create <b>two filters</b> that both apply the label
+          <code>{{ values.GMAIL_REJECTION_LABEL or 'job-rejections' }}</code>.
+          This keeps your inbox clean and makes fetches fast.</p>
+
+        <h4>Filter 1 — rejection subjects</h4>
+        <ol>
+          <li>Open Gmail → click the <b>gear</b> → <b>See all settings</b> → tab
+            <b>Filters and Blocked Addresses</b> → <b>Create a new filter</b>.</li>
+          <li>In <b>Has the words</b>, paste:
+            <pre class="rb-pre">subject:(rejected OR "not selected" OR "not moving" OR unfortunately OR "other candidates" OR "application update" OR "was not selected" OR "no longer" OR "תודה על פנייתך" OR "לא נבחר")</pre>
+          </li>
+          <li>Click <b>Create filter</b> → tick <b>Apply the label</b> → choose
+            <b>New label…</b> → name it <code>job-rejections</code> →
+            <b>Also apply filter to matching conversations</b> → <b>Create filter</b>.</li>
+        </ol>
+
+        <h4>Filter 2 — ATS senders</h4>
+        <ol>
+          <li>Create another filter → in <b>From</b>, paste:
+            <pre class="rb-pre">comeet.co OR greenhouse.io OR lever.co OR linkedin.com OR smartrecruiters.com OR myworkday.com</pre>
+          </li>
+          <li>Apply the same <code>job-rejections</code> label (tick
+            <b>Also apply to matching conversations</b>).</li>
+        </ol>
+
+        <p class="muted sm">Tip: after creating the filters, old rejection emails
+          get the label automatically. Then in Job Tracker: connect rejections Gmail
+          → open <b>Rej.</b> → <b>Fetch from Gmail</b>.</p>
+        <p class="muted sm">No label yet? You can still fetch — the tracker falls
+          back to a built-in Gmail search for likely rejection emails.</p>
+      </div>
+    </details>
+  </section>
 </div>
 
 {# ------------------------------------------------ Backups ---------------- #}

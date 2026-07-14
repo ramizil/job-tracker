@@ -136,6 +136,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "GDRIVE_FOLDER": "Google Drive folder URL for the online applications sheet",
     "GOOGLE_CLIENT_SECRET": "Path to the Google OAuth client JSON (Desktop app)",
     "GMAIL_LABEL": "Gmail label whose emails are scanned for job alerts",
+    "GMAIL_REJECTION_LABEL": "Gmail label for rejection emails (rejections mailbox)",
 }
 
 # Module-level settings (re-assigned by reload()).
@@ -167,6 +168,7 @@ DATA_BACKUP_REMOTE = ""
 GDRIVE_FOLDER = ""
 GOOGLE_CLIENT_SECRET = DATA_DIR / "google_client_secret.json"
 GMAIL_LABEL = "linkedin-jobs"
+GMAIL_REJECTION_LABEL = "job-rejections"
 
 
 def reload() -> None:
@@ -180,7 +182,7 @@ def reload() -> None:
     global GROQ_API_KEY, GROQ_MODEL
     global CURSOR_API_KEY, CURSOR_MODEL, CURSOR_BASE_URL
     global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
-    global GDRIVE_FOLDER, GOOGLE_CLIENT_SECRET, GMAIL_LABEL
+    global GDRIVE_FOLDER, GOOGLE_CLIENT_SECRET, GMAIL_LABEL, GMAIL_REJECTION_LABEL
 
     _migrate_legacy_layout()
     ACTIVE_PROFILE = _read_active_profile()
@@ -228,6 +230,8 @@ def reload() -> None:
     GOOGLE_CLIENT_SECRET = Path(
         os.getenv("GOOGLE_CLIENT_SECRET") or DATA_DIR / "google_client_secret.json")
     GMAIL_LABEL = os.getenv("GMAIL_LABEL", "").strip() or "linkedin-jobs"
+    GMAIL_REJECTION_LABEL = (os.getenv("GMAIL_REJECTION_LABEL", "").strip()
+                               or "job-rejections")
 
 
 def current_settings() -> dict[str, str]:
@@ -258,6 +262,7 @@ def current_settings() -> dict[str, str]:
         "GDRIVE_FOLDER": GDRIVE_FOLDER,
         "GOOGLE_CLIENT_SECRET": str(GOOGLE_CLIENT_SECRET),
         "GMAIL_LABEL": GMAIL_LABEL,
+        "GMAIL_REJECTION_LABEL": GMAIL_REJECTION_LABEL,
     }
 
 

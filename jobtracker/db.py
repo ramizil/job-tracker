@@ -68,6 +68,34 @@ CREATE TABLE IF NOT EXISTS alert_emails (
     gmail_id   TEXT PRIMARY KEY,
     fetched_at TEXT NOT NULL
 );
+
+-- Rejection emails parsed from a dedicated Gmail mailbox (gmail_rejections.py).
+CREATE TABLE IF NOT EXISTS rejection_inbox (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    gmail_id         TEXT UNIQUE,
+    subject          TEXT,
+    from_addr        TEXT,
+    snippet          TEXT,
+    body_text        TEXT,
+    title            TEXT,
+    company          TEXT,
+    stage            TEXT,
+    reason           TEXT,
+    note             TEXT,
+    job_url          TEXT,
+    mail_at          TEXT,
+    matched_app_id   INTEGER,
+    match_confidence TEXT,
+    status           TEXT DEFAULT 'pending',
+    seen             INTEGER DEFAULT 0,
+    created_at       TEXT NOT NULL
+);
+
+-- Rejection emails already parsed (incremental fetch).
+CREATE TABLE IF NOT EXISTS rejection_mail_seen (
+    gmail_id   TEXT PRIMARY KEY,
+    fetched_at TEXT NOT NULL
+);
 """
 
 

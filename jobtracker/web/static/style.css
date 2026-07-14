@@ -477,6 +477,9 @@ textarea[dir="auto"]{unicode-bidi:plaintext}
 .runbook li{margin:4px 0}
 .runbook p{padding:0 14px 12px;margin:0}
 .runbook ul{margin:4px 0;padding-left:20px}
+.runbook h4{padding:8px 14px 0;margin:0;font-size:13px}
+.runbook .rb-pre{margin:6px 14px 12px;padding:10px 12px;background:var(--bg2);
+  border:1px solid var(--rule);border-radius:8px;font-size:12px;overflow-x:auto;white-space:pre-wrap}
 .src-off{margin-top:7px;font-size:12.5px;color:var(--muted);font-weight:500}
 
 /* Profiles: topbar switcher + management table (Settings) */

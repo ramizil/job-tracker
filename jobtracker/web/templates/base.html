@@ -16,6 +16,7 @@
       <a href="{{ url_for('main.applications') }}" class="{{ 'active' if ep in ['main.applications', 'main.detail'] }}">Applications{% if saved_alert and saved_alert.count %}<span class="nav-badge{{ ' hot' if saved_alert.stale }}" title="{{ saved_alert.count }} saved job(s) not applied yet{% if saved_alert.stale %} — {{ saved_alert.stale }} waiting 3+ days{% endif %}">{{ saved_alert.count }}</span>{% endif %}</a>
       <a href="{{ url_for('main.search') }}" class="{{ 'active' if ep == 'main.search' }}">Search</a>
       <a href="{{ url_for('main.alerts') }}" class="{{ 'active' if ep == 'main.alerts' }}">📬 Alerts{% if alerts_badge %}<span class="nav-badge" title="{{ alerts_badge }} job alert(s) you haven't applied to yet">{{ alerts_badge }}</span>{% endif %}</a>
+      <a href="{{ url_for('main.rejection_inbox') }}" class="{{ 'active' if ep == 'main.rejection_inbox' }}">📭 Rej.{% if rejections_badge %}<span class="nav-badge" title="{{ rejections_badge }} rejection email(s) to confirm">{{ rejections_badge }}</span>{% endif %}</a>
       <a href="{{ url_for('main.paste_job') }}" class="{{ 'active' if ep == 'main.paste_job' }}">📋 Paste Job</a>
       <a href="{{ url_for('main.my_pitch') }}" class="{{ 'active' if ep == 'main.my_pitch' }}">🎤 My Pitch</a>
       <a href="{{ url_for('main.resume_builder') }}" class="{{ 'active' if ep in ['main.resume_builder', 'main.resume_builder_review'] }}">🗣️ Resume Builder</a>
@@ -144,6 +145,40 @@
           if (!d || !d.max_id) return;
           var last = parseInt(sessionStorage.getItem(KEY) || '0', 10);
           if (last && d.max_id > last) toast(d.max_id - last);
+          sessionStorage.setItem(KEY, String(d.max_id));
+        }).catch(function () {});
+      }
+      poll();
+      setInterval(poll, 60000);
+    })();
+  </script>
+
+  <script>
+    // Live rejection-inbox popup (same pattern as job alerts).
+    (function () {
+      var URL = '{{ url_for('main.rejection_inbox_status') }}';
+      var PAGE = '{{ url_for('main.rejection_inbox') }}';
+      var KEY = 'jt-rej-inbox-max-id';
+
+      function toast(count) {
+        var el = document.createElement('a');
+        el.className = 'toast';
+        el.href = PAGE;
+        el.innerHTML = '📭 <b>' + count + '</b> rejection email' +
+                       (count > 1 ? 's' : '') + ' matched — review';
+        document.body.appendChild(el);
+        setTimeout(function () { el.classList.add('show'); }, 30);
+        setTimeout(function () {
+          el.classList.remove('show');
+          setTimeout(function () { el.remove(); }, 400);
+        }, 12000);
+      }
+
+      function poll() {
+        fetch(URL).then(function (r) { return r.json(); }).then(function (d) {
+          if (!d || !d.max_id) return;
+          var last = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+          if (last && d.new_count > 0) toast(d.new_count);
           sessionStorage.setItem(KEY, String(d.max_id));
         }).catch(function () {});
       }

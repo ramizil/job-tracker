@@ -20,7 +20,7 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                gmail_alerts, pitch, tracker, tts, usage)
+                gmail_alerts, gmail_rejections, pitch, tracker, tts, usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
@@ -47,6 +47,15 @@ def inject_alerts_badge():
         return {"alerts_badge": gmail_alerts.new_alert_count()}
     except Exception:
         return {"alerts_badge": 0}
+
+
+@bp.app_context_processor
+def inject_rejections_badge():
+    """Pending matched rejection emails — nav badge count."""
+    try:
+        return {"rejections_badge": gmail_rejections.pending_count()}
+    except Exception:
+        return {"rejections_badge": 0}
 
 
 @bp.app_context_processor
@@ -278,6 +287,7 @@ def settings():
         ai_on=ai.is_configured(),
         gs_connected=gsheets.is_connected(),
         gmail_connected=gmail_alerts.is_connected(),
+        gmail_rejections_connected=gmail_rejections.is_connected(),
         gs_secret_found=Path(str(config.GOOGLE_CLIENT_SECRET)).exists(),
         env_path=str(config.ENV_PATH),
         backup_dir=str(config.BACKUP_DIR),
@@ -426,6 +436,24 @@ def gmail_connect():
 def gmail_disconnect():
     gmail_alerts.disconnect()
     flash("Gmail disconnected.", "ok")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gmail-rejections-connect", methods=["POST"])
+def gmail_rejections_connect():
+    """One-time Gmail sign-in for the rejections mailbox."""
+    try:
+        gmail_rejections.connect()
+        flash("Rejections Gmail connected — open Rejection inbox and fetch.", "ok")
+    except Exception as exc:
+        flash(f"Rejections Gmail connection failed: {exc}", "error")
+    return redirect(url_for("main.settings"))
+
+
+@bp.route("/settings/gmail-rejections-disconnect", methods=["POST"])
+def gmail_rejections_disconnect():
+    gmail_rejections.disconnect()
+    flash("Rejections Gmail disconnected.", "ok")
     return redirect(url_for("main.settings"))
 
 
@@ -968,6 +996,93 @@ def alert_ignore(alert_id: int):
 def alert_unignore(alert_id: int):
     gmail_alerts.set_ignored(alert_id, False)
     return redirect(url_for("main.alerts", ignored=1))
+
+
+@bp.route("/rejection-inbox")
+def rejection_inbox():
+    """Rejection emails from Gmail, matched to applications — confirm to log."""
+    show_all = request.args.get("all") == "1"
+    connected = gmail_rejections.is_connected()
+    if connected:
+        try:
+            gmail_rejections.refresh_matches()
+        except Exception:
+            pass
+    rows = gmail_rejections.list_inbox(include_dismissed=show_all)
+    apps = tracker.list_applications()
+    app_names = {r["id"]: f"#{r['id']} {r['company']} — {r['title']}" for r in apps}
+    picker = gmail_rejections.list_applications_for_picker()
+    return render_template(
+        "rejection_inbox.html", rows=rows, show_all=show_all,
+        connected=connected, app_names=app_names, picker=picker,
+        label=config.GMAIL_REJECTION_LABEL,
+        stages=REJECTION_STAGES, reasons=COMMON_REJECTION_REASONS,
+        pending=sum(1 for r in rows if r["status"] == "pending"
+                    and r["matched_app_id"]))
+
+
+@bp.route("/rejection-inbox/status")
+def rejection_inbox_status():
+    try:
+        return {"max_id": gmail_rejections.max_inbox_id(),
+                "new_count": gmail_rejections.pending_count()}
+    except Exception:
+        return {"max_id": 0, "new_count": 0}
+
+
+@bp.route("/rejection-inbox/fetch", methods=["POST"])
+def rejection_inbox_fetch():
+    try:
+        res = gmail_rejections.fetch_rejections()
+        msg = ""
+        if res.get("used_fallback"):
+            msg = (" (label not found — scanned inbox with a built-in rejection "
+                   "query; create the Gmail filter below for cleaner results)")
+        if res["emails"]:
+            flash(f"Checked {res['emails']} new email(s) — "
+                  f"{res['rejections']} rejection(s) found.{msg}", "ok")
+        else:
+            flash("No new rejection emails since the last fetch.", "ok")
+    except Exception as exc:
+        flash(f"Could not fetch rejections: {exc}", "error")
+    return redirect(url_for("main.rejection_inbox"))
+
+
+@bp.route("/rejection-inbox/seen", methods=["POST"])
+def rejection_inbox_seen():
+    gmail_rejections.mark_all_seen()
+    flash("Rejection inbox badge reset.", "ok")
+    return redirect(url_for("main.rejection_inbox", **request.args))
+
+
+@bp.route("/rejection-inbox/<int:row_id>/dismiss", methods=["POST"])
+def rejection_inbox_dismiss(row_id: int):
+    gmail_rejections.set_dismissed(row_id)
+    return redirect(url_for("main.rejection_inbox", **request.args))
+
+
+@bp.route("/rejection-inbox/<int:row_id>/match", methods=["POST"])
+def rejection_inbox_match(row_id: int):
+    app_id = request.form.get("app_id", "").strip()
+    gmail_rejections.set_match(row_id, int(app_id) if app_id else None)
+    return redirect(url_for("main.rejection_inbox", **request.args))
+
+
+@bp.route("/rejection-inbox/<int:row_id>/confirm", methods=["POST"])
+def rejection_inbox_confirm(row_id: int):
+    app_id = int(request.form.get("app_id", "0") or 0)
+    stage = request.form.get("stage", "cv_screen")
+    reason = request.form.get("reason", "no_feedback")
+    note = request.form.get("note", "").strip()
+    if not app_id:
+        flash("Pick an application to mark as rejected.", "error")
+        return redirect(url_for("main.rejection_inbox"))
+    if gmail_rejections.confirm(row_id, app_id=app_id, stage=stage,
+                                reason=reason, note=note):
+        flash("Application marked rejected.", "ok")
+    else:
+        flash("Could not update that application.", "error")
+    return redirect(url_for("main.rejection_inbox", **request.args))
 
 
 @bp.route("/application/<int:app_id>")
