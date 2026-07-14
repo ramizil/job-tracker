@@ -47,18 +47,36 @@ _LINKEDIN_JOB_RE = re.compile(
     r"linkedin\.com/(?:comm/)?jobs/view/(?:[^\s/?#]*?-)?(\d{6,})")
 
 _ACK_ONLY = re.compile(
-    r"(?:thank(s| you) for (your )?(applying|application)|"
-    r"we (have )?received your application|application (was )?received)",
+    r"(?:thank(s| you) for (your )?(applying|application|interest)|"
+    r"we (have )?received your application|application (was )?received|"
+    r"we got (?:your application|it))",
     re.I)
-# Decision language — usually in the BODY, not the subject.
+# Still in play — not a rejection (body must not contain decision language).
+_IN_PROGRESS_ONLY = re.compile(
+    r"we (?:have )?received your application|application (?:has been |was )received|"
+    r"we got (?:your application|it)|successfully received|"
+    r"(?:under|being|currently) review|in the review process|reviewing your application|"
+    r"(?:we(?:'re| are)|our team is) reviewing|"
+    r"recruiter will (?:be in )?touch|will be in touch(?: with you)?(?: soon)?|"
+    r"contact you (?:soon|shortly)|keep you (?:updated|posted|informed)|"
+    r"next steps (?:in|of) (?:the|our) (?:process|hiring)|"
+    r"move forward with your (?:application|candidacy)|"
+    r"would like to (?:schedule|invite)|pleased to invite|congratulations|"
+    r"בקשתך התקבלה|קיבלנו את מועמדותך|בבדיקה|ניצור עמך קשר",
+    re.I)
+# Decision language — must appear in the BODY for a definite rejection.
 _DECIDED_MARKERS = re.compile(
-    r"after reviewing|we(?:'ve| have) decided|we regret|unfortunately|"
-    r"regret to inform|not (?:be )?moving forward|not to move forward|"
-    r"will not be (?:moving|proceeding)|won'?t be proceeding|"
-    r"other candidates|not selected|cannot offer you|unable to move forward|"
-    r"chosen to pursue other|pursue other candidates|not advance|"
-    r"no longer under consideration|position (?:has been |is )filled|"
-    r"was not successful|not be progressing|"
+    r"after (?:careful )?review(?:ing)?(?: applications)?,?\s*we(?:'ve| have) decided|"
+    r"we(?:'ve| have) decided (?:not to|to move forward with other)|"
+    r"we regret|unfortunately|regret to inform|"
+    r"not (?:be )?moving forward(?: with your application)?|"
+    r"not to move forward(?: with your application)?|"
+    r"will not be (?:moving|proceeding)(?: with your application)?|"
+    r"won'?t be proceeding|cannot offer you|unable to (?:move forward|offer)|"
+    r"not selected|other candidates|chosen to pursue other|pursue other candidates|"
+    r"not advance(?: to the next stage)?|no longer under consideration|"
+    r"position (?:has been |is )filled|was not successful|not be progressing|"
+    r"will not be able to offer|decided not to proceed|"
     r"לא נבחר|לא נמשיך|מועמדים אחרים|מצטערים|לא נבחרת",
     re.I)
 _REJECTION_MARKERS = _DECIDED_MARKERS  # alias for note extraction
@@ -184,20 +202,21 @@ def _html_body(payload: dict) -> str:
 
 
 def _looks_like_rejection(subject: str, from_addr: str, text: str) -> bool:
-    """True when the email BODY (not just subject) signals a rejection.
+    """True only when the email body contains definite rejection language.
 
-    Many ATS emails use polite subjects like "Thank you for applying…" and
-    only say "unfortunately / after reviewing we've decided…" in the body.
+    Subjects and Gmail labels are unreliable — "Thank you for applying" and
+    broad filters catch acks and in-review mail. We require decision wording
+    in the body (unfortunately, decided not to move forward, other candidates…).
     """
-    subj = subject or ""
-    body = text or ""
-    combined = f"{subj}\n{body}"
+    body = (text or "").strip()
+    if not body:
+        return False
     if _DECIDED_MARKERS.search(body):
         return True
-    if _DECIDED_MARKERS.search(subj):
-        return True
-    # "Thanks for applying" with no decision text yet → still in review, skip.
-    if _ACK_ONLY.search(subj) and not _DECIDED_MARKERS.search(body):
+    # Ack / in-review only — never show as a rejection.
+    if _IN_PROGRESS_ONLY.search(body):
+        return False
+    if _ACK_ONLY.search(subject or "") and not _DECIDED_MARKERS.search(body):
         return False
     return False
 
@@ -340,14 +359,14 @@ def _extract_note(text: str, limit: int = 280) -> str:
 def parse_rejection_email(*, subject: str, from_addr: str,
                           html: str, plain: str,
                           from_label: bool = False) -> dict | None:
-    """Return parsed rejection fields, or None if this isn't a rejection.
+    """Return parsed rejection fields, or None if this isn't a definite rejection.
 
-    When ``from_label`` is True (email already under the user's rejection
-    label), we trust the label and always parse — the body/subject extract
-    company and title even if detection heuristics would skip it.
+    ``from_label`` only means the email came from the user's Gmail label — we
+    still require rejection wording in the body so acks / in-review mail are
+    dropped even when the label is broad.
     """
     text = plain or _html_to_text(html)
-    if not from_label and not _looks_like_rejection(subject, from_addr, text):
+    if not _looks_like_rejection(subject, from_addr, text):
         return None
 
     out = {
@@ -547,6 +566,7 @@ def fetch_rejections() -> dict:
         raise RejectionsError(f"Gmail API error: {exc.reason or exc}") from exc
 
     refresh_matches()
+    _dismiss_noise()
     return {
         "emails": new_emails,
         "rejections": new_rejections,
@@ -557,6 +577,22 @@ def fetch_rejections() -> dict:
 # --------------------------------------------------------------------------- #
 # UI queries / actions
 # --------------------------------------------------------------------------- #
+def _dismiss_noise() -> None:
+    """Auto-dismiss inbox rows that fail the definite-rejection body check."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, subject, from_addr, body_text, snippet "
+            "FROM rejection_inbox WHERE status = 'pending'"
+        ).fetchall()
+        for r in rows:
+            if not _looks_like_rejection(
+                    r["subject"] or "", r["from_addr"] or "",
+                    r["body_text"] or r["snippet"] or ""):
+                conn.execute(
+                    "UPDATE rejection_inbox SET status='dismissed', seen=1 "
+                    "WHERE id=?", (r["id"],))
+
+
 def list_inbox(*, include_dismissed: bool = False):
     if include_dismissed:
         q = "SELECT * FROM rejection_inbox WHERE status != 'confirmed'"
@@ -564,17 +600,17 @@ def list_inbox(*, include_dismissed: bool = False):
         q = "SELECT * FROM rejection_inbox WHERE status = 'pending'"
     q += " ORDER BY mail_at DESC, id DESC"
     with get_connection() as conn:
-        return conn.execute(q).fetchall()
+        rows = conn.execute(q).fetchall()
+    # Re-check stored body — drop rows imported before stricter filtering.
+    return [r for r in rows
+            if _looks_like_rejection(r["subject"] or "", r["from_addr"] or "",
+                                     r["body_text"] or r["snippet"] or "")]
 
 
 def pending_count() -> int:
     """Unseen pending rejections with a match — nav badge."""
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT COUNT(*) AS n FROM rejection_inbox "
-            "WHERE status = 'pending' AND seen = 0 AND matched_app_id IS NOT NULL"
-        ).fetchone()
-        return int(row["n"])
+    return sum(1 for r in list_inbox()
+               if not r["seen"] and r["matched_app_id"])
 
 
 def mark_all_seen() -> None:

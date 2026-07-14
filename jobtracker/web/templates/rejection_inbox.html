@@ -34,7 +34,10 @@
 {% endif %}
 
 {% if connected or rows %}
-<p class="muted">Rejection emails under Gmail label <code>{{ label }}</code>
+  <p class="muted">Only emails whose <b>body</b> contains definite rejection language
+    (“unfortunately”, “decided not to move forward”, “other candidates”…) —
+    acks (“we received your application”) and in-review mail are filtered out.
+    Label <code>{{ label }}</code>.
   (or a built-in search if the label doesn't exist yet).
   {% if pending %}<b>{{ pending }}</b> matched and waiting for your confirmation.{% endif %}
   <a class="chip {{ 'on' if not show_all else '' }}" href="{{ url_for('main.rejection_inbox') }}">pending</a>
