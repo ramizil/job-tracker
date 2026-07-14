@@ -4,6 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Job Tracker{% endblock %}</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('jt-theme');
+        if (t === 'light' || t === 'dark') {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+        var f = localStorage.getItem('jt-font');
+        if (f) document.documentElement.setAttribute('data-font', f);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -24,6 +36,15 @@
       <a href="{{ url_for('main.export_csv') }}">CSV</a>
       <a href="{{ url_for('main.export_xlsx') }}">Excel</a>
       <span class="sep"></span>
+      <div class="display-prefs" title="Display — theme and text size">
+        <button type="button" id="theme-toggle" class="dp-btn" title="Toggle light/dark mode"
+                aria-label="Toggle light/dark mode">🌙</button>
+        <button type="button" id="font-down" class="dp-btn" title="Smaller text"
+                aria-label="Smaller text">A−</button>
+        <span class="dp-font-label" id="font-size-label" title="Text size">Normal</span>
+        <button type="button" id="font-up" class="dp-btn" title="Larger text"
+                aria-label="Larger text">A+</button>
+      </div>
       <form method="post" action="{{ url_for('main.profile_switch') }}" class="profile-switch" title="Active profile — each profile has its own applications and settings. Add profiles in Settings.">
         <select name="name" onchange="this.form.submit()">
           {% for p in profiles %}
@@ -356,6 +377,7 @@
   </script>
 
   <script src="{{ url_for('static', filename='fx.js') }}"></script>
+  <script src="{{ url_for('static', filename='display.js') }}"></script>
   <script src="{{ url_for('static', filename='tablefilter.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
