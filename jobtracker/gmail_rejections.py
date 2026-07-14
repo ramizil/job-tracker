@@ -18,7 +18,7 @@ import re
 import threading
 import time
 from difflib import SequenceMatcher
-from html import unescape
+from html import escape, unescape
 
 from . import config
 from .db import get_connection, now_iso
@@ -199,6 +199,18 @@ def _html_body(payload: dict) -> str:
                     "utf-8", errors="replace")
         stack.extend(part.get("parts", []) or [])
     return ""
+
+
+def highlight_rejection_body(text: str) -> str:
+    """Return escaped email body with definite-rejection phrases highlighted."""
+    if not text:
+        return ""
+    safe = escape(text)
+
+    def _mark(m: re.Match) -> str:
+        return f'<mark class="rej-hit">{m.group(0)}</mark>'
+
+    return _DECIDED_MARKERS.sub(_mark, safe)
 
 
 def _looks_like_rejection(subject: str, from_addr: str, text: str) -> bool:
@@ -548,7 +560,7 @@ def fetch_rejections() -> dict:
                               status, seen, created_at)
                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (mid, subject, from_addr, parsed.get("snippet", ""),
-                         plain[:4000], parsed.get("title", ""),
+                         plain[:12000], parsed.get("title", ""),
                          parsed.get("company", ""), parsed.get("stage", "cv_screen"),
                          parsed.get("reason", "no_feedback"),
                          parsed.get("note", ""), parsed.get("job_url", ""),

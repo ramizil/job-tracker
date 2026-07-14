@@ -13,8 +13,10 @@ def create_app() -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
     from .views import bp, md_to_html
+    from ..gmail_rejections import highlight_rejection_body
     app.register_blueprint(bp)
     app.jinja_env.filters["md"] = md_to_html
+    app.jinja_env.filters["rej_highlight"] = highlight_rejection_body
 
     # Pull new Gmail job alerts every 10 minutes while the server is up
     # (no-op until Gmail is connected in Settings).

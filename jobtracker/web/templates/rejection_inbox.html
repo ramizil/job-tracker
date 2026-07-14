@@ -66,6 +66,10 @@
         <div><b>{{ r.subject }}</b></div>
         <div class="muted sm">{{ r.from_addr }}</div>
         {% if r.snippet %}<div class="muted sm">{{ r.snippet[:160] }}</div>{% endif %}
+        {% if r.body_text or r.snippet %}
+        <button type="button" class="btn sm rej-toggle" data-target="rej-{{ r.id }}"
+                style="margin-top:.35rem">📧 View full email</button>
+        {% endif %}
       </td>
       <td>
         {% if r.title or r.company %}
@@ -125,6 +129,25 @@
         {% endif %}
       </td>
     </tr>
+    {% if r.body_text or r.snippet %}
+    <tr id="rej-{{ r.id }}" class="rej-expand" hidden>
+      <td colspan="5">
+        <div class="rej-mail-panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:.5rem; flex-wrap:wrap">
+            <div class="muted sm">
+              <b>{{ r.subject }}</b><br>
+              {{ r.from_addr }}{% if r.mail_at %} · {{ r.mail_at[:16].replace('T', ' ') }}{% endif %}
+            </div>
+            <a class="btn sm" target="_blank" rel="noopener"
+               href="https://mail.google.com/mail/u/0/#search/subject%3A%22{{ r.subject|urlencode }}%22"
+               title="Find this email in Gmail">Open in Gmail ↗</a>
+          </div>
+          <pre class="notes rej-mail-body">{{ (r.body_text or r.snippet)|rej_highlight|safe }}</pre>
+          <p class="muted sm" style="margin:.35rem 0 0">Highlighted phrases are why this email was treated as a rejection.</p>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
     {% else %}
     <tr><td colspan="5" class="muted">
       {% if show_all %}No dismissed items.{% else %}No pending rejections —
@@ -133,4 +156,27 @@
   </tbody>
 </table>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  document.querySelectorAll('.rej-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var row = document.getElementById(btn.getAttribute('data-target'));
+      if (!row) return;
+      var open = row.hidden;
+      document.querySelectorAll('.rej-expand').forEach(function (r) { r.hidden = true; });
+      document.querySelectorAll('.rej-toggle').forEach(function (b) {
+        b.textContent = '📧 View full email';
+      });
+      if (open) {
+        row.hidden = false;
+        btn.textContent = '▲ Hide email';
+        row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}
