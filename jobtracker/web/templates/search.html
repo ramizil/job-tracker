@@ -21,6 +21,10 @@
   <button class="btn primary" type="submit" {{ 'disabled' if not configured }}>Search</button>
 </form>
 
+{% if cached_at and results %}
+<p class="muted sm">Last search{% if request.method == 'GET' %} (saved){% endif %} · {{ cached_at[:16].replace('T', ' ') }} UTC</p>
+{% endif %}
+
 {% if results %}
 <table class="grid">
   <thead><tr><th>Match</th><th>Title</th><th>Company</th><th>Location</th><th>Src</th><th></th></tr></thead>

@@ -26,6 +26,8 @@ from .. import resume as resume_mod
 from ..matcher import score_job
 from ..models import COMMON_REJECTION_REASONS, REJECTION_STAGES, STATUSES
 from ..sources import get_sources
+from ..sources.base import JobResult
+from ..db import now_iso
 
 bp = Blueprint("main", __name__)
 
@@ -2099,19 +2101,99 @@ def resume_builder_pdf():
 
 
 # --------------------------------------------------------------------------- #
+# Job search — cache last query + results per profile (web search is slow).
+# --------------------------------------------------------------------------- #
+def _last_search_path() -> Path:
+    return Path(config.PROFILE_DIR) / "last_search.json"
+
+
+def _job_result_to_dict(job: JobResult) -> dict:
+    return {
+        "source": job.source,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "url": job.url,
+        "description": job.description,
+        "salary": job.salary,
+        "posted": job.posted,
+        "external_id": job.external_id,
+    }
+
+
+def _job_result_from_dict(data: dict) -> JobResult:
+    return JobResult(
+        source=data.get("source", ""),
+        title=data.get("title", ""),
+        company=data.get("company", ""),
+        location=data.get("location", ""),
+        url=data.get("url", ""),
+        description=data.get("description", ""),
+        salary=data.get("salary", ""),
+        posted=data.get("posted", ""),
+        external_id=data.get("external_id", ""),
+    )
+
+
+def _save_last_search(query: str, location: str, results: list) -> None:
+    payload = {
+        "query": query,
+        "location": location,
+        "searched_at": now_iso(),
+        "results": [
+            {"job": _job_result_to_dict(item["job"]), "score": item["score"]}
+            for item in results
+        ],
+    }
+    path = _last_search_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_last_search() -> dict | None:
+    try:
+        data = json.loads(_last_search_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+# --------------------------------------------------------------------------- #
 @bp.route("/search", methods=["GET", "POST"])
 def search():
     results = []
     query = request.values.get("query", "")
     location = request.values.get("location", "Israel")
+    cached_at = None
     configured = [s.name for s in get_sources()]
     rd = _readiness()
     if request.method == "POST" and not rd["ready"]:
         for msg in rd["issues"]:
             flash(msg, "error")
-        return render_template("search.html", results=[], query=query,
+        cached = _load_last_search()
+        if cached:
+            query = cached.get("query", query)
+            location = cached.get("location", location)
+            cached_at = cached.get("searched_at")
+            results = [
+                {"job": _job_result_from_dict(r["job"]), "score": r["score"]}
+                for r in cached.get("results", [])
+                if isinstance(r, dict) and isinstance(r.get("job"), dict)
+            ]
+        return render_template("search.html", results=results, query=query,
                                location=location, configured=configured,
-                               jooble_usage=None, ready=rd)
+                               jooble_usage=None, ready=rd, cached_at=cached_at)
+    if request.method == "GET":
+        cached = _load_last_search()
+        if cached:
+            query = cached.get("query", query)
+            location = cached.get("location", location)
+            cached_at = cached.get("searched_at")
+            results = [
+                {"job": _job_result_from_dict(r["job"]), "score": r["score"]}
+                for r in cached.get("results", [])
+                if isinstance(r, dict) and isinstance(r.get("job"), dict)
+            ]
     if request.method == "POST" and configured:
         prof = resume_mod.load_profile()
         if not query:
@@ -2136,6 +2218,8 @@ def search():
             except Exception as exc:
                 flash(f"{src.name}: {exc}", "error")
         results.sort(key=lambda x: x["score"], reverse=True)
+        _save_last_search(query, location, results)
+        cached_at = now_iso()
     # Jooble free-tier usage feedback (only while the source is active).
     ju = (usage.jooble_usage(config.JOOBLE_API_KEY)
           if config.JOOBLE_API_KEY and "jooble" in configured else None)
@@ -2148,7 +2232,7 @@ def search():
                   f"{ju['limit']}. Consider getting a fresh key soon.", "error")
     return render_template("search.html", results=results, query=query,
                            location=location, configured=configured,
-                           jooble_usage=ju, ready=rd)
+                           jooble_usage=ju, ready=rd, cached_at=cached_at)
 
 
 @bp.route("/search/save", methods=["POST"])
