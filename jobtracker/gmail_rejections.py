@@ -305,6 +305,69 @@ def _parse_subject(subject: str, out: dict) -> None:
             break
 
 
+def _valid_company_name(name: str) -> bool:
+    low = name.lower().strip()
+    if len(name) < 2 or len(name) > 60:
+        return False
+    junk = {
+        "no reply", "noreply", "do not reply", "recruiting", "recruitment",
+        "talent", "hr", "hiring", "team", "human resources", "people",
+        "application", "your", "our", "dear", "hi", "hello", "the",
+        "candidate", "candidates",
+    }
+    if low in junk:
+        return False
+    words = [w for w in re.split(r"\s+", low) if w]
+    if words and all(w in junk for w in words):
+        return False
+    return True
+
+
+def _clean_company_name(name: str) -> str:
+    name = _clean(name)
+    name = re.sub(r"^the\s+", "", name, flags=re.I)
+    name = re.sub(r"(?:'s|'s)$", "", name.strip(), flags=re.I).strip(" .,-")
+    name = re.sub(r"\s+(?:recruiting|recruitment|talent|hr|hiring|people)$",
+                  "", name, flags=re.I).strip()
+    return name
+
+
+def _parse_signature_company(text: str, out: dict) -> None:
+    """Extract company from email sign-off (e.g. \"Regards, Tenable's Recruiting Team\")."""
+    if out.get("company"):
+        return
+    raw = text or ""
+    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    tail = "\n".join(lines[-14:]) if lines else raw[-900:]
+    if len(tail) < 15:
+        tail = raw[-900:]
+
+    team = (
+        r"(?:recruiting|recruitment|talent(?:\s+acquisition)?|hr|hiring|"
+        r"people|human resources)(?:\s+team)?"
+    )
+    patterns = [
+        # Regards, Tenable's Recruiting Team
+        rf"(?:regards|best regards|kind regards|sincerely|thanks|thank you|"
+        rf"בברכה|בתודה)\s*,?\s*(?:the\s+)?(.+?)(?:'s|')?\s+{team}",
+        # Tenable's Recruiting Team (no salutation)
+        rf"(?:^|\n)\s*(?:the\s+)?(.+?)(?:'s|')?\s+{team}\s*$",
+        # Regards, The Acme Team
+        r"(?:regards|best regards|kind regards|sincerely|thanks|thank you)\s*,?\s*"
+        r"(?:the\s+)?(.+?)\s+team\s*$",
+        # ...from the Tenable team
+        rf"from (?:the\s+)?(.+?)(?:'s|')?\s+{team}",
+    ]
+    for pat in patterns:
+        m = re.search(pat, tail, re.I | re.M)
+        if not m:
+            continue
+        company = _clean_company_name(m.group(1))
+        if company and _valid_company_name(company):
+            out["company"] = company
+            return
+
+
 def _parse_body(text: str, out: dict) -> None:
     """Extract title + company from the email body (where ATS puts the truth)."""
     blob = _clean(text)
@@ -397,6 +460,7 @@ def parse_rejection_email(*, subject: str, from_addr: str,
     _parse_body(text, out)
     _parse_from_display(from_addr, out)
     _parse_subject(subject, out)
+    _parse_signature_company(text, out)
 
     if not out["company"]:
         out["company"] = _parse_company_from_from_header(from_addr)
@@ -416,6 +480,38 @@ def _norm(s: str) -> str:
 
 def _sim(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
+
+
+def _company_matches(a_company: str, app_company: str) -> bool:
+    ac = _norm(a_company)
+    c = _norm(app_company)
+    if not ac or not c:
+        return False
+    return (c == ac or c in ac or ac in c or _sim(c, ac) >= 0.82)
+
+
+def _title_matches(a_title: str, app_title: str, *, min_score: float = 0.5) -> bool:
+    at = _norm(a_title)
+    t = _norm(app_title)
+    if not at or not t:
+        return False
+    return _sim(t, at) >= min_score
+
+
+def _app_matches_parsed(app, *, company: str, title: str) -> bool:
+    if app["status"] in ("rejected", "withdrawn"):
+        return False
+    a_company = (company or "").strip()
+    a_title = (title or "").strip()
+    if not a_company and not a_title:
+        return True
+    company_ok = _company_matches(a_company, app["company"]) if a_company else True
+    title_ok = _title_matches(a_title, app["title"]) if a_title else True
+    if a_company and a_title:
+        return company_ok and title_ok
+    if a_company:
+        return company_ok
+    return title_ok
 
 
 def _match_one(row: dict, apps) -> tuple[int | None, str]:
@@ -442,10 +538,7 @@ def _match_one(row: dict, apps) -> tuple[int | None, str]:
         t = _norm(app["title"])
         if not c and not t:
             continue
-        company_ok = False
-        if a_company and c:
-            company_ok = (c == a_company or c in a_company or a_company in c
-                          or _sim(c, a_company) >= 0.82)
+        company_ok = _company_matches(a_company, app["company"]) if a_company else False
         title_score = _sim(t, a_title) if a_title and t else 0.0
         if a_company and a_title and company_ok and title_score >= 0.5:
             score = 0.5 + title_score * 0.5
@@ -477,7 +570,16 @@ def refresh_matches() -> None:
             "SELECT * FROM rejection_inbox WHERE status = 'pending'"
         ).fetchall()
         for row in rows:
-            app_id, conf = _match_one(dict(row), apps)
+            rd = dict(row)
+            if not rd.get("company") and rd.get("body_text"):
+                patched = {"title": rd.get("title") or "", "company": ""}
+                _parse_signature_company(rd["body_text"], patched)
+                if patched["company"]:
+                    rd["company"] = patched["company"]
+                    conn.execute(
+                        "UPDATE rejection_inbox SET company=? WHERE id=?",
+                        (patched["company"], row["id"]))
+            app_id, conf = _match_one(rd, apps)
             conn.execute(
                 """UPDATE rejection_inbox
                       SET matched_app_id=?, match_confidence=?
@@ -670,15 +772,35 @@ def max_inbox_id() -> int:
         return int(row["m"] or 0)
 
 
-def list_applications_for_picker():
-    """Active applications for the manual-match dropdown."""
+def list_applications_for_picker(*, company: str = "", title: str = "",
+                                 matched_app_id: int | None = None):
+    """Applications for the confirm dropdown — filtered when job was parsed."""
     with get_connection() as conn:
-        return conn.execute(
+        apps = conn.execute(
             """SELECT id, company, title, status, date_applied
                  FROM applications
                 WHERE status NOT IN ('rejected', 'withdrawn')
                 ORDER BY date_applied DESC, id DESC"""
         ).fetchall()
+
+    company = (company or "").strip()
+    title = (title or "").strip()
+    if not company and not title:
+        return list(apps)
+
+    matched = [a for a in apps
+               if _app_matches_parsed(a, company=company, title=title)]
+    if matched_app_id:
+        have = {a["id"] for a in matched}
+        if matched_app_id not in have:
+            with get_connection() as conn:
+                extra = conn.execute(
+                    "SELECT id, company, title, status, date_applied "
+                    "FROM applications WHERE id=?", (matched_app_id,)
+                ).fetchone()
+            if extra:
+                matched = [extra] + matched
+    return matched
 
 
 # --------------------------------------------------------------------------- #

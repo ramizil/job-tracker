@@ -1011,10 +1011,17 @@ def rejection_inbox():
     rows = gmail_rejections.list_inbox(include_dismissed=show_all)
     apps = tracker.list_applications()
     app_names = {r["id"]: f"#{r['id']} {r['company']} — {r['title']}" for r in apps}
-    picker = gmail_rejections.list_applications_for_picker()
+    picker_by_row = {
+        r["id"]: gmail_rejections.list_applications_for_picker(
+            company=r["company"] or "",
+            title=r["title"] or "",
+            matched_app_id=r["matched_app_id"],
+        )
+        for r in rows
+    }
     return render_template(
         "rejection_inbox.html", rows=rows, show_all=show_all,
-        connected=connected, app_names=app_names, picker=picker,
+        connected=connected, app_names=app_names, picker_by_row=picker_by_row,
         label=config.GMAIL_REJECTION_LABEL,
         stages=REJECTION_STAGES, reasons=COMMON_REJECTION_REASONS,
         pending=sum(1 for r in rows if r["status"] == "pending"

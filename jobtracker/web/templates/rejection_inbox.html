@@ -97,14 +97,24 @@
         {% if r.status == 'pending' %}
         <form method="post" action="{{ url_for('main.rejection_inbox_confirm', row_id=r.id) }}"
               style="display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; max-width:28rem">
+          {% set row_picker = picker_by_row.get(r.id, []) %}
           <select name="app_id" required title="Application to mark rejected">
             <option value="">— pick application —</option>
-            {% for a in picker %}
+            {% if (r.company or r.title) and not row_picker %}
+            <option value="" disabled>— no applications match parsed job —</option>
+            {% endif %}
+            {% for a in row_picker %}
             <option value="{{ a.id }}" {{ 'selected' if a.id == r.matched_app_id }}>
               #{{ a.id }} {{ a.company }} — {{ a.title }} ({{ a.status }})
             </option>
             {% endfor %}
           </select>
+          {% if r.company or r.title %}
+          <span class="muted sm" title="Filtered by parsed company/title from the email">
+            {{ row_picker|length }} match{{ 'es' if row_picker|length != 1 else '' }}
+            for {{ r.company or '?' }}{% if r.title %} · {{ r.title }}{% endif %}
+          </span>
+          {% endif %}
           <select name="stage" title="Rejection stage">
             {% for s in stages %}
             <option {{ 'selected' if s == r.stage }}>{{ s }}</option>
