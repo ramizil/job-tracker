@@ -16,8 +16,15 @@ ALL_SOURCES: list[JobSource] = [JSearchSource(), JoobleSource(), AdzunaSource(),
 
 
 def get_sources(only: str | None = None) -> list[JobSource]:
-    """Return configured (credentialed) sources, optionally filtered by name."""
-    sources = [s for s in ALL_SOURCES if s.is_configured()]
+    """Return configured (credentialed) sources, optionally filtered by name.
+
+    Sources listed in SOURCES_DISABLED are skipped even when credentialed
+    (e.g. Jooble blocked on a corporate network) — toggleable in Settings.
+    """
+    from .. import config
+    disabled = {s.strip() for s in config.SOURCES_DISABLED.split(",") if s.strip()}
+    sources = [s for s in ALL_SOURCES
+               if s.is_configured() and s.name not in disabled]
     if only:
         sources = [s for s in sources if s.name == only.lower()]
     return sources

@@ -116,6 +116,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "ADZUNA_APP_ID": "Adzuna app id (optional, no Israel)",
     "ADZUNA_APP_KEY": "Adzuna app key (optional)",
     "WEB_SEARCH_SITES": "Comma-separated site: filters for the web-search source (ATS job boards)",
+    "SOURCES_DISABLED": "Comma-separated source names to skip (jsearch, jooble, adzuna, websearch)",
     "AI_PROVIDER": "AI provider: gemini | openai | anthropic | groq | cursor",
     "AI_FALLBACK": "Auto-switch to another configured AI provider when one fails (1/0)",
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
@@ -146,6 +147,7 @@ ADZUNA_APP_KEY = ""
 DEFAULT_WEB_SEARCH_SITES = ("comeet.com/jobs, boards.greenhouse.io, jobs.lever.co, "
                             "careers.smartrecruiters.com")
 WEB_SEARCH_SITES = DEFAULT_WEB_SEARCH_SITES
+SOURCES_DISABLED = ""
 AI_PROVIDER = "gemini"
 AI_FALLBACK = False
 GEMINI_API_KEY = ""
@@ -172,7 +174,7 @@ def reload() -> None:
     global ACTIVE_PROFILE, PROFILE_DIR, ENV_PATH
     global DB_PATH, PROFILE_PATH, PITCH_PATH, BUILT_RESUME_PATH, TAILORED_DIR
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
-    global WEB_SEARCH_SITES
+    global WEB_SEARCH_SITES, SOURCES_DISABLED
     global AI_PROVIDER, AI_FALLBACK, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
     global GROQ_API_KEY, GROQ_MODEL
@@ -205,6 +207,7 @@ def reload() -> None:
     WEB_SEARCH_SITES = (os.getenv("WEB_SEARCH_SITES", "").strip()
                         or os.getenv("GOOGLE_CSE_SITES", "").strip()
                         or DEFAULT_WEB_SEARCH_SITES)
+    SOURCES_DISABLED = os.getenv("SOURCES_DISABLED", "").strip().lower()
     AI_PROVIDER = (os.getenv("AI_PROVIDER", "gemini").strip().lower() or "gemini")
     AI_FALLBACK = os.getenv("AI_FALLBACK", "").strip().lower() in ("1", "true", "yes", "on")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -235,6 +238,7 @@ def current_settings() -> dict[str, str]:
         "ADZUNA_APP_ID": ADZUNA_APP_ID,
         "ADZUNA_APP_KEY": ADZUNA_APP_KEY,
         "WEB_SEARCH_SITES": WEB_SEARCH_SITES,
+        "SOURCES_DISABLED": SOURCES_DISABLED,
         "AI_PROVIDER": AI_PROVIDER,
         "AI_FALLBACK": "1" if AI_FALLBACK else "",
         "GEMINI_API_KEY": GEMINI_API_KEY,

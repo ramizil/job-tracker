@@ -261,7 +261,9 @@ def md_to_html(text: str) -> str:
 @bp.route("/settings", methods=["GET", "POST"])
 def settings():
     if request.method == "POST":
-        updates = {k: request.form.get(k, "").strip() for k in config.EDITABLE_KEYS}
+        # getlist: multi-checkbox keys (SOURCES_DISABLED) post several values.
+        updates = {k: ",".join(request.form.getlist(k)).strip()
+                   for k in config.EDITABLE_KEYS}
         try:
             config.update_env_file(updates)
             flash("Settings saved and applied (no restart needed).", "ok")
@@ -2003,8 +2005,9 @@ def search():
             except Exception as exc:
                 flash(f"{src.name}: {exc}", "error")
         results.sort(key=lambda x: x["score"], reverse=True)
-    # Jooble free-tier usage feedback.
-    ju = usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None
+    # Jooble free-tier usage feedback (only while the source is active).
+    ju = (usage.jooble_usage(config.JOOBLE_API_KEY)
+          if config.JOOBLE_API_KEY and "jooble" in configured else None)
     if ju and ju["tracked"]:
         if ju["exhausted"]:
             flash("Jooble free quota (500) is used up — get a new key at "

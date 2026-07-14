@@ -150,6 +150,11 @@
       <input type="text" id="RAPIDAPI_KEY" name="RAPIDAPI_KEY" form="settings-form" value="{{ values.RAPIDAPI_KEY }}" placeholder="paste your X-RapidAPI-Key" autocomplete="off">
       <small>Get it at <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener">rapidapi.com → JSearch</a>
         (free tier) — <a href="#rb-jsearch">📖 step-by-step guide</a>.</small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="jsearch" form="settings-form"
+               {{ 'checked' if 'jsearch' in values.SOURCES_DISABLED }}>
+        Disable JSearch (keeps the key saved)
+      </label>
     </div>
     <div class="setting">
       <label for="JOOBLE_API_KEY">Jooble API key (free, Israel)</label>
@@ -163,6 +168,11 @@
           {% elif jooble_usage.low %}<b>Running low — get a fresh key soon.</b>{% endif %}
         {% else %}<i>Usage tracked after your first search.</i>{% endif %}
       </small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="jooble" form="settings-form"
+               {{ 'checked' if 'jooble' in values.SOURCES_DISABLED }}>
+        Disable Jooble (keeps the key saved — useful when a corporate network blocks il.jooble.org)
+      </label>
     </div>
     <div class="setting">
       <label for="WEB_SEARCH_SITES">Web search over ATS job pages — sites <span class="rec">no key needed</span></label>
@@ -170,14 +180,24 @@
       <small>Finds jobs on ATS career pages (Comeet, Greenhouse, Lever…) via
         <code>site:</code> web searches (DuckDuckGo) — postings the aggregators often
         miss. <b>Free, no API key or signup.</b> Comma-separated <code>site:</code>
-        filters; clear the field to disable the source.
+        filters.
         <a href="#rb-websearch">📖 details</a>.</small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="websearch" form="settings-form"
+               {{ 'checked' if 'websearch' in values.SOURCES_DISABLED }}>
+        Disable web search
+      </label>
     </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
         <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" form="settings-form" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>
       <div class="setting"><label for="ADZUNA_APP_KEY">Adzuna app key</label>
-        <input type="text" id="ADZUNA_APP_KEY" name="ADZUNA_APP_KEY" form="settings-form" value="{{ values.ADZUNA_APP_KEY }}" placeholder="optional" autocomplete="off"></div>
+        <input type="text" id="ADZUNA_APP_KEY" name="ADZUNA_APP_KEY" form="settings-form" value="{{ values.ADZUNA_APP_KEY }}" placeholder="optional" autocomplete="off">
+        <label class="check-setting src-off">
+          <input type="checkbox" name="SOURCES_DISABLED" value="adzuna" form="settings-form"
+                 {{ 'checked' if 'adzuna' in values.SOURCES_DISABLED }}>
+          Disable Adzuna
+        </label></div>
     </div>
     <p class="muted">Currently active sources: <b>{{ sources | join(', ') if sources else 'none' }}</b></p>
   </section>
