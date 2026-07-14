@@ -76,6 +76,15 @@ def _split_title(title: str, url_company: str = "") -> tuple[str, str]:
     return t, ""
 
 
+def _ats_label(url: str) -> str:
+    """Short board name for the result's source tag, e.g. 'comeet'."""
+    host = urlparse(url).netloc.lower()
+    for name in ("comeet", "greenhouse", "lever", "smartrecruiters"):
+        if name in host:
+            return name
+    return host.removeprefix("www.") or "web"
+
+
 def _looks_like_listing_page(url: str, title: str) -> bool:
     """Skip company job-board index pages ('Jobs at Acme', 'All open positions')."""
     p = urlparse(url)
@@ -120,10 +129,12 @@ class WebSearchSource(JobSource):
         sites = self.sites()
         if not sites:
             return []
-        per_site = max(3, min(15, -(-limit // len(sites))))  # ceil
+        # Fetch generously per site: search engines rank, they don't enumerate,
+        # so a broad query ("automation") needs a deep top-N for good coverage.
+        per_site = max(10, min(20, -(-limit // len(sites))))  # ceil
 
         ddgs = DDGS()
-        results: list[JobResult] = []
+        per_site_results: list[list[JobResult]] = []
         seen: set[str] = set()
         errors: list[str] = []
         for i, site in enumerate(sites):
@@ -138,6 +149,7 @@ class WebSearchSource(JobSource):
                 errors.append(f"{site}: {exc}")
                 continue
 
+            bucket: list[JobResult] = []
             for it in items:
                 url = it.get("href") or ""
                 if not url or url in seen:
@@ -148,8 +160,8 @@ class WebSearchSource(JobSource):
                     continue
                 url_co = _company_from_url(url)
                 title, company = _split_title(title_raw, url_co)
-                results.append(JobResult(
-                    source=self.name,
+                bucket.append(JobResult(
+                    source=f"web:{_ats_label(url)}",
                     title=title,
                     company=url_co or company,
                     location=location,
@@ -158,8 +170,17 @@ class WebSearchSource(JobSource):
                     external_id=url,
                     raw=dict(it),
                 ))
+            per_site_results.append(bucket)
 
-        if not results and errors:
+        if not any(per_site_results) and errors:
             # Surface a real problem instead of a silent empty list.
             raise RuntimeError("; ".join(errors[:2]))
+
+        # Interleave across sites so the limit doesn't crowd out the boards
+        # that were queried last.
+        results: list[JobResult] = []
+        for rank in range(max((len(b) for b in per_site_results), default=0)):
+            for bucket in per_site_results:
+                if rank < len(bucket):
+                    results.append(bucket[rank])
         return results[:limit]
