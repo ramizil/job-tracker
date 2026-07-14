@@ -335,7 +335,10 @@
     </div>
     <p class="muted sm mt">Sign in with the mailbox that receives rejection emails
       (can differ from the alerts mailbox).
-      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
+      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.
+      {% if not gmail_rejections_connected %}If Google shows <b>Access blocked / 403 access_denied</b>,
+      add <code>zilber.rami@gmail.com</code> as a <b>Test user</b> in
+      <a href="#rb-google-cloud">Google Cloud → OAuth consent screen</a>, then try again.{% endif %}</p>
 
     <details class="runbook" id="rb-gmail-rejections">
       <summary>📖 How to set up the Gmail label (step-by-step)</summary>
@@ -630,9 +633,10 @@
           user type <b>External</b> → fill only app name + your email → save. The app can
           stay in <b>Testing</b> mode forever.</li>
         <li><b>Test users:</b> on the consent screen page open <b>Audience → Test users → + Add users</b>
-          and add <i>every</i> Google account you'll sign in with — your main account for
-          Sheets <b>and</b> the alerts mailbox (e.g. <code>ramizil1@gmail.com</code>). Without
-          this, sign-in fails with “access blocked”.</li>
+          and add <i>every</i> Google account you'll sign in with — e.g. your Sheets account,
+          the alerts mailbox (<code>ramizil1@gmail.com</code>) <b>and</b> the rejections mailbox
+          (<code>zilber.rami@gmail.com</code>). Without this, sign-in fails with
+          <b>“Access blocked” / שגיאה 403: access_denied</b>.</li>
         <li><b>Create the client:</b> <b>APIs &amp; Services → Credentials → + Create credentials →
           OAuth client ID</b> → application type <b>Desktop app</b> → Create → <b>Download JSON</b>.</li>
         <li><b>Install it:</b> save the downloaded file at the path shown in the
