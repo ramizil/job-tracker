@@ -168,7 +168,7 @@ DATA_BACKUP_REMOTE = ""
 GDRIVE_FOLDER = ""
 GOOGLE_CLIENT_SECRET = DATA_DIR / "google_client_secret.json"
 GMAIL_LABEL = "linkedin-jobs"
-GMAIL_REJECTION_LABEL = "job-rejections"
+GMAIL_REJECTION_LABEL = "job-rejection"
 
 
 def reload() -> None:
@@ -231,7 +231,7 @@ def reload() -> None:
         os.getenv("GOOGLE_CLIENT_SECRET") or DATA_DIR / "google_client_secret.json")
     GMAIL_LABEL = os.getenv("GMAIL_LABEL", "").strip() or "linkedin-jobs"
     GMAIL_REJECTION_LABEL = (os.getenv("GMAIL_REJECTION_LABEL", "").strip()
-                               or "job-rejections")
+                               or "job-rejection")
 
 
 def current_settings() -> dict[str, str]:

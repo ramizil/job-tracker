@@ -27,14 +27,13 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 AUTO_FETCH_INTERVAL_S = 600  # 10 minutes
 
 # Gmail search used when the configured label doesn't exist yet.
+# Subjects alone are unreliable — the query casts a wide net; body parsing
+# below decides what is a real rejection vs a mere "thanks for applying".
 _FALLBACK_QUERY = (
-    "(subject:(rejected OR \"not selected\" OR \"not moving\" OR unfortunately "
-    "OR \"other candidates\" OR \"application update\" OR \"was not selected\" "
-    "OR \"no longer under consideration\" OR \"will not be moving\" "
-    "OR \"decided to proceed\" OR \"decided not to\" OR \"not advance\" "
-    "OR \"תודה על פנייתך\" OR \"לא נבחר\" OR \"לא נמשיך\" OR \"מועמדים אחרים\") "
-    "OR from:(comeet.co OR greenhouse.io OR lever.co OR linkedin.com "
-    "OR smartrecruiters.com OR myworkday.com OR workday.com)) "
+    "(\"thank you for applying\" OR \"update on your application\" "
+    "OR \"your application\" OR \"interest in joining\" OR unfortunately "
+    "OR \"not selected\" OR \"not moving\" OR \"other candidates\" "
+    "OR \"after reviewing\" OR \"תודה על פנייתך\" OR \"לא נבחר\") "
     "-in:spam -in:trash newer_than:1y"
 )
 
@@ -51,19 +50,18 @@ _ACK_ONLY = re.compile(
     r"(?:thank(s| you) for (your )?(applying|application)|"
     r"we (have )?received your application|application (was )?received)",
     re.I)
-_REJECTION_MARKERS = re.compile(
-    r"not selected|not moving forward|unfortunately|regret to inform|"
-    r"decided to (proceed|move forward) with other|other candidates|"
-    r"will not be moving|no longer under consideration|not advance|"
-    r"position (has been |is )filled|was not successful|"
-    r"not be progressing|cannot offer you|we('ve| have) decided|"
+# Decision language — usually in the BODY, not the subject.
+_DECIDED_MARKERS = re.compile(
+    r"after reviewing|we(?:'ve| have) decided|we regret|unfortunately|"
+    r"regret to inform|not (?:be )?moving forward|not to move forward|"
+    r"will not be (?:moving|proceeding)|won'?t be proceeding|"
+    r"other candidates|not selected|cannot offer you|unable to move forward|"
+    r"chosen to pursue other|pursue other candidates|not advance|"
+    r"no longer under consideration|position (?:has been |is )filled|"
+    r"was not successful|not be progressing|"
     r"לא נבחר|לא נמשיך|מועמדים אחרים|מצטערים|לא נבחרת",
     re.I)
-
-_REJECTION_SENDERS = (
-    "comeet.co", "greenhouse.io", "lever.co", "linkedin.com",
-    "smartrecruiters.com", "myworkday.com", "workday.com",
-)
+_REJECTION_MARKERS = _DECIDED_MARKERS  # alias for note extraction
 
 
 class RejectionsError(Exception):
@@ -186,16 +184,21 @@ def _html_body(payload: dict) -> str:
 
 
 def _looks_like_rejection(subject: str, from_addr: str, text: str) -> bool:
+    """True when the email BODY (not just subject) signals a rejection.
+
+    Many ATS emails use polite subjects like "Thank you for applying…" and
+    only say "unfortunately / after reviewing we've decided…" in the body.
+    """
     subj = subject or ""
     body = text or ""
-    frm = (from_addr or "").lower()
-    if _REJECTION_MARKERS.search(subj) or _REJECTION_MARKERS.search(body):
+    combined = f"{subj}\n{body}"
+    if _DECIDED_MARKERS.search(body):
         return True
-    if any(s in frm for s in _REJECTION_SENDERS):
-        if _ACK_ONLY.search(subj + " " + body[:500]) and not _REJECTION_MARKERS.search(subj + body):
-            return False
-        return bool(_REJECTION_MARKERS.search(subj + body) or
-                    re.search(r"application|update|status|מועמד", subj + body, re.I))
+    if _DECIDED_MARKERS.search(subj):
+        return True
+    # "Thanks for applying" with no decision text yet → still in review, skip.
+    if _ACK_ONLY.search(subj) and not _DECIDED_MARKERS.search(body):
+        return False
     return False
 
 
@@ -239,17 +242,26 @@ def _extract_urls(blob: str) -> list[str]:
 def _parse_subject(subject: str, out: dict) -> None:
     subj = _clean(subject)
     patterns = [
+        # "Thank you for applying for the QA Engineer position at Untrama"
+        r"thank you for applying for the (.+?) position at (.+?)(?:\s*[-–—]|$)",
         # LinkedIn: Your application was not selected for TITLE at COMPANY
         r"(?:not selected|update).{0,40}?\bfor\s+(.+?)\s+at\s+(.+?)(?:\s*[-–|]|$)",
         r"your application (?:to|for)\s+(.+?)\s+at\s+(.+?)(?:\s*[-–|]|$)",
         r"application (?:to|for)\s+(.+?)\s+at\s+(.+?)(?:\s*[-–|]|$)",
         r"update (?:on|regarding) your application (?:to|for)\s+(.+?)\s+at\s+(.+?)(?:\s*[-–|]|$)",
-        # Hebrew-ish: COMPANY — TITLE
-        r"^(.+?)\s*[-–—]\s*(.+?)$",
+        # "Update on your application - Untrama - Hi Rami…"
+        r"update on your application\s*[-–—]\s*([^-–—]+?)(?:\s*[-–—]|$)",
+        # "Thanks for your recent interest in joining Varonis"
+        r"interest in joining (.+?)(?:\s*[-–—]|$)",
     ]
     for pat in patterns:
         m = re.search(pat, subj, re.I)
         if not m:
+            continue
+        if m.lastindex == 1:
+            company = _clean(m.group(1))
+            if company and not out["company"]:
+                out["company"] = company
             continue
         a, b = _clean(m.group(1)), _clean(m.group(2))
         if len(a) < 2 or len(b) < 2:
@@ -260,6 +272,49 @@ def _parse_subject(subject: str, out: dict) -> None:
             out["company"] = b if out["title"] == a else a
         if out["title"] and out["company"]:
             break
+
+
+def _parse_body(text: str, out: dict) -> None:
+    """Extract title + company from the email body (where ATS puts the truth)."""
+    blob = _clean(text)
+    # (regex, title_group, company_group) — 1-based group index; None = absent
+    patterns: list[tuple[str, int, int | None]] = [
+        (r"applying for the (.+?) position at (.+?)(?:[.,;]| and | but |$)", 1, 2),
+        (r"apply(?:ing|ied) (?:to|for) the (.+?) position at (.+?)(?:[.,;]| and |$)", 1, 2),
+        (r"for the (.+?) (?:position|role) at (.+?)(?:[.,;]| and |$)", 1, 2),
+        (r"considering (.+?) as your next .{0,50}?applying for the role of (.+?)(?:[.,;]|$)",
+         2, 1),
+        (r"applying for the role of (.+?)(?:[.,;]| unfortunately|$)", 1, None),
+    ]
+    for pat, tg, cg in patterns:
+        m = re.search(pat, blob, re.I)
+        if not m:
+            continue
+        title = _clean(m.group(tg)) if tg else ""
+        company = (_clean(m.group(cg))
+                   if cg and m.lastindex and m.lastindex >= cg else "")
+        if title and len(title) > 2 and not out["title"]:
+            out["title"] = title
+        if company and len(company) > 1 and not out["company"]:
+            out["company"] = company
+        if out["title"] and out["company"]:
+            break
+
+
+def _parse_from_display(from_addr: str, out: dict) -> None:
+    """Use the sender display name when it is the company (Cyera, Varonis…)."""
+    m = re.match(r"^([^<]+)<", from_addr or "")
+    if not m:
+        return
+    name = _clean(m.group(1))
+    low = name.lower()
+    if not name or low in ("no reply", "noreply", "do not reply"):
+        return
+    if any(x in low for x in ("recruiting", "recruitment", "talent", "hr")):
+        name = re.sub(r"\b(recruiting|recruitment|talent|hr)\b", "", name,
+                      flags=re.I).strip(" .")
+    if name and not out["company"]:
+        out["company"] = name
 
 
 def _parse_company_from_from_header(from_addr: str) -> str:
@@ -283,10 +338,16 @@ def _extract_note(text: str, limit: int = 280) -> str:
 
 
 def parse_rejection_email(*, subject: str, from_addr: str,
-                          html: str, plain: str) -> dict | None:
-    """Return parsed rejection fields, or None if this isn't a rejection."""
+                          html: str, plain: str,
+                          from_label: bool = False) -> dict | None:
+    """Return parsed rejection fields, or None if this isn't a rejection.
+
+    When ``from_label`` is True (email already under the user's rejection
+    label), we trust the label and always parse — the body/subject extract
+    company and title even if detection heuristics would skip it.
+    """
     text = plain or _html_to_text(html)
-    if not _looks_like_rejection(subject, from_addr, text):
+    if not from_label and not _looks_like_rejection(subject, from_addr, text):
         return None
 
     out = {
@@ -302,25 +363,12 @@ def parse_rejection_email(*, subject: str, from_addr: str,
     if urls:
         out["job_url"] = urls[0]
 
+    _parse_body(text, out)
+    _parse_from_display(from_addr, out)
     _parse_subject(subject, out)
-
-    # LinkedIn body: "… for TITLE at COMPANY"
-    if not out["company"] or not out["title"]:
-        m = re.search(
-            r"(?:for|to)\s+(.+?)\s+at\s+([^\n.]{2,80})", text, re.I)
-        if m:
-            out["title"] = out["title"] or _clean(m.group(1))
-            out["company"] = out["company"] or _clean(m.group(2))
 
     if not out["company"]:
         out["company"] = _parse_company_from_from_header(from_addr)
-
-    # Comeet / Greenhouse often put the company in the From display name
-    m = re.match(r"^([^<]+)<", from_addr or "")
-    if m and not out["company"]:
-        name = _clean(m.group(1))
-        if name and "comeet" not in name.lower():
-            out["company"] = name
 
     if not out["snippet"] and out["note"]:
         out["snippet"] = out["note"][:200]
@@ -458,7 +506,8 @@ def fetch_rejections() -> dict:
                 plain = html
 
             parsed = parse_rejection_email(
-                subject=subject, from_addr=from_addr, html=html, plain=plain)
+                subject=subject, from_addr=from_addr, html=html, plain=plain,
+                from_label=bool(label))
             try:
                 from datetime import datetime, timezone
                 ts = datetime.fromtimestamp(

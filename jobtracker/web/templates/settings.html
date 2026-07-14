@@ -312,14 +312,14 @@
     <div class="setting">
       <label for="GMAIL_REJECTION_LABEL">Gmail label to scan</label>
       <input type="text" id="GMAIL_REJECTION_LABEL" name="GMAIL_REJECTION_LABEL" form="settings-form"
-             value="{{ values.GMAIL_REJECTION_LABEL }}" placeholder="job-rejections" autocomplete="off">
+             value="{{ values.GMAIL_REJECTION_LABEL }}" placeholder="job-rejection" autocomplete="off">
       <small>Rejection emails from your applications mailbox (e.g.
-        <code>zilber.rami@gmail.com</code>). Point them at a Gmail label
-        <code>{{ values.GMAIL_REJECTION_LABEL or 'job-rejections' }}</code>
-        using the filter guide below — or skip the label for now: the tracker can
-        scan your inbox with a built-in rejection search on the first fetch.
-        <b>Read-only</b> access; nothing is auto-marked rejected until you confirm
-        on the <b>Rej.</b> page.</small>
+        <code>zilber.rami@gmail.com</code>). Tag them with label
+        <code>{{ values.GMAIL_REJECTION_LABEL or 'job-rejection' }}</code>
+        (manually or via a broad filter — see guide below). The tracker
+        <b>reads the email body</b> to detect real rejections and extract
+        company/title. <b>Read-only</b>; nothing is auto-marked rejected until
+        you confirm on the <b>Rej.</b> page.</small>
     </div>
     <div class="actions">
       {% if not gmail_rejections_connected %}
@@ -338,39 +338,43 @@
       Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
 
     <details class="runbook" id="rb-gmail-rejections">
-      <summary>📖 How to create the Gmail filter (step-by-step)</summary>
+      <summary>📖 How to set up the Gmail label (step-by-step)</summary>
       <div class="rb-body">
-        <p>In <b>zilber.rami@gmail.com</b> (or whichever mailbox gets rejection
-          replies), create <b>two filters</b> that both apply the label
-          <code>{{ values.GMAIL_REJECTION_LABEL or 'job-rejections' }}</code>.
-          This keeps your inbox clean and makes fetches fast.</p>
+        <p><b>Rejection subjects are misleading.</b> Most say “Thank you for applying…”
+          in the subject — the actual rejection (“unfortunately…”, “after reviewing
+          we've decided…”) is only inside the email body. Subject-based filters
+          miss most of them, so the tracker <b>reads the full email content</b>
+          to tell a real rejection from a mere acknowledgment.</p>
 
-        <h4>Filter 1 — rejection subjects</h4>
+        <h4>Recommended — label you already use</h4>
+        <p>You created <code>job-rejection</code> — perfect. Set that name in the
+          field above (default). Any email under that label is imported; the tracker
+          parses company + title from the body.</p>
         <ol>
-          <li>Open Gmail → click the <b>gear</b> → <b>See all settings</b> → tab
-            <b>Filters and Blocked Addresses</b> → <b>Create a new filter</b>.</li>
-          <li>In <b>Has the words</b>, paste:
-            <pre class="rb-pre">subject:(rejected OR "not selected" OR "not moving" OR unfortunately OR "other candidates" OR "application update" OR "was not selected" OR "no longer" OR "תודה על פנייתך" OR "לא נבחר")</pre>
-          </li>
-          <li>Click <b>Create filter</b> → tick <b>Apply the label</b> → choose
-            <b>New label…</b> → name it <code>job-rejections</code> →
-            <b>Also apply filter to matching conversations</b> → <b>Create filter</b>.</li>
+          <li>When a rejection arrives, Gmail → select the message → click the
+            <b>Label</b> icon → tick <code>job-rejection</code>.</li>
+          <li>Or drag the email to the label in the left sidebar.</li>
+          <li>In Job Tracker: connect rejections Gmail → <b>Rej.</b> →
+            <b>Fetch from Gmail</b>.</li>
         </ol>
 
-        <h4>Filter 2 — ATS senders</h4>
+        <h4>Optional — auto-label new mail (broad filter)</h4>
+        <p>This catches <em>all</em> application replies (including “we received
+          your application”). The tracker still reads the body and only surfaces
+          real rejections when not using the label — but with the label, everything
+          tagged is shown for you to confirm.</p>
         <ol>
-          <li>Create another filter → in <b>From</b>, paste:
-            <pre class="rb-pre">comeet.co OR greenhouse.io OR lever.co OR linkedin.com OR smartrecruiters.com OR myworkday.com</pre>
+          <li>Gmail → Settings → Filters → <b>Create a new filter</b>.</li>
+          <li><b>Has the words:</b>
+            <pre class="rb-pre">"thank you for applying" OR "update on your application" OR "your application" OR "interest in joining"</pre>
           </li>
-          <li>Apply the same <code>job-rejections</code> label (tick
-            <b>Also apply to matching conversations</b>).</li>
+          <li>Apply label <code>job-rejection</code> → tick
+            <b>Also apply filter to matching conversations</b>.</li>
         </ol>
 
-        <p class="muted sm">Tip: after creating the filters, old rejection emails
-          get the label automatically. Then in Job Tracker: connect rejections Gmail
-          → open <b>Rej.</b> → <b>Fetch from Gmail</b>.</p>
-        <p class="muted sm">No label yet? You can still fetch — the tracker falls
-          back to a built-in Gmail search for likely rejection emails.</p>
+        <p class="muted sm">No label yet? Fetch still works — the tracker searches
+          your inbox and analyses each email's <b>body</b> for decision language
+          (“unfortunately”, “after reviewing we've decided”, etc.).</p>
       </div>
     </details>
   </section>

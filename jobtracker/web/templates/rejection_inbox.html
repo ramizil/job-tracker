@@ -22,8 +22,11 @@
 {% if not connected %}
 <div class="panel">
   <p class="muted">Reads <b>rejection emails</b> from your applications mailbox
-    (e.g. <code>zilber.rami@gmail.com</code>), matches them to jobs you applied to,
-    and lets you <b>confirm</b> before marking anything rejected — no surprises.</p>
+    (e.g. <code>zilber.rami@gmail.com</code>). Tag them with the
+    <code>job-rejection</code> label in Gmail, or let the tracker scan your inbox
+    and read each email's <b>body</b> for decision language (“unfortunately”,
+    “after reviewing we've decided…”). Matches jobs you applied to — you
+    <b>confirm</b> before marking anything rejected.</p>
   <p class="muted">Connect in
     <a href="{{ url_for('main.settings') }}">Settings → Gmail rejections</a>
     (one-time Google sign-in, read-only), then come back and fetch.</p>
