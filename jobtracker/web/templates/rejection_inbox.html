@@ -110,9 +110,9 @@
             {% endfor %}
           </select>
           {% if r.company or r.title %}
-          <span class="muted sm" title="Filtered by parsed company/title from the email">
+          <span class="muted sm" title="Filtered by parsed company from the email">
             {{ row_picker|length }} match{{ 'es' if row_picker|length != 1 else '' }}
-            for {{ r.company or '?' }}{% if r.title %} · {{ r.title }}{% endif %}
+            for {{ r.company }}{% if r.title %} ({{ r.title }}){% endif %}
           </span>
           {% endif %}
           <select name="stage" title="Rejection stage">

@@ -774,22 +774,25 @@ def max_inbox_id() -> int:
 
 def list_applications_for_picker(*, company: str = "", title: str = "",
                                  matched_app_id: int | None = None):
-    """Applications for the confirm dropdown — filtered when job was parsed."""
+    """Applications for the confirm dropdown — filtered by parsed company name.
+
+    Title is shown for context but not used for filtering (rejection subjects
+    often differ slightly from the stored application title). Rejected
+    applications are included so a mailbox rejection can still be linked.
+    """
     with get_connection() as conn:
         apps = conn.execute(
             """SELECT id, company, title, status, date_applied
                  FROM applications
-                WHERE status NOT IN ('rejected', 'withdrawn')
+                WHERE status != 'withdrawn'
                 ORDER BY date_applied DESC, id DESC"""
         ).fetchall()
 
     company = (company or "").strip()
-    title = (title or "").strip()
-    if not company and not title:
+    if not company:
         return list(apps)
 
-    matched = [a for a in apps
-               if _app_matches_parsed(a, company=company, title=title)]
+    matched = [a for a in apps if _company_matches(company, a["company"])]
     if matched_app_id:
         have = {a["id"] for a in matched}
         if matched_app_id not in have:
