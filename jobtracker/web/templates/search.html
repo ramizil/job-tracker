@@ -15,7 +15,7 @@
   </p>
 {% endif %}
 
-<form method="post" class="searchbar" data-loading="Searching job boards…">
+<form method="post" class="searchbar" data-loading="Searching job boards and verifying each link (web search opens postings to check they are live and in your location — may take ~30s)…">
   <input name="query" value="{{ query }}" placeholder="e.g. performance test engineer (blank = your target titles)">
   <input name="location" value="{{ location }}" placeholder="Location">
   <button class="btn primary" type="submit" {{ 'disabled' if not configured }}>Search</button>

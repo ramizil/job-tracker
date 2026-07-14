@@ -2002,6 +2002,15 @@ def search():
                     results.append({"job": job, "score": m.score})
                     count += 1
                 flash(f"{src.name}: {count} result(s).", "ok")
+                if src.name == "websearch":
+                    if count:
+                        flash(f"Web search: only live postings in “{location or 'any'}” "
+                              f"are shown — closed links and abroad jobs were dropped.",
+                              "ok")
+                    else:
+                        flash(f"Web search: no live postings in “{location or 'any'}” "
+                              f"for this query — indexed links were closed or abroad.",
+                              "error")
             except Exception as exc:
                 flash(f"{src.name}: {exc}", "error")
         results.sort(key=lambda x: x["score"], reverse=True)
