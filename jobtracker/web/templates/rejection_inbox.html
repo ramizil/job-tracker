@@ -37,8 +37,10 @@
   <p class="muted">Only emails whose <b>body</b> contains definite rejection language
     (“unfortunately”, “decided not to move forward”, “other candidates”…) —
     acks (“we received your application”) and in-review mail are filtered out.
-    Label <code>{{ label }}</code>.
-  (or a built-in search if the label doesn't exist yet).
+    Label <code>{{ label }}</code>
+    (or a built-in search if the label doesn't exist yet).
+    {% if connected %}While Job Tracker is running, Gmail is checked automatically
+    <b>every 10 minutes</b> — new matches pop up in the nav badge.{% endif %}
   {% if pending %}<b>{{ pending }}</b> matched and waiting for your confirmation.{% endif %}
   <a class="chip {{ 'on' if not show_all else '' }}" href="{{ url_for('main.rejection_inbox') }}">pending</a>
   <a class="chip {{ 'on' if show_all else '' }}" href="{{ url_for('main.rejection_inbox', all=1) }}">+ dismissed</a>
