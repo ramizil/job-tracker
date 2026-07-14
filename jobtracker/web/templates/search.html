@@ -27,7 +27,7 @@
 
 {% if results %}
 <table class="grid">
-  <thead><tr><th>Match</th><th>Title</th><th>Company</th><th>Location</th><th>Src</th><th></th></tr></thead>
+  <thead><tr><th>Match</th><th>Title</th><th>Company</th><th>Location</th><th>Status</th><th>Src</th><th></th></tr></thead>
   <tbody>
     {% for item in results %}
     {% set j = item.job %}
@@ -36,6 +36,14 @@
       <td><a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.title }}</a></td>
       <td>{{ j.company }}</td>
       <td>{{ j.location }}</td>
+      <td>
+        {% if item.app_id %}
+          <a class="pill status-{{ item.app_status }}" href="{{ url_for('main.detail', app_id=item.app_id) }}"
+             title="Open application #{{ item.app_id }}">{{ item.app_status }}</a>
+        {% else %}
+          <span class="pill status-new">new</span>
+        {% endif %}
+      </td>
       <td>{{ j.source }}</td>
       <td>
         <form method="post" action="{{ url_for('main.search_save') }}">

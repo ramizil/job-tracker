@@ -1,8 +1,11 @@
 """Application CRUD, status transitions (with history) and rejection logging."""
 from __future__ import annotations
 
+import re
 import sqlite3
+from difflib import SequenceMatcher
 from typing import Any
+from urllib.parse import urlparse
 
 from .db import get_connection, now_iso
 from .models import NEGATIVE_STATUSES, normalize_status
@@ -74,6 +77,121 @@ def import_job_result(job: JobResult, match_score: float | None = None,
         status=status,
         match_score=match_score,
     )
+
+
+def _norm_match_text(s: str) -> str:
+    return re.sub(r"[^a-z0-9\u0590-\u05ff ]+", " ", (s or "").lower()).strip()
+
+
+def _text_sim(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _norm_job_url(url: str) -> str:
+    if not url:
+        return ""
+    p = urlparse(url.strip())
+    host = (p.netloc or "").lower().removeprefix("www.")
+    path = (p.path or "").rstrip("/")
+    return f"{host}{path}"
+
+
+def _job_url_keys(url: str) -> set[str]:
+    """Stable identifiers for cross-matching search hits to saved applications."""
+    keys: set[str] = set()
+    nu = _norm_job_url(url)
+    if nu:
+        keys.add(nu)
+    patterns = [
+        (r"linkedin\.com/(?:comm/)?jobs/view/(?:[^\s/?#]*?-)?(\d{6,})", "linkedin"),
+        (r"greenhouse\.io/(?:[^/]+/)?jobs/(\d+)", "greenhouse"),
+        (r"lever\.co/[^/]+/([0-9a-f-]{36})", "lever"),
+        (r"comeet\.com/jobs/[^/]+/([^/?#]+)", "comeet"),
+        (r"smartrecruiters\.com/[^/]+/(\d+)", "smartrecruiters"),
+    ]
+    for pat, label in patterns:
+        m = re.search(pat, url or "", re.I)
+        if m:
+            keys.add(f"{label}:{m.group(1).lower()}")
+    return keys
+
+
+def _company_matches_search(needle: str, haystack: str) -> bool:
+    a = _norm_match_text(needle)
+    b = _norm_match_text(haystack)
+    if not a or not b:
+        return False
+    return (a == b or a in b or b in a or _text_sim(a, b) >= 0.85)
+
+
+def _title_matches_search(needle: str, haystack: str) -> bool:
+    a = _norm_match_text(needle)
+    b = _norm_match_text(haystack)
+    if not a or not b:
+        return False
+    return a == b or a in b or b in a or _text_sim(a, b) >= 0.55
+
+
+def match_job_to_application(*, url: str = "", company: str = "", title: str = "",
+                             apps: list[sqlite3.Row] | None = None,
+                             url_index: dict[str, sqlite3.Row] | None = None
+                             ) -> sqlite3.Row | None:
+    """Best application match for a search hit: URL id first, then fuzzy title+company."""
+    if apps is None:
+        with get_connection() as conn:
+            apps = conn.execute(
+                "SELECT id, company, title, url, status FROM applications"
+            ).fetchall()
+    if url_index is None:
+        url_index = {}
+        for app in apps:
+            for key in _job_url_keys(app["url"] or ""):
+                url_index.setdefault(key, app)
+
+    for key in _job_url_keys(url):
+        hit = url_index.get(key)
+        if hit:
+            return hit
+
+    j_company = _norm_match_text(company)
+    j_title = _norm_match_text(title)
+    if not j_company or not j_title:
+        return None
+    for app in apps:
+        if (_company_matches_search(company, app["company"])
+                and _title_matches_search(title, app["title"])):
+            return app
+    return None
+
+
+def enrich_search_results(results: list[dict]) -> list[dict]:
+    """Add app_id + app_status ('new' or saved status) to search result dicts."""
+    if not results:
+        return results
+    with get_connection() as conn:
+        apps = conn.execute(
+            "SELECT id, company, title, url, status FROM applications"
+        ).fetchall()
+    url_index: dict[str, sqlite3.Row] = {}
+    for app in apps:
+        for key in _job_url_keys(app["url"] or ""):
+            url_index.setdefault(key, app)
+    enriched: list[dict] = []
+    for item in results:
+        job = item["job"]
+        hit = match_job_to_application(
+            url=job.url, company=job.company, title=job.title,
+            apps=apps, url_index=url_index,
+        )
+        row = dict(item)
+        if hit:
+            row["app_id"] = int(hit["id"])
+            row["app_status"] = hit["status"]
+        else:
+            row["app_id"] = None
+            row["app_status"] = "new"
+        enriched.append(row)
+    return enriched
 
 
 def find_duplicates(title: str, company: str) -> list[sqlite3.Row]:

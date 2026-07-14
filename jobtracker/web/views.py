@@ -2158,6 +2158,10 @@ def _load_last_search() -> dict | None:
         return None
 
 
+def _enrich_search_results(results: list) -> list:
+    return tracker.enrich_search_results(results)
+
+
 # --------------------------------------------------------------------------- #
 @bp.route("/search", methods=["GET", "POST"])
 def search():
@@ -2175,11 +2179,11 @@ def search():
             query = cached.get("query", query)
             location = cached.get("location", location)
             cached_at = cached.get("searched_at")
-            results = [
+            results = _enrich_search_results([
                 {"job": _job_result_from_dict(r["job"]), "score": r["score"]}
                 for r in cached.get("results", [])
                 if isinstance(r, dict) and isinstance(r.get("job"), dict)
-            ]
+            ])
         return render_template("search.html", results=results, query=query,
                                location=location, configured=configured,
                                jooble_usage=None, ready=rd, cached_at=cached_at)
@@ -2189,11 +2193,11 @@ def search():
             query = cached.get("query", query)
             location = cached.get("location", location)
             cached_at = cached.get("searched_at")
-            results = [
+            results = _enrich_search_results([
                 {"job": _job_result_from_dict(r["job"]), "score": r["score"]}
                 for r in cached.get("results", [])
                 if isinstance(r, dict) and isinstance(r.get("job"), dict)
-            ]
+            ])
     if request.method == "POST" and configured:
         prof = resume_mod.load_profile()
         if not query:
@@ -2230,6 +2234,7 @@ def search():
         elif ju["low"]:
             flash(f"Heads-up: only {ju['remaining']} Jooble requests left of "
                   f"{ju['limit']}. Consider getting a fresh key soon.", "error")
+    results = _enrich_search_results(results)
     return render_template("search.html", results=results, query=query,
                            location=location, configured=configured,
                            jooble_usage=ju, ready=rd, cached_at=cached_at)

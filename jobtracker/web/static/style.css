@@ -243,6 +243,7 @@ table.mini td.r{text-align:right;color:var(--muted)}
 .status-rejected{background:rgba(42,18,18,.85);color:#ffb4b4;border-color:rgba(255,180,180,.4);box-shadow:0 0 14px -2px rgba(255,180,180,.5)}
 .status-withdrawn{background:rgba(28,37,48,.85);color:#9aa7b6;border-color:rgba(154,167,182,.3)}
 .status-ghosted{background:rgba(28,37,48,.85);color:#9aa7b6;border-color:rgba(154,167,182,.3)}
+.status-new{background:rgba(18,36,54,.85);color:#7dd3fc;border-color:rgba(125,211,252,.45);box-shadow:0 0 14px -2px rgba(125,211,252,.45)}
 
 /* buttons / forms */
 .btn{
