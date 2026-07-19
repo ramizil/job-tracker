@@ -1,8 +1,9 @@
 """Remotive free remote-jobs API — no key required.
 
 Docs: https://remotive.com/api/remote-jobs
-Complements flaky web-search / blocked Jooble with a stable JSON feed of
-remote roles (filter client-side for Israel / query keywords).
+Complements flaky web-search / blocked Jooble with a stable JSON feed.
+When location is Israel, only Israel-eligible postings are kept (not
+Brazil/Mexico/US “remote” roles that Remotive also returns for a keyword).
 """
 from __future__ import annotations
 
@@ -15,9 +16,43 @@ from .base import JobResult, JobSource
 _URL = "https://remotive.com/api/remote-jobs"
 _TIMEOUT = 20
 _IL = re.compile(
-    r"\b(israel|tel[\s-]?aviv|jerusalem|haifa|herzliy[ay]|remote[\s-]?israel)\b",
+    r"\b(israel|tel[\s-]?aviv|jerusalem|haifa|herzliy[ay]|רעננה|ישראל|"
+    r"remote[\s-]?israel|israel[\s-]?remote)\b",
     re.I,
 )
+# Locations that clearly are not Israel (even if the job is "remote").
+_NOT_IL = re.compile(
+    r"\b(brazil|brasil|mexico|méxico|uruguay|argentina|chile|colombia|"
+    r"united states|usa|u\.s\.|canada|uk|united kingdom|germany|france|"
+    r"india|australia|spain|italy|netherlands|poland|portugal|ireland|"
+    r"americas|latin america|latam|emea|apac|europe only|asia only|"
+    r"africa|oceania)\b",
+    re.I,
+)
+
+
+def _location_matches(loc: str, description: str, requested: str) -> bool:
+    """True when this Remotive job fits the requested location filter."""
+    req = (requested or "").strip().lower()
+    if not req:
+        return True
+    loc = (loc or "").strip()
+    blob = f"{loc} {description or ''}"
+
+    if "israel" in req:
+        # Must mention Israel (location field preferred); never keep LATAM/US/etc.
+        if _NOT_IL.search(loc) and not _IL.search(loc):
+            return False
+        if _IL.search(loc):
+            return True
+        # Soft: Israel only in description, and location is empty / worldwide.
+        loc_l = loc.lower()
+        if loc_l in ("", "worldwide", "anywhere", "remote", "global", "world"):
+            return bool(_IL.search(blob))
+        return False
+
+    # Generic: requested location string must appear in the job location.
+    return req in loc.lower() or req in blob.lower()
 
 
 class RemotiveSource(JobSource):
@@ -29,9 +64,9 @@ class RemotiveSource(JobSource):
     def search(self, query: str, location: str = "Israel",
                limit: int = 20) -> list[JobResult]:
         q = (query or "").strip()
-        params: dict[str, str | int] = {"limit": max(limit * 3, 40)}
+        # Fetch a deeper pool — Israel-eligible remotes are a small fraction.
+        params: dict[str, str | int] = {"limit": max(limit * 8, 100)}
         if q:
-            # Remotive search is a single keyword string.
             params["search"] = q.split(" OR ")[0].strip().strip('"')[:80]
         try:
             resp = requests.get(_URL, params=params, timeout=_TIMEOUT)
@@ -40,25 +75,17 @@ class RemotiveSource(JobSource):
         except requests.exceptions.RequestException as exc:
             raise RuntimeError(f"Remotive unreachable: {exc}") from exc
 
-        want_il = "israel" in (location or "").lower()
         results: list[JobResult] = []
         for j in jobs:
             title = (j.get("title") or "").strip()
             company = (j.get("company_name") or "").strip()
             loc = (j.get("candidate_required_location") or "").strip()
             url = (j.get("url") or "").strip()
+            desc = (j.get("description") or "")[:5000]
             if not title or not url:
                 continue
-            blob = f"{title} {company} {loc} {j.get('description') or ''}"
-            if want_il and not (_IL.search(loc) or _IL.search(blob)
-                                or loc.lower() in ("", "worldwide", "anywhere",
-                                                   "remote", "global")):
-                # Keep worldwide/remote; drop clearly other-country-only.
-                if any(x in loc.lower() for x in (
-                        "united states", "usa", "uk", "germany", "india",
-                        "canada", "australia", "france", "europe only")):
-                    continue
-            desc = (j.get("description") or "")[:5000]
+            if not _location_matches(loc, desc, location):
+                continue
             results.append(JobResult(
                 source="remotive",
                 title=title,
