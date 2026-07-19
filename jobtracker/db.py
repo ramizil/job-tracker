@@ -97,6 +97,18 @@ CREATE TABLE IF NOT EXISTS rejection_mail_seen (
     gmail_id   TEXT PRIMARY KEY,
     fetched_at TEXT NOT NULL
 );
+
+-- Search results the user dismissed or ignored (search_hidden.py).
+CREATE TABLE IF NOT EXISTS search_hidden (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_key    TEXT UNIQUE NOT NULL,
+    title      TEXT,
+    company    TEXT,
+    url        TEXT,
+    ignored    INTEGER DEFAULT 0,    -- 0 = dismissed (restorable), 1 = forever
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_search_hidden_ignored ON search_hidden(ignored);
 """
 
 

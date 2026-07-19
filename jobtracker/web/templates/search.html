@@ -21,12 +21,56 @@
   <button class="btn primary" type="submit" {{ 'disabled' if not configured }}>Search</button>
 </form>
 
-{% if cached_at and results %}
-<p class="muted sm">Last search{% if request.method == 'GET' %} (saved){% endif %} · {{ cached_at[:16].replace('T', ' ') }} UTC</p>
+<p class="filters">
+  <a class="chip {{ 'on' if not show_dismissed and not show_ignored else '' }}"
+     href="{{ url_for('main.search') }}">results</a>
+  <a class="chip {{ 'on' if show_dismissed else '' }}"
+     href="{{ url_for('main.search', dismissed=1) }}"
+     title="Jobs you dismissed from search">+ dismissed{% if hide_counts and hide_counts.dismissed %} ({{ hide_counts.dismissed }}){% endif %}</a>
+  <a class="chip {{ 'on' if show_ignored else '' }}"
+     href="{{ url_for('main.search', ignored=1) }}"
+     title="Jobs hidden forever from search">🔕 ignored{% if hide_counts and hide_counts.ignored %} ({{ hide_counts.ignored }}){% endif %}</a>
+</p>
+
+{% if cached_at and results and not show_dismissed and not show_ignored %}
+<p class="muted sm">Last search{% if request.method == 'GET' %} (saved){% endif %} · {{ cached_at[:16].replace('T', ' ') }} UTC
+  · ✕ Dismiss hides for now · 🔕 Ignore never shows again</p>
 {% endif %}
 
-{% if results %}
-<table class="grid">
+{% if show_dismissed or show_ignored %}
+<table class="grid sticky-head">
+  <thead><tr>
+    <th>When</th><th>Title</th><th>Company</th><th></th>
+  </tr></thead>
+  <tbody>
+    {% for r in hidden_rows %}
+    <tr class="muted">
+      <td>{{ (r.created_at or '')[:10] }}</td>
+      <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title or r.url }} ↗</a>{% else %}{{ r.title }}{% endif %}</td>
+      <td>{{ r.company }}</td>
+      <td class="actions-cell">
+        {% if show_ignored %}
+          <form method="post" action="{{ url_for('main.search_unignore') }}" style="display:inline">
+            <input type="hidden" name="job_key" value="{{ r.job_key }}">
+            <button class="btn sm" type="submit" title="Move to dismissed">🔔 Unignore</button>
+          </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('main.search_restore') }}" style="display:inline">
+          <input type="hidden" name="job_key" value="{{ r.job_key }}">
+          <input type="hidden" name="next" value="{{ 'ignored' if show_ignored else 'dismissed' }}">
+          <button class="btn sm" type="submit" title="Show again in search results">↩ Restore</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">
+      {% if show_ignored %}Ignore list is empty.{% else %}No dismissed search results.{% endif %}
+    </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% elif results %}
+<table class="grid sticky-head">
   <thead><tr><th>Match</th><th>Title</th><th>Company</th><th>Location</th><th>Status</th><th>Src</th><th></th></tr></thead>
   <tbody>
     {% for item in results %}
@@ -45,8 +89,9 @@
         {% endif %}
       </td>
       <td>{{ j.source }}</td>
-      <td>
-        <form method="post" action="{{ url_for('main.search_save') }}">
+      <td class="actions-cell">
+        {% if not item.app_id %}
+        <form method="post" action="{{ url_for('main.search_save') }}" style="display:inline">
           <input type="hidden" name="company" value="{{ j.company }}">
           <input type="hidden" name="title" value="{{ j.title }}">
           <input type="hidden" name="location" value="{{ j.location }}">
@@ -54,7 +99,20 @@
           <input type="hidden" name="salary" value="{{ j.salary }}">
           <input type="hidden" name="source" value="{{ j.source }}">
           <input type="hidden" name="description" value="{{ j.description }}">
-          <button class="btn sm" type="submit">Save</button>
+          <button class="btn sm primary" type="submit">Save</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('main.search_dismiss') }}" style="display:inline">
+          <input type="hidden" name="url" value="{{ j.url }}">
+          <input type="hidden" name="title" value="{{ j.title }}">
+          <input type="hidden" name="company" value="{{ j.company }}">
+          <button class="btn sm" type="submit" title="Hide from results — can restore later">✕ Dismiss</button>
+        </form>
+        <form method="post" action="{{ url_for('main.search_ignore') }}" style="display:inline">
+          <input type="hidden" name="url" value="{{ j.url }}">
+          <input type="hidden" name="title" value="{{ j.title }}">
+          <input type="hidden" name="company" value="{{ j.company }}">
+          <button class="btn sm" type="submit" title="Never show this job in search again">🔕 Ignore</button>
         </form>
       </td>
     </tr>

@@ -20,7 +20,8 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                gmail_alerts, gmail_rejections, pitch, syncstatus, tracker, tts,
+                gmail_alerts, gmail_rejections, pitch, search_hidden, syncstatus,
+                tracker, tts,
                 usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
@@ -2394,7 +2395,8 @@ def _load_last_search() -> dict | None:
         return None
 
 
-def _enrich_search_results(results: list, query: str = "") -> list:
+def _enrich_search_results(results: list, query: str = "",
+                           *, show_hidden: bool = False) -> list:
     if query:
         results = [
             item for item in results
@@ -2404,6 +2406,18 @@ def _enrich_search_results(results: list, query: str = "") -> list:
                 description=getattr(item.get("job"), "description", "") or "",
             )
         ]
+    if not show_hidden:
+        hide_keys = search_hidden.hidden_key_set()
+        if hide_keys:
+            results = [
+                item for item in results
+                if not search_hidden.is_hidden(
+                    getattr(item.get("job"), "url", "") or "",
+                    getattr(item.get("job"), "company", "") or "",
+                    getattr(item.get("job"), "title", "") or "",
+                    key_set=hide_keys,
+                )
+            ]
     return tracker.enrich_search_results(results)
 
 
@@ -2413,9 +2427,23 @@ def search():
     results = []
     query = request.values.get("query", "")
     location = request.values.get("location", "Israel")
+    show_dismissed = request.args.get("dismissed") == "1"
+    show_ignored = request.args.get("ignored") == "1"
     cached_at = None
     configured = [s.name for s in get_sources()]
     rd = _readiness()
+    hide_counts = search_hidden.counts()
+
+    # Dismissed / ignored lists — separate from live search results.
+    if show_dismissed or show_ignored:
+        rows = search_hidden.list_hidden(ignored=True if show_ignored else False)
+        return render_template(
+            "search.html", results=[], query=query, location=location,
+            configured=configured, jooble_usage=None, ready=rd, cached_at=None,
+            show_dismissed=show_dismissed, show_ignored=show_ignored,
+            hidden_rows=rows, hide_counts=hide_counts,
+        )
+
     if request.method == "POST" and not rd["ready"]:
         for msg in rd["issues"]:
             flash(msg, "error")
@@ -2429,9 +2457,12 @@ def search():
                 for r in cached.get("results", [])
                 if isinstance(r, dict) and isinstance(r.get("job"), dict)
             ], query=query)
-        return render_template("search.html", results=results, query=query,
-                               location=location, configured=configured,
-                               jooble_usage=None, ready=rd, cached_at=cached_at)
+        return render_template(
+            "search.html", results=results, query=query, location=location,
+            configured=configured, jooble_usage=None, ready=rd,
+            cached_at=cached_at, show_dismissed=False, show_ignored=False,
+            hidden_rows=[], hide_counts=hide_counts,
+        )
     if request.method == "GET":
         cached = _load_last_search()
         if cached:
@@ -2447,6 +2478,7 @@ def search():
         prof = resume_mod.load_profile()
         if not query:
             query = " OR ".join(prof.get("target_titles", [])[:3])
+        hide_keys = search_hidden.hidden_key_set()
         for src in get_sources():
             try:
                 count = 0
@@ -2456,6 +2488,9 @@ def search():
                     if not job_matches_query(
                             query, title=job.title,
                             description=job.description or ""):
+                        continue
+                    if search_hidden.is_hidden(
+                            job.url, job.company, job.title, key_set=hide_keys):
                         continue
                     m = score_job(job.title, job.description, prof)
                     results.append({"job": job, "score": m.score})
@@ -2500,9 +2535,12 @@ def search():
             flash(f"Heads-up: only {ju['remaining']} Jooble requests left of "
                   f"{ju['limit']}. Consider getting a fresh key soon.", "error")
     results = _enrich_search_results(results, query=query)
-    return render_template("search.html", results=results, query=query,
-                           location=location, configured=configured,
-                           jooble_usage=ju, ready=rd, cached_at=cached_at)
+    return render_template(
+        "search.html", results=results, query=query, location=location,
+        configured=configured, jooble_usage=ju, ready=rd, cached_at=cached_at,
+        show_dismissed=False, show_ignored=False, hidden_rows=[],
+        hide_counts=hide_counts,
+    )
 
 
 @bp.route("/search/save", methods=["POST"])
@@ -2517,6 +2555,57 @@ def search_save():
     )
     flash(f"Saved as #{app_id}.", "ok")
     return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/search/dismiss", methods=["POST"])
+def search_dismiss():
+    f = request.form
+    try:
+        search_hidden.hide(
+            url=f.get("url", ""), title=f.get("title", ""),
+            company=f.get("company", ""), ignored=False,
+        )
+        flash("Dismissed — hidden from search results (restore from + dismissed).", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.search"))
+
+
+@bp.route("/search/ignore", methods=["POST"])
+def search_ignore():
+    f = request.form
+    try:
+        search_hidden.hide(
+            url=f.get("url", ""), title=f.get("title", ""),
+            company=f.get("company", ""), ignored=True,
+        )
+        flash("Ignored — this job won't appear in search again.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.search"))
+
+
+@bp.route("/search/restore", methods=["POST"])
+def search_restore():
+    job_key = (request.form.get("job_key") or "").strip()
+    if job_key:
+        search_hidden.restore(job_key)
+        flash("Restored — will show again in search results.", "ok")
+    next_view = request.form.get("next") or ""
+    if next_view == "ignored":
+        return redirect(url_for("main.search", ignored=1))
+    if next_view == "dismissed":
+        return redirect(url_for("main.search", dismissed=1))
+    return redirect(url_for("main.search"))
+
+
+@bp.route("/search/unignore", methods=["POST"])
+def search_unignore():
+    job_key = (request.form.get("job_key") or "").strip()
+    if job_key:
+        search_hidden.set_ignored(job_key, False)
+        flash("Moved to dismissed — restore from there to show in results again.", "ok")
+    return redirect(url_for("main.search", ignored=1))
 
 
 # --------------------------------------------------------------------------- #
