@@ -55,6 +55,11 @@ def make_backup(dest_dir: Path | str | None = None) -> Path:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
 
+    try:
+        from . import syncstatus
+        syncstatus.record_backup(folder=str(folder))
+    except Exception:
+        pass
     return folder
 
 
@@ -71,6 +76,11 @@ def backup_zip_bytes() -> bytes:
             for src in _profile_files(name):
                 zf.write(src, f"profiles/{name}/{src.relative_to(pdir)}")
     buf.seek(0)
+    try:
+        from . import syncstatus
+        syncstatus.record_backup(zip_download=True)
+    except Exception:
+        pass
     return buf.getvalue()
 
 

@@ -20,7 +20,8 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                gmail_alerts, gmail_rejections, pitch, tracker, tts, usage)
+                gmail_alerts, gmail_rejections, pitch, syncstatus, tracker, tts,
+                usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
@@ -44,11 +45,20 @@ def inject_saved_alert():
 
 @bp.app_context_processor
 def inject_alerts_badge():
-    """Unhandled job alerts (not applied, not dismissed) — nav badge count."""
+    """Unread job alerts (mailbox-style) — nav badge count."""
     try:
         return {"alerts_badge": gmail_alerts.new_alert_count()}
     except Exception:
         return {"alerts_badge": 0}
+
+
+@bp.app_context_processor
+def inject_sync_status():
+    """Last backup / Sheets sync times for the top-bar confidence chip."""
+    try:
+        return {"sync_status": syncstatus.status_summary()}
+    except Exception:
+        return {"sync_status": {}}
 
 
 @bp.app_context_processor
@@ -295,6 +305,7 @@ def settings():
         backup_dir=str(config.BACKUP_DIR),
         data_dir=str(config.PROFILE_DIR),
         jooble_usage=usage.jooble_usage(config.JOOBLE_API_KEY) if config.JOOBLE_API_KEY else None,
+        sync_meta=syncstatus.status_summary(),
         gemini_models=ai.list_models(),
         openai_models=ai.OPENAI_MODELS,
         anthropic_models=ai.ANTHROPIC_MODELS,
@@ -728,6 +739,7 @@ def dashboard():
         sources=analytics.source_stats(),
         insight=analytics.match_score_insight(),
         reminders=analytics.saved_reminders(),
+        digest=analytics.action_digest(),
         ai_on=ai.is_configured(),
     )
 
@@ -923,6 +935,9 @@ def alerts():
     """Job postings collected from Gmail alert emails, vs. what you applied to."""
     show_all = request.args.get("all") == "1"
     show_ignored = request.args.get("ignored") == "1"
+    # Default = action queue (needs a decision). ?view=all shows every active row.
+    show_queue = (not show_all and not show_ignored
+                  and request.args.get("view", "queue") != "all")
     connected = gmail_alerts.is_connected()
     if connected:
         try:  # keep 'applied' badges fresh (cheap: local fuzzy matching only)
@@ -930,14 +945,19 @@ def alerts():
         except Exception:
             pass
     rows = gmail_alerts.list_alerts(include_dismissed=show_all,
-                                    ignored=show_ignored)
+                                    ignored=show_ignored, queue=show_queue)
     apps = tracker.list_applications()
     app_names = {r["id"]: f"{r['company']} — {r['title']}" for r in apps}
     app_dates = {r["id"]: (r["date_applied"] or "")[:10] for r in apps}
+    app_status = {r["id"]: r["status"] for r in apps}
+    matched_ids = [r["matched_app_id"] for r in rows if r["matched_app_id"]]
+    app_paths = tracker.status_paths_for_apps(matched_ids)
     return render_template(
         "alerts.html", rows=rows, show_all=show_all, show_ignored=show_ignored,
-        connected=connected, app_names=app_names, app_dates=app_dates,
+        show_queue=show_queue, connected=connected, app_names=app_names,
+        app_dates=app_dates, app_status=app_status, app_paths=app_paths,
         label=config.GMAIL_LABEL,
+        queue_count=gmail_alerts.action_queue_count(),
         pending=sum(1 for r in rows
                     if not r["dismissed"] and not r["matched_app_id"]
                     and not r["ignored"]))
@@ -972,6 +992,177 @@ def alerts_seen():
     """Reset the Alerts nav badge without dismissing anything."""
     gmail_alerts.mark_all_seen()
     flash("Alerts counter reset — the badge now counts only new alerts.", "ok")
+    return redirect(url_for("main.alerts", **request.args))
+
+
+@bp.route("/alerts/<int:alert_id>/read", methods=["POST"])
+def alert_read(alert_id: int):
+    """Mark one alert as read (mailbox-style)."""
+    gmail_alerts.set_seen(alert_id, True)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": True, "id": alert_id}
+    return redirect(url_for("main.alerts", **request.args))
+
+
+@bp.route("/alerts/<int:alert_id>/comment", methods=["POST"])
+def alert_comment(alert_id: int):
+    """Save a note on an alert — survives when the same job appears again."""
+    gmail_alerts.set_comment(alert_id, request.form.get("comment", ""))
+    flash("Comment saved.", "ok")
+    return redirect(url_for("main.alerts", **request.args))
+
+
+def _fetch_job_page_text(url: str) -> str:
+    """Best-effort job description from a posting URL (for one-click capture)."""
+    if not url:
+        return ""
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return ""
+    headers = {
+        "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/126.0.0.0 Safari/537.36"),
+        "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+    except Exception:
+        return ""
+    if resp.status_code >= 400:
+        return ""
+    html = resp.text[:400_000]
+    # Prefer JobPosting JSON-LD description when present.
+    for m in re.finditer(
+            r"<script[^>]*application/ld\+json[^>]*>(.*?)</script>",
+            html, re.S | re.I):
+        try:
+            data = json.loads(m.group(1).strip())
+        except Exception:
+            continue
+        for d in (data if isinstance(data, list) else [data]):
+            if isinstance(d, dict) and d.get("@type") == "JobPosting":
+                desc = d.get("description") or ""
+                if isinstance(desc, str) and len(desc.strip()) >= 80:
+                    # description may be HTML
+                    return _html_visible_text(desc) if "<" in desc else desc.strip()
+    text = _html_visible_text(html)
+    # Drop obvious chrome noise
+    if len(text) < 80:
+        return ""
+    return text[:20000]
+
+
+@bp.route("/alerts/<int:alert_id>/capture", methods=["POST"])
+def alert_capture(alert_id: int):
+    """One-click capture: fetch the job page, save as an application, link alert.
+
+    If the page can't be fetched (common for LinkedIn), fall back to the Paste
+    form prefilled with the alert's fields.
+    """
+    row = gmail_alerts.get_alert(alert_id)
+    if not row:
+        flash("Alert not found.", "error")
+        return redirect(url_for("main.alerts"))
+
+    url = (row["url"] or "").strip()
+    title = (row["title"] or "").strip()
+    company = (row["company"] or "").strip()
+    location = (row["location"] or "").strip()
+
+    if row["matched_app_id"]:
+        flash("This alert is already linked to an application.", "ok")
+        return redirect(url_for("main.detail", app_id=row["matched_app_id"]))
+
+    text = _fetch_job_page_text(url)
+    if not text:
+        gmail_alerts.set_seen(alert_id, True)
+        flash("Couldn't fetch the job page automatically — paste the description "
+              "below (LinkedIn often blocks direct fetch).", "error")
+        return redirect(url_for(
+            "main.paste_job", url=url, title=title, company=company,
+            location=location))
+
+    # Enrich blank fields with AI when available.
+    if ai.is_configured() and not (title and company):
+        try:
+            parsed = ai.parse_job(text)
+            title = title or parsed.get("title", "")
+            company = company or parsed.get("company", "")
+            location = location or parsed.get("location", "")
+        except ai.AIError as exc:
+            flash(f"AI extraction skipped: {exc}", "error")
+
+    if not title:
+        title = text.splitlines()[0][:120] if text else "(untitled)"
+    if not company:
+        company = "(unknown)"
+
+    # If a duplicate already exists, just link the alert to it.
+    if company != "(unknown)":
+        dups = tracker.find_duplicates(title, company)
+        if dups:
+            app_id = int(dups[0]["id"])
+            gmail_alerts.link_application(alert_id, app_id)
+            flash(f"Linked alert to existing application #{app_id}.", "ok")
+            return redirect(url_for("main.detail", app_id=app_id))
+
+    source = _source_from_url(url) or "linkedin-alert"
+    score = score_job(title, text).score
+    app_id = tracker.add_application(
+        company=company, title=title, location=location, url=url,
+        description=text, source=source, status="saved", match_score=score,
+    )
+    gmail_alerts.link_application(alert_id, app_id)
+    flash(f"Captured alert as application #{app_id} — review and apply when ready.",
+          "ok")
+    return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/alerts/<int:alert_id>/open")
+def alert_open(alert_id: int):
+    """Open the job URL and mark the alert as read (like opening a mail)."""
+    gmail_alerts.set_seen(alert_id, True)
+    url = gmail_alerts.alert_url(alert_id)
+    if url:
+        return redirect(url)
+    flash("Alert has no job URL.", "error")
+    return redirect(url_for("main.alerts", **request.args))
+
+
+@bp.route("/alerts/bulk", methods=["POST"])
+def alerts_bulk():
+    """Apply the same action to several checked alerts."""
+    action = (request.form.get("action") or "").strip()
+    raw_ids = request.form.getlist("alert_ids")
+    ids = []
+    for v in raw_ids:
+        try:
+            ids.append(int(v))
+        except (TypeError, ValueError):
+            pass
+    if not ids:
+        flash("Select at least one alert.", "error")
+        return redirect(url_for("main.alerts", **request.args))
+    if action == "read":
+        n = gmail_alerts.set_seen_many(ids, True)
+        flash(f"Marked {n} alert(s) as read.", "ok")
+    elif action == "dismiss":
+        n = gmail_alerts.set_dismissed_many(ids, True)
+        flash(f"Dismissed {n} alert(s).", "ok")
+    elif action == "ignore":
+        n = gmail_alerts.set_ignored_many(ids, True)
+        flash(f"Ignored {n} alert(s) — they won't notify again.", "ok")
+    elif action == "restore":
+        n = gmail_alerts.set_dismissed_many(ids, False)
+        flash(f"Restored {n} alert(s).", "ok")
+    elif action == "unignore":
+        n = gmail_alerts.set_ignored_many(ids, False)
+        flash(f"Removed {n} alert(s) from the ignore list.", "ok")
+    else:
+        flash("Unknown bulk action.", "error")
     return redirect(url_for("main.alerts", **request.args))
 
 
@@ -1077,6 +1268,38 @@ def rejection_inbox_match(row_id: int):
     return redirect(url_for("main.rejection_inbox", **request.args))
 
 
+def _analyze_rejection_app(app_id: int) -> bool:
+    """Run + cache per-rejection AI analysis. Returns True on success."""
+    r = tracker.get_application(app_id)
+    if not r:
+        return False
+    data = ai.analyze_rejection(
+        title=r["title"], company=r["company"],
+        description=r["description"] or "",
+        stage=r["rejection_stage"] or "", reason=r["rejection_reason"] or "",
+        note=r["rejection_note"] or "",
+        fit_summary=_fit_summary_for_prompt(r),
+    )
+    tracker.set_rejection_analysis(app_id, data)
+    return True
+
+
+def _refresh_rejection_overall() -> None:
+    """Best-effort refresh of the overall rejection-insights cache."""
+    rows = tracker.list_applications(status="rejected")
+    analyses = {r["id"]: tracker.get_rejection_analysis(r["id"]) for r in rows}
+    if not any(analyses.values()):
+        return
+    overall = ai.analyze_rejections_overall(
+        verdicts=_rejection_verdicts_digest(rows, analyses),
+        baseline=json.dumps(analytics.rejection_baseline(),
+                            ensure_ascii=False, indent=1))
+    overall["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    overall["rejections_analyzed"] = sum(1 for v in analyses.values() if v)
+    _rejection_insights_path().write_text(
+        json.dumps(overall, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 @bp.route("/rejection-inbox/<int:row_id>/confirm", methods=["POST"])
 def rejection_inbox_confirm(row_id: int):
     app_id = int(request.form.get("app_id", "0") or 0)
@@ -1086,11 +1309,24 @@ def rejection_inbox_confirm(row_id: int):
     if not app_id:
         flash("Pick an application to mark as rejected.", "error")
         return redirect(url_for("main.rejection_inbox"))
-    if gmail_rejections.confirm(row_id, app_id=app_id, stage=stage,
-                                reason=reason, note=note):
-        flash("Application marked rejected.", "ok")
-    else:
+    if not gmail_rejections.confirm(row_id, app_id=app_id, stage=stage,
+                                    reason=reason, note=note):
         flash("Could not update that application.", "error")
+        return redirect(url_for("main.rejection_inbox", **request.args))
+
+    flash("Application marked rejected.", "ok")
+    # Close the loop: analyze this rejection and open the insights dashboard.
+    if ai.is_configured():
+        try:
+            _analyze_rejection_app(app_id)
+            flash("Rejection analysis ready — see insights below.", "ok")
+            try:
+                _refresh_rejection_overall()
+            except ai.AIError as exc:
+                flash(f"Overall patterns not refreshed: {exc}", "error")
+            return redirect(url_for("main.rejections"))
+        except ai.AIError as exc:
+            flash(f"Rejection saved, but analysis failed: {exc}", "error")
     return redirect(url_for("main.rejection_inbox", **request.args))
 
 
@@ -2211,13 +2447,25 @@ def search():
                     count += 1
                 flash(f"{src.name}: {count} result(s).", "ok")
                 if src.name == "websearch":
-                    if count:
-                        flash(f"Web search: only live postings in “{location or 'any'}” "
-                              f"are shown — closed links and abroad jobs were dropped.",
+                    soft = sum(
+                        1 for item in results
+                        if getattr(item.get("job"), "raw", None)
+                        and (item["job"].raw or {}).get("soft_verify")
+                    ) if count else 0
+                    if count and soft:
+                        flash(f"Web search: {count} result(s) for “{location or 'any'}” "
+                              f"— some links could not be fully verified live "
+                              f"(open a few to confirm they're still open).",
+                              "ok")
+                    elif count:
+                        flash(f"Web search: live postings in “{location or 'any'}” "
+                              f"— closed links and abroad jobs were dropped.",
                               "ok")
                     else:
-                        flash(f"Web search: no live postings in “{location or 'any'}” "
-                              f"for this query — indexed links were closed or abroad.",
+                        flash(f"Web search: no postings in “{location or 'any'}” "
+                              f"for this query. Try a shorter keyword (e.g. “automation” "
+                              f"instead of a long phrase), wait a minute and search again "
+                              f"(DuckDuckGo rate-limits), or check Settings → sites list.",
                               "error")
             except Exception as exc:
                 flash(f"{src.name}: {exc}", "error")

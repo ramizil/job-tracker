@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS job_alerts (
     times_seen     INTEGER DEFAULT 1,    -- how many alert emails contained this job
     last_alert_at  TEXT,                 -- most recent email that mentioned it
     ignored        INTEGER DEFAULT 0,    -- ignore list: hidden, never notifies again
+    comment        TEXT,                 -- user note; kept when the same job resurfaces
     created_at     TEXT NOT NULL
 );
 
@@ -165,6 +166,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if "ignored" not in alert_cols:
             conn.execute(
                 "ALTER TABLE job_alerts ADD COLUMN ignored INTEGER DEFAULT 0")
+        if "comment" not in alert_cols:
+            conn.execute("ALTER TABLE job_alerts ADD COLUMN comment TEXT")
 
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)")}
     added = []

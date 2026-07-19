@@ -237,6 +237,67 @@ def get_history(app_id: int) -> list[sqlite3.Row]:
         ).fetchall()
 
 
+def _compact_status_path(path: list[str], current: str = "") -> list[str]:
+    """Collapse a status trail for compact UI (e.g. applied → rejected)."""
+    cleaned: list[str] = []
+    for s in path:
+        s = (s or "").strip()
+        if not s or s == "saved":
+            continue
+        if not cleaned or cleaned[-1] != s:
+            cleaned.append(s)
+    cur = (current or "").strip()
+    if cur and cur != "saved":
+        if not cleaned:
+            cleaned = [cur]
+        elif cleaned[-1] != cur:
+            cleaned.append(cur)
+    elif not cleaned and cur:
+        cleaned = [cur]
+    return cleaned
+
+
+def status_paths_for_apps(app_ids: list[int]) -> dict[int, list[str]]:
+    """Ordered status lifecycle per application (e.g. ['applied', 'rejected']).
+
+    Built from status_history when present; otherwise just the current status.
+    "saved" and consecutive duplicates are dropped for a compact trail.
+    """
+    ids = sorted({int(i) for i in app_ids if i is not None})
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        apps = {
+            int(r["id"]): r["status"]
+            for r in conn.execute(
+                f"SELECT id, status FROM applications WHERE id IN ({placeholders})",
+                ids,
+            )
+        }
+        hist = conn.execute(
+            f"""SELECT application_id, old_status, new_status, changed_at
+                  FROM status_history
+                 WHERE application_id IN ({placeholders})
+                 ORDER BY changed_at ASC, id ASC""",
+            ids,
+        ).fetchall()
+
+    raw: dict[int, list[str]] = {i: [] for i in ids}
+    for h in hist:
+        aid = int(h["application_id"])
+        path = raw[aid]
+        if not path and h["old_status"]:
+            path.append(h["old_status"])
+        new = h["new_status"]
+        if new and (not path or path[-1] != new):
+            path.append(new)
+    return {
+        aid: _compact_status_path(raw.get(aid, []), apps.get(aid, ""))
+        for aid in ids if aid in apps
+    }
+
+
 def update_status(app_id: int, new_status: str, note: str = "") -> bool:
     """Transition status, recording history. Auto-stamps date_applied."""
     new_status = normalize_status(new_status)

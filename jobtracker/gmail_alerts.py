@@ -273,13 +273,14 @@ def fetch_alerts() -> dict:
                          job["location"], job["url"], mid, ts, ts, now_iso()))
                     new_jobs += cur.rowcount
                     if not cur.rowcount:
-                        # Known job resurfacing in a new email: count the
-                        # repeat notification (dismissed/ignored state kept).
+                        # Known job resurfacing: bump count, mark unread again
+                        # (dismissed/ignored kept; badge only counts active).
                         conn.execute(
                             """UPDATE job_alerts
                                   SET times_seen = times_seen + 1,
                                       last_alert_at = MAX(COALESCE(last_alert_at,
-                                                                   alert_at, ''), ?)
+                                                                   alert_at, ''), ?),
+                                      seen = CASE WHEN ignored = 1 THEN seen ELSE 0 END
                                 WHERE job_key = ?""",
                             (ts, job["job_key"]))
                 conn.execute(
@@ -347,15 +348,26 @@ def refresh_matches() -> None:
 # --------------------------------------------------------------------------- #
 # Queries for the UI
 # --------------------------------------------------------------------------- #
-def list_alerts(include_dismissed: bool = False, ignored: bool = False):
-    """Alerts for the UI. ignored=True returns the ignore list instead."""
+def list_alerts(include_dismissed: bool = False, ignored: bool = False,
+                queue: bool = False):
+    """Alerts for the UI.
+
+    queue=True → daily action list: not applied, not dismissed/ignored,
+    unread first. ignored=True → ignore list. include_dismissed → active+dismissed.
+    """
     if ignored:
         q = "SELECT * FROM job_alerts WHERE ignored = 1"
+        q += " ORDER BY alert_at DESC, id DESC"
+    elif queue:
+        q = ("SELECT * FROM job_alerts "
+             "WHERE ignored = 0 AND dismissed = 0 AND matched_app_id IS NULL "
+             "ORDER BY seen ASC, alert_at DESC, id DESC")
     elif include_dismissed:
         q = "SELECT * FROM job_alerts WHERE ignored = 0"
+        q += " ORDER BY alert_at DESC, id DESC"
     else:
         q = "SELECT * FROM job_alerts WHERE ignored = 0 AND dismissed = 0"
-    q += " ORDER BY alert_at DESC, id DESC"
+        q += " ORDER BY seen ASC, alert_at DESC, id DESC"
     with get_connection() as conn:
         return conn.execute(q).fetchall()
 
@@ -371,16 +383,73 @@ def new_alert_count() -> int:
         return int(row["n"])
 
 
+def action_queue_count() -> int:
+    """Active alerts still needing a decision (not applied / dismissed / ignored)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM job_alerts "
+            "WHERE dismissed = 0 AND ignored = 0 AND matched_app_id IS NULL"
+        ).fetchone()
+        return int(row["n"])
+
+
+def get_alert(alert_id: int):
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT * FROM job_alerts WHERE id=?", (alert_id,)
+        ).fetchone()
+
+
+def link_application(alert_id: int, app_id: int) -> None:
+    """Point an alert at a captured application and mark it read."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE job_alerts SET matched_app_id=?, seen=1 WHERE id=?",
+            (app_id, alert_id))
+
+
 def mark_all_seen() -> None:
     """Reset the nav badge: acknowledge every alert currently in the list."""
     with get_connection() as conn:
         conn.execute("UPDATE job_alerts SET seen = 1 WHERE seen = 0")
 
 
+def set_seen(alert_id: int, seen: bool = True) -> None:
+    with get_connection() as conn:
+        conn.execute("UPDATE job_alerts SET seen=? WHERE id=?",
+                     (1 if seen else 0, alert_id))
+
+
+def set_seen_many(alert_ids: list[int], seen: bool = True) -> int:
+    ids = [int(i) for i in alert_ids if i is not None]
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        cur = conn.execute(
+            f"UPDATE job_alerts SET seen=? WHERE id IN ({placeholders})",
+            (1 if seen else 0, *ids))
+        return cur.rowcount
+
+
 def set_dismissed(alert_id: int, dismissed: bool) -> None:
     with get_connection() as conn:
-        conn.execute("UPDATE job_alerts SET dismissed=? WHERE id=?",
-                     (1 if dismissed else 0, alert_id))
+        conn.execute(
+            "UPDATE job_alerts SET dismissed=?, seen=1 WHERE id=?",
+            (1 if dismissed else 0, alert_id))
+
+
+def set_dismissed_many(alert_ids: list[int], dismissed: bool = True) -> int:
+    ids = [int(i) for i in alert_ids if i is not None]
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        cur = conn.execute(
+            f"UPDATE job_alerts SET dismissed=?, seen=1 "
+            f"WHERE id IN ({placeholders})",
+            (1 if dismissed else 0, *ids))
+        return cur.rowcount
 
 
 def set_ignored(alert_id: int, ignored: bool) -> None:
@@ -388,6 +457,36 @@ def set_ignored(alert_id: int, ignored: bool) -> None:
     with get_connection() as conn:
         conn.execute("UPDATE job_alerts SET ignored=?, seen=1 WHERE id=?",
                      (1 if ignored else 0, alert_id))
+
+
+def set_ignored_many(alert_ids: list[int], ignored: bool = True) -> int:
+    ids = [int(i) for i in alert_ids if i is not None]
+    if not ids:
+        return 0
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        cur = conn.execute(
+            f"UPDATE job_alerts SET ignored=?, seen=1 "
+            f"WHERE id IN ({placeholders})",
+            (1 if ignored else 0, *ids))
+        return cur.rowcount
+
+
+def alert_url(alert_id: int) -> str | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT url FROM job_alerts WHERE id=?", (alert_id,)
+        ).fetchone()
+        return (row["url"] if row else None) or None
+
+
+def set_comment(alert_id: int, comment: str) -> None:
+    """Save a free-text note on an alert. Kept across resurfacing (same job_key)."""
+    text = (comment or "").strip()
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE job_alerts SET comment=? WHERE id=?",
+            (text or None, alert_id))
 
 
 def max_alert_id() -> int:

@@ -7,6 +7,38 @@
 <div class="banner">Gemini AI is not configured. Add <code>GEMINI_API_KEY</code> to <code>.env</code> to enable fit analysis &amp; resume tailoring.</div>
 {% endif %}
 
+{% if digest %}
+<div class="digest{{ ' hot' if digest.has_work }}">
+  <span class="digest-ic">📋</span>
+  <div class="digest-body">
+    <b>Action digest</b>
+    <span class="muted sm">{% if digest.has_work %}— what needs attention now{% else %}— you're clear for now{% endif %}</span>
+    <div class="digest-items">
+      <a class="digest-chip{{ ' hot' if digest.unread_alerts or digest.action_alerts }}" href="{{ url_for('main.alerts') }}"
+         title="Unread job alerts + jobs still needing a decision">
+        <span class="digest-n">{{ digest.unread_alerts }}</span> unread alert{{ 's' if digest.unread_alerts != 1 }}
+        {% if digest.action_alerts %}
+          <span class="muted">· {{ digest.action_alerts }} need action</span>
+        {% endif %}
+      </a>
+      <a class="digest-chip{{ ' hot' if digest.saved_stale }}" href="{{ url_for('main.applications', status='saved') }}"
+         title="Saved applications sitting {{ digest.saved_stale_days }}+ days without apply/reject">
+        <span class="digest-n">{{ digest.saved_stale }}</span> saved {{ digest.saved_stale_days }}+ days
+      </a>
+      <a class="digest-chip{{ ' hot' if digest.rejections_pending }}" href="{{ url_for('main.rejection_inbox') }}"
+         title="Rejection emails waiting for confirmation">
+        <span class="digest-n">{{ digest.rejections_pending }}</span> rejection{{ 's' if digest.rejections_pending != 1 }} to confirm
+      </a>
+    </div>
+  </div>
+  {% if digest.unread_alerts or digest.action_alerts %}
+  <a class="btn sm primary" href="{{ url_for('main.alerts') }}">Open Alerts</a>
+  {% elif digest.rejections_pending %}
+  <a class="btn sm primary" href="{{ url_for('main.rejection_inbox') }}">Open Rej.</a>
+  {% endif %}
+</div>
+{% endif %}
+
 {% if reminders and reminders.count %}
 <div class="reminder{{ ' hot' if reminders.stale }}">
   <span class="reminder-ic">⏰</span>

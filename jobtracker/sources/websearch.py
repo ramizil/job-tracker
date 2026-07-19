@@ -111,6 +111,26 @@ _IL_HINTS = (
     "kiryat ono", "kiryat gat", "haifa bay",
 )
 
+# Older settings used sub-paths that DDG now indexes poorly — map to root domains.
+_SITE_ALIASES = {
+    "comeet.com/jobs": "comeet.com",
+    "www.comeet.com/jobs": "comeet.com",
+    "boards.greenhouse.io": "greenhouse.io",
+    "job-boards.greenhouse.io": "greenhouse.io",
+    "careers.smartrecruiters.com": "jobs.smartrecruiters.com",
+    "www.careers.smartrecruiters.com": "jobs.smartrecruiters.com",
+}
+
+# Search-result titles that aren't the real job title (filled in during verify).
+_WEAK_TITLES = {
+    "", "job", "jobs", "careers", "career", "opening", "openings",
+    "position", "positions", "apply", "hiring",
+}
+
+_DDG_BACKENDS = ("auto", "bing", "yahoo")
+# Sticky preference: the last backend that returned hits (DDG is flaky).
+_preferred_backend: str = "auto"
+
 
 def _looks_like_listing_page(url: str, title: str) -> bool:
     """Skip company job-board index pages and malformed job URLs."""
@@ -144,6 +164,82 @@ def _looks_like_listing_page(url: str, title: str) -> bool:
         return True
     return bool(re.search(r"\b(all )?(open )?(positions|careers|jobs)\s*$",
                           t, re.IGNORECASE)) and len(parts) <= 2
+
+
+def _normalize_site(site: str) -> str:
+    s = (site or "").strip().lower().removeprefix("www.")
+    return _SITE_ALIASES.get(s, s)
+
+
+def _quote_query(query: str) -> str:
+    q = (query or "").strip()
+    if not q:
+        return q
+    if q.startswith('"') and q.endswith('"'):
+        return q
+    # DDG treats quoted OR strings literally — leave them unquoted.
+    if re.search(r"\s+OR\s+", q, re.I):
+        return q
+    return f'"{q}"' if " " in q else q
+
+
+def _search_terms(query: str) -> list[str]:
+    """Split OR-combined queries (default blank search) into separate DDG lookups."""
+    q = (query or "").strip()
+    if not q:
+        return [""]
+    if re.search(r"\s+OR\s+", q, re.I):
+        return [p.strip() for p in re.split(r"\s+OR\s+", q, flags=re.I) if p.strip()][:3]
+    return [q]
+
+
+def _query_variants(site: str, query: str, location: str) -> list[str]:
+    """A few query shapes — DDG is flaky and different phrasings surface jobs."""
+    domain = _normalize_site(site)
+    quoted = _quote_query(query)
+    bare = (query or "").strip().strip('"')
+    loc = (location or "").strip()
+    variants: list[str] = []
+    if loc:
+        # Most reliable for Comeet / Greenhouse (DDG chokes on bare site: queries).
+        variants.append(f"{quoted} {loc} site:{domain}")
+        variants.append(f"site:{domain} {quoted} {loc}")
+        if bare and bare != quoted:
+            variants.append(f"{bare} {loc} site:{domain}")
+        variants.append(f"{quoted} jobs {loc} site:{domain}")
+    variants.append(f"site:{domain} {quoted}")
+    if bare and bare != quoted:
+        variants.append(f"site:{domain} {bare}")
+    # Dedupe while preserving order.
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in variants:
+        if v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _ddg_text(ddgs, query: str, *, max_results: int) -> list[dict]:
+    """Run a DDG text search with backend fallbacks (single backend often fails)."""
+    global _preferred_backend
+    last_exc: Exception | None = None
+    order = [_preferred_backend] + [b for b in _DDG_BACKENDS if b != _preferred_backend]
+    for backend in order:
+        try:
+            items = ddgs.text(query, max_results=max_results, backend=backend) or []
+            if items:
+                _preferred_backend = backend
+                return items
+        except Exception as exc:
+            last_exc = exc
+    if last_exc:
+        raise last_exc
+    return []
+
+
+def _weak_title(title: str) -> bool:
+    return (title or "").strip().lower() in _WEAK_TITLES
 
 
 def _text_location_ok(text: str, requested: str) -> bool:
@@ -239,7 +335,61 @@ def _extract_location(html: str) -> str:
     m = re.search(r'class="[^"]*posting-categor[^"]*location[^"]*"[^>]*>([^<]+)<', html)
     if not m:
         m = re.search(r'class="[^"]*\blocation\b[^"]*"[^>]*>\s*([^<]+?)\s*<', html)
-    return m.group(1).strip() if m else ""
+    if m:
+        return m.group(1).strip()
+    # SmartRecruiters: <spl-job-location formattedAddress="Tel Aviv, Israel" …>
+    m = re.search(r'<spl-job-location[^>]*\sformattedAddress="([^"]{2,120})"', html, re.I)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r'itemprop="addressLocality"[^>]*content="([^"]{2,80})"', html, re.I)
+    if m:
+        country = re.search(r'itemprop="addressCountry"[^>]*content="([^"]{2,40})"',
+                            html, re.I)
+        if country:
+            return f"{m.group(1).strip()}, {country.group(1).strip()}"
+        return m.group(1).strip()
+    return ""
+
+
+def _extract_title(html: str) -> str:
+    """Real job title from the ATS page (search snippets often say just \"Jobs\")."""
+    for m in re.finditer(r"<script[^>]*application/ld\+json[^>]*>(.*?)</script>",
+                         html, re.S | re.I):
+        try:
+            data = json.loads(m.group(1).strip())
+        except Exception:
+            continue
+        for d in (data if isinstance(data, list) else [data]):
+            if isinstance(d, dict) and d.get("@type") == "JobPosting":
+                title = (d.get("title") or "").strip()
+                if title and not _weak_title(title):
+                    return title
+    for pat in (
+        r'"job_post_title"\s*:\s*"([^"]{3,120})"',
+        r'"posting_title"\s*:\s*"([^"]{3,120})"',
+        r"<title>([^<|]{3,120})",
+    ):
+        m = re.search(pat, html, re.I)
+        if m:
+            title = _TITLE_NOISE.sub("", m.group(1)).strip()
+            if title and not _weak_title(title):
+                return title
+    return ""
+
+
+def _page_text_location_ok(text: str, requested: str) -> bool:
+    """Fallback when structured location is missing — scan visible page text."""
+    req = (requested or "").strip().lower()
+    if not req:
+        return True
+    t = (text or "").lower().replace("'", "'")
+    if "israel" in req:
+        if any(h in t for h in _IL_HINTS):
+            return True
+        if any(m in t for m in _ABROAD_MARKERS):
+            return False
+        return False
+    return req in t
 
 
 def _location_ok(extracted: str, requested: str) -> bool:
@@ -289,18 +439,35 @@ def _verify(result: JobResult, requested_location: str) -> JobResult | str | Non
             or _DEAD_TITLE.search(html)
             or _BOARD_PAGE.search(low)):
         return None
+    title = _extract_title(html)
+    if title and _weak_title(result.title):
+        result.title = title
     loc = _extract_location(html)
     if loc:
         result.location = loc
-    if not _location_ok(loc, requested_location):
+    if _location_ok(loc, requested_location):
+        return result
+    if loc:
         return None
-    return result
+    if _page_text_location_ok(low, requested_location):
+        if not result.location:
+            result.location = requested_location
+        return result
+    return None
+
+
+def _mark_soft(results: list[JobResult]) -> list[JobResult]:
+    for r in results:
+        raw = dict(r.raw or {})
+        raw["soft_verify"] = True
+        r.raw = raw
+    return results
 
 
 def _verify_all(candidates: list[JobResult], requested_location: str,
                 limit: int) -> list[JobResult]:
     # Many candidates die on verification — check a deeper pool.
-    pool = candidates[: max(limit * 4, limit)]
+    pool = candidates[: max(limit * 5, limit)]
     with ThreadPoolExecutor(max_workers=10) as ex:
         checked = list(ex.map(lambda r: _verify(r, requested_location), pool))
     # If (nearly) every fetch failed at the network level, the machine likely
@@ -308,9 +475,20 @@ def _verify_all(candidates: list[JobResult], requested_location: str,
     # unverified results than nothing.
     neterrs = sum(1 for c in checked if c == "neterr")
     if pool and neterrs >= max(3, int(len(pool) * 0.7)):
-        return candidates[:limit]
+        return _mark_soft(candidates[:limit])
     good = [c for c in checked if isinstance(c, JobResult)]
-    return good[:limit]
+    if good:
+        return good[:limit]
+    # Verification dropped everything (strict location / flaky pages) but DDG
+    # did find candidates — return soft results rather than an empty page.
+    if candidates:
+        soft = [
+            c for c in candidates
+            if _text_location_ok(f"{c.title} {c.location} {c.description}",
+                                 requested_location)
+        ] or candidates
+        return _mark_soft(soft[:limit])
+    return []
 
 
 class WebSearchSource(JobSource):
@@ -323,7 +501,14 @@ class WebSearchSource(JobSource):
 
     @staticmethod
     def sites() -> list[str]:
-        return [s.strip() for s in config.WEB_SEARCH_SITES.split(",") if s.strip()]
+        seen: set[str] = set()
+        out: list[str] = []
+        for raw in config.WEB_SEARCH_SITES.split(","):
+            site = _normalize_site(raw.strip())
+            if site and site not in seen:
+                seen.add(site)
+                out.append(site)
+        return out
 
     def search(self, query: str, location: str = "Israel",
                limit: int = 20) -> list[JobResult]:
@@ -340,47 +525,59 @@ class WebSearchSource(JobSource):
         # so a broad query ("automation") needs a deep top-N for good coverage.
         per_site = max(10, min(20, -(-limit // len(sites))))  # ceil
 
-        ddgs = DDGS()
-        per_site_results: list[list[JobResult]] = []
-        seen: set[str] = set()
-        errors: list[str] = []
-        for i, site in enumerate(sites):
-            q = f"site:{site} {query}"
-            if location:
-                q += f" {location}"
-            try:
-                if i:
-                    time.sleep(0.7)   # be polite; avoids DDG rate-limiting
-                items = ddgs.text(q, max_results=per_site) or []
-            except Exception as exc:
-                errors.append(f"{site}: {exc}")
-                continue
+        ddgs = DDGS(timeout=14)
+        terms = _search_terms(query)
+        # Second-chance: if the query is a long phrase, also try its head word.
+        head = (query or "").strip().split()
+        if len(head) >= 2 and head[0].lower() not in {t.lower() for t in terms}:
+            terms = list(terms) + [head[0]]
 
-            bucket: list[JobResult] = []
-            for it in items:
-                url = it.get("href") or ""
-                if not url or url in seen:
-                    continue
-                seen.add(url)
-                title_raw = it.get("title") or ""
-                if _looks_like_listing_page(url, title_raw):
-                    continue
-                snippet = (it.get("body") or "")[:5000]
-                if not _text_location_ok(f"{title_raw} {snippet}", location):
-                    continue
-                url_co = _company_from_url(url)
-                title, company = _split_title(title_raw, url_co)
-                bucket.append(JobResult(
-                    source=f"web:{_ats_label(url)}",
-                    title=title,
-                    company=url_co or company,
-                    location=location,
-                    url=url,
-                    description=snippet,
-                    external_id=url,
-                    raw=dict(it),
-                ))
-            per_site_results.append(bucket)
+        def _collect(search_terms: list[str]) -> tuple[list[list[JobResult]], list[str]]:
+            per_site: list[list[JobResult]] = []
+            seen_urls: set[str] = set()
+            errs: list[str] = []
+            for i, site in enumerate(sites):
+                bucket: list[JobResult] = []
+                for term in search_terms:
+                    for q in _query_variants(site, term, location):
+                        try:
+                            if i or bucket:
+                                time.sleep(0.45)
+                            items = _ddg_text(ddgs, q, max_results=per_site)
+                        except Exception as exc:
+                            errs.append(f"{site}: {exc}")
+                            continue
+                        for it in items:
+                            url = it.get("href") or ""
+                            if not url or url in seen_urls:
+                                continue
+                            seen_urls.add(url)
+                            title_raw = it.get("title") or ""
+                            if _looks_like_listing_page(url, title_raw):
+                                continue
+                            snippet = (it.get("body") or "")[:5000]
+                            if not _text_location_ok(f"{title_raw} {snippet}", location):
+                                continue
+                            url_co = _company_from_url(url)
+                            title, company = _split_title(title_raw, url_co)
+                            bucket.append(JobResult(
+                                source=f"web:{_ats_label(url)}",
+                                title=title,
+                                company=url_co or company,
+                                location=location,
+                                url=url,
+                                description=snippet,
+                                external_id=url,
+                                raw=dict(it),
+                            ))
+                        if bucket:
+                            break
+                    if bucket:
+                        break
+                per_site.append(bucket)
+            return per_site, errs
+
+        per_site_results, errors = _collect(terms)
 
         if not any(per_site_results) and errors:
             # Surface a real problem instead of a silent empty list.

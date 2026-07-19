@@ -1,5 +1,6 @@
 // Futuristic constellation / starfield backdrop. Lightweight, pauses when the
-// tab is hidden and disables itself for users who prefer reduced motion.
+// tab is hidden and disables itself for users who prefer reduced motion or a
+// professional / slate theme.
 (function () {
   var canvas = document.getElementById("fx");
   if (!canvas) return;
@@ -9,6 +10,12 @@
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
   var w = 0, h = 0, particles = [], raf = null;
   var mouse = { x: -9999, y: -9999 };
+  var active = false;
+
+  function isFuturistic() {
+    var t = document.documentElement.getAttribute("data-theme") || "futuristic";
+    return t === "futuristic" || t === "futuristic-light" || t === "dark" || t === "light";
+  }
 
   function resize() {
     w = canvas.clientWidth = window.innerWidth;
@@ -74,14 +81,35 @@
     raf = requestAnimationFrame(step);
   }
 
-  function start() { if (!raf) raf = requestAnimationFrame(step); }
-  function stop() { if (raf) { cancelAnimationFrame(raf); raf = null; } }
+  function start() {
+    if (!isFuturistic()) { stop(); return; }
+    active = true;
+    canvas.style.display = "";
+    if (!raf) raf = requestAnimationFrame(step);
+  }
+  function stop() {
+    active = false;
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    if (ctx && w && h) ctx.clearRect(0, 0, w, h);
+    if (!isFuturistic()) canvas.style.display = "none";
+  }
 
-  window.addEventListener("resize", resize, { passive: true });
+  window.addEventListener("resize", function () { if (active || isFuturistic()) resize(); }, { passive: true });
   window.addEventListener("mousemove", function (e) { mouse.x = e.clientX; mouse.y = e.clientY; }, { passive: true });
   window.addEventListener("mouseout", function () { mouse.x = mouse.y = -9999; });
-  document.addEventListener("visibilitychange", function () { document.hidden ? stop() : start(); });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) stop();
+    else if (isFuturistic()) { resize(); start(); }
+  });
+  window.addEventListener("jt-theme", function () {
+    if (isFuturistic()) { resize(); start(); }
+    else stop();
+  });
 
-  resize();
-  start();
+  if (isFuturistic()) {
+    resize();
+    start();
+  } else {
+    canvas.style.display = "none";
+  }
 })();

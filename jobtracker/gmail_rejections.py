@@ -727,6 +727,11 @@ def pending_count() -> int:
                if not r["seen"] and r["matched_app_id"])
 
 
+def confirm_count() -> int:
+    """All pending rejection emails waiting for user confirmation."""
+    return len(list_inbox())
+
+
 def mark_all_seen() -> None:
     with get_connection() as conn:
         conn.execute("UPDATE rejection_inbox SET seen = 1 WHERE seen = 0")

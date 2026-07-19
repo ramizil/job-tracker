@@ -176,7 +176,7 @@
     </div>
     <div class="setting">
       <label for="WEB_SEARCH_SITES">Web search over ATS job pages — sites <span class="rec">no key needed</span></label>
-      <input type="text" id="WEB_SEARCH_SITES" name="WEB_SEARCH_SITES" form="settings-form" value="{{ values.WEB_SEARCH_SITES }}" placeholder="comeet.com/jobs, boards.greenhouse.io, jobs.lever.co" autocomplete="off">
+      <input type="text" id="WEB_SEARCH_SITES" name="WEB_SEARCH_SITES" form="settings-form" value="{{ values.WEB_SEARCH_SITES }}" placeholder="comeet.com, greenhouse.io, jobs.lever.co, jobs.smartrecruiters.com" autocomplete="off">
       <small>Finds jobs on ATS career pages (Comeet, Greenhouse, Lever…) via
         <code>site:</code> web searches (DuckDuckGo) — postings the aggregators often
         miss. <b>Free, no API key or signup.</b> Comma-separated <code>site:</code>
@@ -186,6 +186,17 @@
         <input type="checkbox" name="SOURCES_DISABLED" value="websearch" form="settings-form"
                {{ 'checked' if 'websearch' in values.SOURCES_DISABLED }}>
         Disable web search
+      </label>
+    </div>
+    <div class="setting">
+      <label>Remotive — remote jobs API <span class="rec">no key needed</span></label>
+      <small>Stable free JSON feed of remote roles (worldwide + Israel-friendly remote).
+        Good backup when DuckDuckGo web search is empty or Jooble is blocked.
+        <a href="https://remotive.com/api/remote-jobs" target="_blank" rel="noopener">API</a>.</small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="remotive" form="settings-form"
+               {{ 'checked' if 'remotive' in values.SOURCES_DISABLED }}>
+        Disable Remotive
       </label>
     </div>
     <div class="row">
@@ -273,7 +284,15 @@
       <p class="muted sm mt">Status:
         {% if gs_connected %}<span class="fit fit-yes">Google connected</span> — the sheet
         also updates by itself a few seconds after you add, edit, reject or delete an
-        application.{% else %}<span class="fit fit-no">not connected</span>{% endif %}</p>
+        application.
+        {% set sm = sync_meta or sync_status %}
+        {% if sm and sm.sheets_at %}
+          <br>Last sync: <b>{{ sm.sheets_at }}</b> UTC
+          {% if sm.sheets_url %}· <a href="{{ sm.sheets_url }}" target="_blank" rel="noopener">open sheet ↗</a>{% endif %}
+        {% else %}
+          <br>Last sync: <i>not yet</i> — press “Sync to Google Sheet now” once.
+        {% endif %}
+        {% else %}<span class="fit fit-no">not connected</span>{% endif %}</p>
     {% else %}
       <p class="muted sm">Paste your Drive folder URL above and save settings to enable connect &amp; sync.</p>
     {% endif %}
@@ -400,6 +419,12 @@
       (applications + AI analyses, cover letters, recruiter notes), match profile,
       settings (<code>.env</code>) and tailored resumes. The active profile's live
       data lives in <code>{{ data_dir }}</code>.</p>
+    {% set sm = sync_meta or sync_status %}
+    <p class="muted sm">Last backup:
+      {% if sm and sm.backup_at %}<b>{{ sm.backup_at }}</b> UTC
+        {% if sm.backup_folder %}· <code class="sm">{{ sm.backup_folder }}</code>{% endif %}
+      {% else %}<i>not yet</i> — run “Back up now” below.{% endif %}
+    </p>
     <div class="actions">
       <form method="post" action="{{ url_for('main.backup_now') }}">
         <button class="btn primary" type="submit">📦 Back up now → {{ backup_dir }}</button>

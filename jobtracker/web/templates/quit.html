@@ -4,12 +4,35 @@
 <section class="panel" style="max-width:520px;margin:40px auto;text-align:center">
   {% if stopped %}
     <h1>✅ Server stopped</h1>
-    <p class="muted">The Job Tracker server has shut down. You can close this window.</p>
-    <p><button class="btn" onclick="window.close()">Close window</button></p>
+    <p class="muted">The Job Tracker server has shut down. You can close this tab.</p>
+    <p><button class="btn primary" type="button" id="close-win">Close window</button></p>
+    <p class="muted sm" id="close-hint" hidden style="margin-top:12px;line-height:1.55">
+      Your browser blocked auto-close — that’s normal for tabs you opened yourself
+      (Chrome/Safari only allow scripts to close windows they created).
+      Press <kbd>⌘W</kbd> on Mac or <kbd>Ctrl+W</kbd> on Windows to close this tab.
+    </p>
+    <script>
+      (function () {
+        var btn = document.getElementById('close-win');
+        var hint = document.getElementById('close-hint');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          try { window.close(); } catch (e) {}
+          // If close was blocked, the tab is still here — show how to close it.
+          setTimeout(function () {
+            if (hint) hint.hidden = false;
+            btn.textContent = 'Close blocked — use ⌘W / Ctrl+W';
+            btn.disabled = true;
+          }, 250);
+        });
+        // Also show the hint up front so it's obvious.
+        if (hint) hint.hidden = false;
+      })();
+    </script>
   {% else %}
     <h1>⏻ Stop the server?</h1>
     <p class="muted">This stops the local Job Tracker server. Your data is saved.
-       To use it again, run <code>start.bat</code> (or <code>python -m jobtracker web</code>).</p>
+       To use it again, run <code>start.command</code> (or <code>python -m jobtracker web</code>).</p>
     <form method="post" action="{{ url_for('main.quit_app') }}">
       <button class="btn danger" type="submit">Yes, stop the server</button>
       <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>

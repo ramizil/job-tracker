@@ -49,6 +49,38 @@ def saved_reminders(stale_days: int = 3) -> dict[str, Any]:
     }
 
 
+def action_digest(stale_days: int = 3) -> dict[str, Any]:
+    """Weekly-style action counts for the dashboard digest panel."""
+    from . import gmail_alerts, gmail_rejections
+
+    try:
+        unread_alerts = gmail_alerts.new_alert_count()
+    except Exception:
+        unread_alerts = 0
+    try:
+        action_alerts = gmail_alerts.action_queue_count()
+    except Exception:
+        action_alerts = 0
+    rem = saved_reminders(stale_days)
+    try:
+        rejections = gmail_rejections.confirm_count()
+    except Exception:
+        rejections = 0
+    # "total" follows the weekly digest numbers (unread + stale saved +
+    # rejections). action_alerts is the broader Alerts queue (may be read
+    # but still not applied).
+    attention = unread_alerts + rem["stale"] + rejections
+    return {
+        "unread_alerts": unread_alerts,
+        "action_alerts": action_alerts,
+        "saved_stale": rem["stale"],
+        "saved_stale_days": stale_days,
+        "rejections_pending": rejections,
+        "total": attention,
+        "has_work": attention > 0 or action_alerts > 0,
+    }
+
+
 def _count(sql: str, params: tuple = ()) -> list[tuple[str, int]]:
     with get_connection() as conn:
         return [(r[0], r[1]) for r in conn.execute(sql, params).fetchall()]

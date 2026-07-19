@@ -51,21 +51,30 @@ class JoobleSource(JobSource):
 
         host = _host_for(location)
         payload = {"keywords": query, "location": location}
-        try:
-            resp = requests.post(
-                f"https://{host}/api/{config.JOOBLE_API_KEY}",
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=_TIMEOUT,
-            )
-        except requests.exceptions.RequestException as exc:
-            # Country hosts like il.jooble.org can be blocked by corporate
-            # proxies; make the reason actionable rather than a raw traceback.
+        hosts = [host]
+        if host != "jooble.org":
+            hosts.append("jooble.org")  # fallback when IL host is blocked
+        resp = None
+        last_exc: Exception | None = None
+        for h in hosts:
+            try:
+                resp = requests.post(
+                    f"https://{h}/api/{config.JOOBLE_API_KEY}",
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=_TIMEOUT,
+                )
+                host = h
+                break
+            except requests.exceptions.RequestException as exc:
+                last_exc = exc
+                continue
+        if resp is None:
             raise RuntimeError(
-                f"Couldn't reach {host} ({type(exc).__name__}). This Jooble "
-                "country domain may be blocked on your network — try from a "
-                "home/non-corporate connection."
-            ) from exc
+                f"Couldn't reach Jooble ({type(last_exc).__name__ if last_exc else 'error'}). "
+                "il.jooble.org may be blocked — try from a home/non-corporate "
+                "connection, or disable Jooble in Settings."
+            ) from last_exc
         if resp.status_code in (401, 403):
             raise JoobleQuotaError(
                 "Jooble rejected the API key (likely the 500-request free tier "

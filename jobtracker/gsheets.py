@@ -148,7 +148,13 @@ def sync() -> str:
                 "Drive folder not found — check the folder URL in Settings "
                 "and that it belongs to the Google account you connected.")
         raise SyncError(f"Google API error: {exc.reason or exc}") from exc
-    return f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+    try:
+        from . import syncstatus
+        syncstatus.record_sheets_sync(url=url)
+    except Exception:
+        pass
+    return url
 
 
 # ---- Debounced background auto-sync (called after data mutations) ---------- #
