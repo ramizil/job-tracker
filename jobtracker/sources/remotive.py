@@ -12,6 +12,7 @@ import re
 import requests
 
 from .base import JobResult, JobSource
+from .relevance import job_matches_query
 
 _URL = "https://remotive.com/api/remote-jobs"
 _TIMEOUT = 20
@@ -85,6 +86,8 @@ class RemotiveSource(JobSource):
             if not title or not url:
                 continue
             if not _location_matches(loc, desc, location):
+                continue
+            if not job_matches_query(q, title=title, description=desc):
                 continue
             results.append(JobResult(
                 source="remotive",

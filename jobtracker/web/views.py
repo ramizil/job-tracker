@@ -26,7 +26,7 @@ from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
 from ..models import COMMON_REJECTION_REASONS, REJECTION_STAGES, STATUSES
-from ..sources import get_sources
+from ..sources import get_sources, job_matches_query
 from ..sources.base import JobResult
 from ..db import now_iso
 
@@ -2394,7 +2394,16 @@ def _load_last_search() -> dict | None:
         return None
 
 
-def _enrich_search_results(results: list) -> list:
+def _enrich_search_results(results: list, query: str = "") -> list:
+    if query:
+        results = [
+            item for item in results
+            if job_matches_query(
+                query,
+                title=getattr(item.get("job"), "title", "") or "",
+                description=getattr(item.get("job"), "description", "") or "",
+            )
+        ]
     return tracker.enrich_search_results(results)
 
 
@@ -2419,7 +2428,7 @@ def search():
                 {"job": _job_result_from_dict(r["job"]), "score": r["score"]}
                 for r in cached.get("results", [])
                 if isinstance(r, dict) and isinstance(r.get("job"), dict)
-            ])
+            ], query=query)
         return render_template("search.html", results=results, query=query,
                                location=location, configured=configured,
                                jooble_usage=None, ready=rd, cached_at=cached_at)
@@ -2433,7 +2442,7 @@ def search():
                 {"job": _job_result_from_dict(r["job"]), "score": r["score"]}
                 for r in cached.get("results", [])
                 if isinstance(r, dict) and isinstance(r.get("job"), dict)
-            ])
+            ], query=query)
     if request.method == "POST" and configured:
         prof = resume_mod.load_profile()
         if not query:
@@ -2441,10 +2450,18 @@ def search():
         for src in get_sources():
             try:
                 count = 0
-                for job in src.search(query, location=location, limit=20):
+                # Ask sources for a deeper pool; we filter irrelevant titles
+                # (e.g. Remotive returning sales roles for query "QA").
+                for job in src.search(query, location=location, limit=40):
+                    if not job_matches_query(
+                            query, title=job.title,
+                            description=job.description or ""):
+                        continue
                     m = score_job(job.title, job.description, prof)
                     results.append({"job": job, "score": m.score})
                     count += 1
+                    if count >= 20:
+                        break
                 flash(f"{src.name}: {count} result(s).", "ok")
                 if src.name == "websearch":
                     soft = sum(
@@ -2482,7 +2499,7 @@ def search():
         elif ju["low"]:
             flash(f"Heads-up: only {ju['remaining']} Jooble requests left of "
                   f"{ju['limit']}. Consider getting a fresh key soon.", "error")
-    results = _enrich_search_results(results)
+    results = _enrich_search_results(results, query=query)
     return render_template("search.html", results=results, query=query,
                            location=location, configured=configured,
                            jooble_usage=ju, ready=rd, cached_at=cached_at)

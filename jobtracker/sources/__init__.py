@@ -11,12 +11,12 @@ from .jooble import JoobleSource
 from .adzuna import AdzunaSource
 from .websearch import WebSearchSource
 from .remotive import RemotiveSource
+from .relevance import job_matches_query
 
 ALL_SOURCES: list[JobSource] = [
     JSearchSource(), JoobleSource(), AdzunaSource(),
     WebSearchSource(), RemotiveSource(),
 ]
-
 
 def get_sources(only: str | None = None) -> list[JobSource]:
     """Return configured (credentialed) sources, optionally filtered by name.
@@ -33,4 +33,5 @@ def get_sources(only: str | None = None) -> list[JobSource]:
     return sources
 
 
-__all__ = ["JobResult", "JobSource", "get_sources", "ALL_SOURCES"]
+__all__ = ["JobResult", "JobSource", "get_sources", "ALL_SOURCES",
+           "job_matches_query"]
