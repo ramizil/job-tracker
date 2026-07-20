@@ -11,11 +11,15 @@ from .jooble import JoobleSource
 from .adzuna import AdzunaSource
 from .websearch import WebSearchSource
 from .remotive import RemotiveSource
+from .drushim import DrushimSource
+from .sqlink import SQLinkSource
+from .alljobs import AllJobsSource
 from .relevance import job_matches_query
 
 ALL_SOURCES: list[JobSource] = [
     JSearchSource(), JoobleSource(), AdzunaSource(),
     WebSearchSource(), RemotiveSource(),
+    DrushimSource(), SQLinkSource(), AllJobsSource(),
 ]
 
 def get_sources(only: str | None = None) -> list[JobSource]:

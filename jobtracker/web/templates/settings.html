@@ -199,6 +199,38 @@
         Disable Remotive
       </label>
     </div>
+    <div class="setting">
+      <label>Drushim — דרושים IL <span class="rec">no key needed</span></label>
+      <small>Israel’s major Hebrew job board via their public search JSON API.
+        <a href="https://www.drushim.co.il/" target="_blank" rel="noopener">drushim.co.il</a>.</small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="drushim" form="settings-form"
+               {{ 'checked' if 'drushim' in values.SOURCES_DISABLED }}>
+        Disable Drushim
+      </label>
+    </div>
+    <div class="setting">
+      <label>SQLink — career board <span class="rec">no key needed</span></label>
+      <small>Israeli staffing board (QA / automation categories under
+        <code>/career/db/</code>).
+        <a href="https://www.sqlink.com/career/db/" target="_blank" rel="noopener">sqlink.com/career</a>.</small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="sqlink" form="settings-form"
+               {{ 'checked' if 'sqlink' in values.SOURCES_DISABLED }}>
+        Disable SQLink
+      </label>
+    </div>
+    <div class="setting">
+      <label>AllJobs — כל-המשרות <span class="rec">no key needed</span></label>
+      <small>Guest search scrape of
+        <a href="https://www.alljobs.co.il/" target="_blank" rel="noopener">alljobs.co.il</a>
+        (free-text <code>freetxt</code> results).</small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="alljobs" form="settings-form"
+               {{ 'checked' if 'alljobs' in values.SOURCES_DISABLED }}>
+        Disable AllJobs
+      </label>
+    </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
         <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" form="settings-form" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>
