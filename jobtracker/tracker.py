@@ -417,6 +417,36 @@ def add_note(app_id: int, text: str) -> bool:
         return True
 
 
+def set_description(app_id: int, description: str,
+                    *, rescore: bool = True) -> bool:
+    """Replace the job description (e.g. after a bad Alerts capture).
+
+    When ``rescore`` is True, also refresh the keyword match_score from the
+    new text so Overview / AI inputs stay consistent.
+    """
+    text = description or ""
+    score = None
+    if rescore:
+        from .matcher import score_job
+        row = get_application(app_id)
+        if not row:
+            return False
+        score = score_job(row["title"] or "", text).score
+    with get_connection() as conn:
+        if score is None:
+            cur = conn.execute(
+                "UPDATE applications SET description=?, updated_at=? WHERE id=?",
+                (text, now_iso(), app_id),
+            )
+        else:
+            cur = conn.execute(
+                """UPDATE applications
+                      SET description=?, match_score=?, updated_at=? WHERE id=?""",
+                (text, score, now_iso(), app_id),
+            )
+        return cur.rowcount > 0
+
+
 def set_ai_analysis(app_id: int, analysis: dict[str, Any]) -> bool:
     """Persist a Gemini fit-analysis result on the application."""
     import json

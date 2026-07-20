@@ -1553,6 +1553,17 @@ def note(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id))
 
 
+@bp.route("/application/<int:app_id>/description", methods=["POST"])
+def description_save(app_id: int):
+    """Edit / replace the job description (common after LinkedIn wall captures)."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    text = request.form.get("description", "")
+    tracker.set_description(app_id, text)
+    flash("Job description saved — match score refreshed.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#job-description")
+
+
 @bp.route("/application/<int:app_id>/delete", methods=["POST"])
 def delete(app_id: int):
     tracker.delete_application(app_id)

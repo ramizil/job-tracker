@@ -50,9 +50,33 @@
       </form>
     </section>
 
-    {% if app.description %}
-    <section class="panel"><h2>Job description</h2><pre class="jd">{{ app.description }}</pre></section>
-    {% endif %}
+    <section class="panel" id="job-description">
+      <div class="panel-head">
+        <h2>Job description</h2>
+        {% if app.description %}
+        <button type="button" class="btn sm" id="jd-edit-toggle"
+                title="Replace or fix the captured text">✏️ Edit</button>
+        {% endif %}
+      </div>
+      {% if not app.description %}
+        <p class="muted sm">No description yet — paste the real job posting text
+          (LinkedIn capture often grabs the login wall instead).</p>
+      {% else %}
+        <pre class="jd" id="jd-view">{{ app.description }}</pre>
+      {% endif %}
+      <form method="post" action="{{ url_for('main.description_save', app_id=app.id) }}"
+            class="stack" id="jd-edit-form"
+            {% if app.description %}hidden{% endif %}>
+        <textarea name="description" rows="16" dir="auto"
+                  placeholder="Paste the full job description here…">{{ app.description or '' }}</textarea>
+        <div class="inline">
+          <button class="btn primary" type="submit">Save description</button>
+          {% if app.description %}
+          <button type="button" class="btn" id="jd-edit-cancel">Cancel</button>
+          {% endif %}
+        </div>
+      </form>
+    </section>
 
   </div>
 
@@ -579,6 +603,22 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+(function () {
+  var toggle = document.getElementById('jd-edit-toggle');
+  var form = document.getElementById('jd-edit-form');
+  var view = document.getElementById('jd-view');
+  var cancel = document.getElementById('jd-edit-cancel');
+  if (!form) return;
+  function showEdit(on) {
+    form.hidden = !on;
+    if (view) view.hidden = !!on;
+    if (toggle) toggle.hidden = !!on;
+  }
+  if (toggle) toggle.addEventListener('click', function () { showEdit(true); });
+  if (cancel) cancel.addEventListener('click', function () { showEdit(false); });
+})();
+</script>
 <script>
 // Tab view: one tab visible at a time; #hash links (e.g. redirects back to
 // #salary or #pitch) open the tab containing that element and scroll to it.
