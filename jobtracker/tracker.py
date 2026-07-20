@@ -5,7 +5,7 @@ import re
 import sqlite3
 from difflib import SequenceMatcher
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .db import get_connection, now_iso
 from .models import NEGATIVE_STATUSES, normalize_status
@@ -88,12 +88,22 @@ def _text_sim(a: str, b: str) -> float:
 
 
 def _norm_job_url(url: str) -> str:
+    """Host + path, plus significant query ids (e.g. AllJobs JobID).
+
+    Query strings are usually noise (utm_*), but boards that put the job id
+    only in ``?JobID=`` must keep it — otherwise every AllJobs URL collapses
+    to the same key and search falsely marks every hit as already applied.
+    """
     if not url:
         return ""
     p = urlparse(url.strip())
     host = (p.netloc or "").lower().removeprefix("www.")
     path = (p.path or "").rstrip("/")
-    return f"{host}{path}"
+    base = f"{host}{path}"
+    for k, vals in parse_qs(p.query or "").items():
+        if k.lower() in ("jobid", "job_id") and vals and vals[0]:
+            return f"{base}?jobid={vals[0]}"
+    return base
 
 
 def _job_url_keys(url: str) -> set[str]:
@@ -108,6 +118,8 @@ def _job_url_keys(url: str) -> set[str]:
         (r"lever\.co/[^/]+/([0-9a-f-]{36})", "lever"),
         (r"comeet\.com/jobs/[^/]+/([^/?#]+)", "comeet"),
         (r"smartrecruiters\.com/[^/]+/(\d+)", "smartrecruiters"),
+        (r"alljobs\.co\.il/[^?\s]*[?&]JobID=(\d+)", "alljobs"),
+        (r"drushim\.co\.il/job/(\d+)", "drushim"),
     ]
     for pat, label in patterns:
         m = re.search(pat, url or "", re.I)
@@ -156,6 +168,10 @@ def match_job_to_application(*, url: str = "", company: str = "", title: str = "
     j_company = _norm_match_text(company)
     j_title = _norm_match_text(title)
     if not j_company or not j_title:
+        return None
+    # Staffing-board placeholders are not real employers — never fuzzy-match
+    # on them (would glue every SQLink/AllJobs hit to one application).
+    if j_company in {"alljobs", "sqlink", "unknown", "via sqlink"}:
         return None
     for app in apps:
         if (_company_matches_search(company, app["company"])

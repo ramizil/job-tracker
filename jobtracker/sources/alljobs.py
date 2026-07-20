@@ -20,6 +20,10 @@ _UA = {
 }
 _BOX_ID = re.compile(r"^job-box(\d+)$")
 _JOB_HREF = re.compile(r"UploadSingle\.aspx\?JobID=(\d+)", re.I)
+_MORE_ABOUT = re.compile(
+    r"(?:לעוד משרות ומידע על|more jobs.*?(?:at|about))\s*(.+?)\s*>?\s*$",
+    re.I,
+)
 
 
 def _search_term(query: str) -> str:
@@ -29,6 +33,10 @@ def _search_term(query: str) -> str:
     if re.search(r"\s+OR\s+", q, re.I):
         return q.split(" OR ")[0].strip().strip('"')[:80]
     return q.strip().strip('"')[:80]
+
+
+def _text(el) -> str:
+    return el.get_text(" ", strip=True) if el else ""
 
 
 def _parse_box(box) -> dict | None:
@@ -50,46 +58,67 @@ def _parse_box(box) -> dict | None:
     if not title:
         return None
     url = href if href.startswith("http") else f"{_BASE}{href}"
-    text = box.get_text("\n", strip=True)
+
+    # Prefer structured AllJobs markup over free-text heuristics.
     company = ""
-    # Heuristic: company name often appears on its own line near the title.
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    # Skip boilerplate prefixes.
-    skip = {
-        "חברת השמה / כח אדם", "משרה בלעדית", "מיקום המשרה:", "סוג משרה:",
-        "מספר מקומות", "משרה מלאה", "שליחה", "תיאור",
-    }
-    for i, ln in enumerate(lines):
-        if ln == title or title in ln:
-            # next non-meta line is often the company
-            for nxt in lines[i + 1:i + 6]:
-                if nxt in skip or nxt.endswith(":") or re.match(r"^\d+\s*ימים", nxt):
-                    continue
-                if len(nxt) < 40 and not nxt.startswith("לחברה"):
-                    company = nxt
-                    break
+    desc_el = box.select_one(
+        ".job-content-top-desc, .job-content-top-desc-ltr"
+    )
+    if desc_el:
+        m = _MORE_ABOUT.search(_text(desc_el))
+        if m:
+            company = m.group(1).strip(" >\u200f\u200e")
+
+    if not company:
+        # Title block often ends with "Title CompanyName".
+        title_el = box.select_one(
+            ".job-content-top-title, .job-content-top-title-ltr"
+        )
+        block = _text(title_el)
+        if block.startswith(title) and len(block) > len(title) + 1:
+            company = block[len(title):].strip()
+
+    loc_el = box.select_one(
+        ".job-content-top-location, .job-content-top-location-ltr"
+    )
+    loc_raw = _text(loc_el)
+    for prefix in ("מיקום המשרה:", "Location:", "מיקום המשרה"):
+        if loc_raw.lower().startswith(prefix.lower()):
+            loc_raw = loc_raw[len(prefix):].strip()
             break
-    locs: list[str] = []
-    if "מיקום המשרה:" in text:
-        after = text.split("מיקום המשרה:", 1)[1]
-        chunk = after.split("סוג משרה:", 1)[0]
-        for ln in chunk.splitlines():
-            ln = ln.strip()
-            if ln and ln not in ("מספר מקומות",) and len(ln) < 40:
-                locs.append(ln)
-    # Description snippet: last longer paragraph-ish line.
+    loc_raw = re.sub(r"^מספר מקומות\s*", "", loc_raw).strip()
+    location = re.sub(r"\s+", " ", loc_raw)
+
+    # Never treat a city/location line as the company.
+    if company and location and (
+            company == location
+            or company in location.split()
+            or location.startswith(company)):
+        # Ambiguous — keep company only if desc-el gave it.
+        if not desc_el:
+            company = ""
+
     desc = ""
-    for ln in reversed(lines):
-        if len(ln) > 60 and "דיווח" not in ln and "תודה" not in ln:
-            desc = ln
+    for sel in (".job-content-top-details", ".job-content", ".job-box"):
+        el = box.select_one(sel) if sel != ".job-box" else box
+        if not el:
+            continue
+        blob = el.get_text("\n", strip=True)
+        for ln in blob.splitlines():
+            ln = ln.strip()
+            if len(ln) > 80 and "דיווח" not in ln and "תודה" not in ln:
+                desc = ln
+                break
+        if desc:
             break
+
     return {
         "job_id": job_id,
         "title": title,
         "url": url,
         "company": company or "AllJobs",
-        "location": ", ".join(locs[:5]),
-        "description": desc[:3000],
+        "location": location,
+        "description": (desc or "")[:3000],
     }
 
 
