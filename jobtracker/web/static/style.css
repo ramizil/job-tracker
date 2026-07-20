@@ -490,6 +490,11 @@ button.is-busy{opacity:.6;cursor:progress}
 .detail-head h1{margin:8px 0}
 .sub{color:var(--muted);margin-top:0}
 pre.notes,pre.jd{background:var(--pre-bg);border:1px solid var(--rule);border-radius:10px;padding:11px;white-space:pre-wrap;max-height:280px;overflow:auto;font-size:calc(var(--base-font) * .89)}
+/* Job description: view XOR edit — .stack{display:flex} used to override [hidden]. */
+.jd-panel:not(.is-editing) .jd-edit-form{display:none!important}
+.jd-panel.is-editing .jd-view,
+.jd-panel.is-editing .jd-edit-toggle,
+.jd-panel.is-editing .jd-empty-hint{display:none!important}
 .rej-mail-panel{margin:.35rem 0 .15rem;padding:10px 12px;background:rgba(8,14,24,.55);border:1px solid var(--rule);border-radius:10px}
 .rej-mail-panel .rej-mail-body{max-height:420px;margin:8px 0 0}
 .rej-mail-panel .rej-hit{background:rgba(251,191,36,.35);color:#fff;border-radius:3px;padding:0 2px}

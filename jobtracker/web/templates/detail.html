@@ -50,29 +50,28 @@
       </form>
     </section>
 
-    <section class="panel" id="job-description">
+    <section class="panel jd-panel{{ ' is-editing' if not app.description else '' }}" id="job-description">
       <div class="panel-head">
         <h2>Job description</h2>
         {% if app.description %}
-        <button type="button" class="btn sm" id="jd-edit-toggle"
+        <button type="button" class="btn sm jd-edit-toggle"
                 title="Replace or fix the captured text">✏️ Edit</button>
         {% endif %}
       </div>
       {% if not app.description %}
-        <p class="muted sm">No description yet — paste the real job posting text
+        <p class="muted sm jd-empty-hint">No description yet — paste the real job posting text
           (LinkedIn capture often grabs the login wall instead).</p>
       {% else %}
-        <pre class="jd" id="jd-view">{{ app.description }}</pre>
+        <pre class="jd jd-view">{{ app.description }}</pre>
       {% endif %}
       <form method="post" action="{{ url_for('main.description_save', app_id=app.id) }}"
-            class="stack" id="jd-edit-form"
-            {% if app.description %}hidden{% endif %}>
+            class="stack jd-edit-form">
         <textarea name="description" rows="16" dir="auto"
                   placeholder="Paste the full job description here…">{{ app.description or '' }}</textarea>
         <div class="inline">
           <button class="btn primary" type="submit">Save description</button>
           {% if app.description %}
-          <button type="button" class="btn" id="jd-edit-cancel">Cancel</button>
+          <button type="button" class="btn jd-edit-cancel">Cancel</button>
           {% endif %}
         </div>
       </form>
@@ -605,15 +604,12 @@
 {% block scripts %}
 <script>
 (function () {
-  var toggle = document.getElementById('jd-edit-toggle');
-  var form = document.getElementById('jd-edit-form');
-  var view = document.getElementById('jd-view');
-  var cancel = document.getElementById('jd-edit-cancel');
-  if (!form) return;
+  var panel = document.getElementById('job-description');
+  if (!panel) return;
+  var toggle = panel.querySelector('.jd-edit-toggle');
+  var cancel = panel.querySelector('.jd-edit-cancel');
   function showEdit(on) {
-    form.hidden = !on;
-    if (view) view.hidden = !!on;
-    if (toggle) toggle.hidden = !!on;
+    panel.classList.toggle('is-editing', !!on);
   }
   if (toggle) toggle.addEventListener('click', function () { showEdit(true); });
   if (cancel) cancel.addEventListener('click', function () { showEdit(false); });
