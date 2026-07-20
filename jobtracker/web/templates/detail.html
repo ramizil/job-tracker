@@ -184,7 +184,7 @@
         <form method="post" action="{{ url_for('main.generate_batch', app_id=app.id) }}" data-loading="Generating your selected items with Gemini… this can take a minute or two." class="stack">
           <div class="gen-picks">
             <label class="gen-pick"><input type="checkbox" name="items" value="analyze" checked>
-              <span><b>Fit analysis</b><br><span class="muted">how well your resume matches this job</span></span></label>
+              <span><b>Fit analysis</b><br><span class="muted">how well your resume matches this job <b>+ ATS score</b></span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="resume">
               <span><b>Tailored resume</b><br><span class="muted">rewrite your CV for this job (applies fit-analysis fixes)</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="cover">
@@ -204,7 +204,7 @@
             <label class="gen-pick"><input type="checkbox" name="items" value="salary">
               <span><b>Salary research</b><br><span class="muted">expected ₪/month gross for this role</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="ats">
-              <span><b>ATS keyword check</b><br><span class="muted">which job keywords your resume is missing</span></span></label>
+              <span><b>ATS keyword check</b><br><span class="muted">re-run alone (also included automatically with Fit analysis)</span></span></label>
           </div>
           <input name="instructions" placeholder="optional instructions (used by cover letter / recruiter note / interview prep)">
           <p class="muted sm" style="margin:2px 0 0">Language applies to cover letter / interview prep / mock. <b>Fit analysis</b> is always English + Hebrew; <b>Note to recruiter</b> always includes an English version.</p>
@@ -228,13 +228,17 @@
       {% else %}
         <div class="verdict">
           <span class="fit big fit-{{ (analysis.fit_level or 'maybe')|lower }}" title="{{ analysis.fit_level }}">{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %}{{ analysis.fit_score }}%{% else %}{{ analysis.fit_level }}{% endif %}</span>
+          {% if ats and ats.ats_score is defined and ats.ats_score not in (none, '') %}
+          <a class="fit big fit-{{ 'yes' if ats.ats_score >= 70 else ('maybe' if ats.ats_score >= 45 else 'no') }}"
+             href="#ats" title="ATS keyword score — open details below">ATS {{ ats.ats_score }}%</a>
+          {% endif %}
           <div style="flex:1">
             {% if analysis.verdict_he %}
             <div class="bi"><b dir="ltr">{{ analysis.verdict }}</b><b class="he">{{ analysis.verdict_he }}</b></div>
             {% else %}
             <b dir="auto">{{ analysis.verdict }}</b>
             {% endif %}
-            <div class="muted">{{ analysis.fit_level }}{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %} · fit score {{ analysis.fit_score }}/100{% endif %}</div>
+            <div class="muted">{{ analysis.fit_level }}{% if analysis.fit_score is defined and analysis.fit_score not in (none, '') %} · fit score {{ analysis.fit_score }}/100{% endif %}{% if ats and ats.ats_score is defined and ats.ats_score not in (none, '') %} · <a href="#ats">ATS {{ ats.ats_score }}%</a>{% endif %}</div>
           </div>
         </div>
 
@@ -340,7 +344,7 @@
       </div>
       <p class="muted">Simulates the <b>Applicant Tracking System</b> screen recruiters run: which
         keywords from this job description an ATS would look for, and which are <b>missing from your
-        resume</b> — fix them before applying.</p>
+        resume</b> — fix them before applying. Runs automatically with <b>Fit analysis</b>.</p>
       {% if not ai_on %}
         <p class="muted">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to enable this.</p>
       {% else %}

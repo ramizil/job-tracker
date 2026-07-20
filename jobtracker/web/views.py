@@ -1469,6 +1469,7 @@ def paste_job():
         # fresh fit-analysis suggestions. ("pitch" ignores the language hint: it
         # is always tailored in Hebrew, keeping the base pitch verbatim + a
         # job-specific closing station.)
+        # "analyze" also runs the ATS keyword check (see _generate_one).
         plan = [("company", "en"), ("analyze", "en"), ("resume", "en"),
                 ("salary", "en"), ("note", "en"), ("cover", "en"),
                 ("pitch", "he")]
@@ -1573,6 +1574,16 @@ def delete(app_id: int):
     return redirect(url_for("main.applications"))
 
 
+def _run_ats_check(app_id: int, r) -> dict:
+    """Run the existing ATS keyword check and persist it (same section on detail)."""
+    data = ai.ats_check(
+        title=r["title"] or "", company=r["company"] or "",
+        location=r["location"] or "", description=r["description"] or "",
+    )
+    tracker.set_ats_check(app_id, data)
+    return data
+
+
 @bp.route("/application/<int:app_id>/analyze", methods=["POST"])
 def analyze(app_id: int):
     r = tracker.get_application(app_id)
@@ -1585,10 +1596,16 @@ def analyze(app_id: int):
             description=r["description"] or "", language=language,
         )
         tracker.set_ai_analysis(app_id, result)
-        flash("AI fit analysis complete.", "ok")
+        try:
+            time.sleep(_AUTOGEN_GAP_S)
+            ats = _run_ats_check(app_id, r)
+            flash(f"AI fit analysis complete — ATS score {ats.get('ats_score', '?')}%.",
+                  "ok")
+        except ai.AIError as exc:
+            flash(f"AI fit analysis complete, but ATS check failed: {exc}", "error")
     except ai.AIError as exc:
         flash(str(exc), "error")
-    return redirect(url_for("main.detail", app_id=app_id))
+    return redirect(url_for("main.detail", app_id=app_id) + "#analysis")
 
 
 @bp.route("/application/<int:app_id>/cover-letter", methods=["POST"])
@@ -1840,6 +1857,9 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
         tracker.set_ai_analysis(app_id, ai.analyze_fit(
             title=title, company=company, location=location,
             description=description, language=language))
+        # Always refresh the ATS keyword section with the same analysis pass.
+        time.sleep(_AUTOGEN_GAP_S)
+        _run_ats_check(app_id, r)
     elif key == "cover":
         tracker.set_cover_letter(app_id, ai.cover_letter(
             title=title, company=company, location=location,
@@ -1922,12 +1942,18 @@ def generate_batch(app_id: int):
     failed: list[str] = []
 
     selected = [k for k in _BATCH_ITEMS if k in items]
+    # Fit analysis already runs ATS — don't pay for it twice in the same batch.
+    if "analyze" in selected and "ats" in selected:
+        selected = [k for k in selected if k != "ats"]
     for idx, key in enumerate(selected):
         if idx:
             time.sleep(_AUTOGEN_GAP_S)  # ease off the per-minute rate limit
         try:
             _generate_one(app_id, key, r, language=language, instructions=instructions)
-            done.append(_BATCH_ITEMS[key])
+            label = _BATCH_ITEMS[key]
+            if key == "analyze":
+                label = "fit analysis + ATS check"
+            done.append(label)
         except Exception as exc:  # keep going so one failure doesn't lose the rest
             failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
 
@@ -1945,12 +1971,9 @@ def ats_check(app_id: int):
     if not r:
         abort(404)
     try:
-        data = ai.ats_check(
-            title=r["title"] or "", company=r["company"] or "",
-            location=r["location"] or "", description=r["description"] or "",
-        )
-        tracker.set_ats_check(app_id, data)
-        flash("ATS keyword check complete.", "ok")
+        data = _run_ats_check(app_id, r)
+        flash(f"ATS keyword check complete — score {data.get('ats_score', '?')}%.",
+              "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#ats")
