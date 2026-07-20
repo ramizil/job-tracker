@@ -73,15 +73,26 @@ def _credentials():
     if not token_path.exists():
         raise AlertsError("Gmail isn't connected yet — click "
                           "\u201cConnect Gmail\u201d in Settings first.")
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
     creds = Credentials.from_authorized_user_info(
         json.loads(token_path.read_text(encoding="utf-8")), SCOPES)
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json(), encoding="utf-8")
+        try:
+            creds.refresh(Request())
+            token_path.write_text(creds.to_json(), encoding="utf-8")
+        except RefreshError as exc:
+            # invalid_grant — token revoked / expired / password changed.
+            token_path.unlink(missing_ok=True)
+            raise AlertsError(
+                "Gmail login expired or was revoked. Open Settings → "
+                "Gmail job alerts → Connect Gmail and sign in again "
+                "(one-time browser login)."
+            ) from exc
     if not creds.valid:
+        token_path.unlink(missing_ok=True)
         raise AlertsError("Gmail login expired — click \u201cConnect Gmail\u201d "
                           "in Settings to sign in again.")
     return creds

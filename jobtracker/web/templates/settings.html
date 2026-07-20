@@ -317,12 +317,18 @@
         </form>
       {% else %}
         <a class="btn primary" href="{{ url_for('main.alerts') }}">📬 Open Job Alerts</a>
+        <form method="post" action="{{ url_for('main.gmail_connect') }}">
+          <button class="btn" type="submit"
+                  title="If fetch fails with invalid_grant / expired token">🔑 Reconnect Gmail</button>
+        </form>
         <form method="post" action="{{ url_for('main.gmail_disconnect') }}">
           <button class="btn danger" type="submit">Disconnect Gmail</button>
         </form>
       {% endif %}
     </div>
-    <p class="muted sm mt">Sign in with the mailbox that receives the alerts.
+    <p class="muted sm mt">Sign in with the mailbox that receives the alerts
+      (e.g. <code>ramizil1@gmail.com</code>). If you see
+      <b>invalid_grant / Token expired</b>, press <b>Reconnect Gmail</b>.
       Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
   </section>
 

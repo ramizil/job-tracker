@@ -124,15 +124,25 @@ def _credentials():
     if not token_path.exists():
         raise RejectionsError("Rejections Gmail isn't connected yet — click "
                               "\u201cConnect rejections Gmail\u201d in Settings.")
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
     creds = Credentials.from_authorized_user_info(
         json.loads(token_path.read_text(encoding="utf-8")), SCOPES)
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json(), encoding="utf-8")
+        try:
+            creds.refresh(Request())
+            token_path.write_text(creds.to_json(), encoding="utf-8")
+        except RefreshError as exc:
+            token_path.unlink(missing_ok=True)
+            raise RejectionsError(
+                "Rejections Gmail login expired or was revoked. Open Settings → "
+                "Rejection inbox → Connect and sign in again "
+                "(one-time browser login)."
+            ) from exc
     if not creds.valid:
+        token_path.unlink(missing_ok=True)
         raise RejectionsError("Rejections Gmail login expired — reconnect in "
                               "Settings.")
     return creds
