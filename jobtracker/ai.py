@@ -922,8 +922,11 @@ lists, keep it skimmable):
 ## Address your gaps
 - For each notable gap/risk vs the job, a short, honest way to handle it if asked.
 
-## Smart questions to ask them
-- 4-6 thoughtful questions the candidate should ask the interviewer.
+## Practical questions to ask them
+- 4-6 simple, practical questions the candidate should ask the interviewer.
+  Focus on the day-to-day role, team, tools, success criteria, and next steps —
+  things a hiring manager can answer plainly. Avoid clever, philosophical, or
+  "gotcha" questions. Keep each question short and natural (one sentence).
 
 ## Quick prep checklist
 - 4-6 actionable things to review/practise before the interview.
@@ -1556,8 +1559,9 @@ Use these ## sections with short bullets:
 ## Recent news
 - 2-4 recent, DATED developments from roughly the last 12 months, if available.
 ## Angles for your application
-- 3-5 specific talking points the candidate can use, plus 2-3 smart questions to
-  ask the interviewer, tied to what this company actually does.
+- 3-5 specific talking points the candidate can use, plus 2-3 simple, practical
+  questions to ask the interviewer (day-to-day work, team, tools — not clever
+  or philosophical), tied to what this company actually does.
 
 Keep it tight and skimmable. Write in English ONLY (a Hebrew version is produced
 separately). Output Markdown only, no code fences.
