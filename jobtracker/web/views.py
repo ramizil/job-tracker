@@ -2565,28 +2565,38 @@ def search():
                     count += 1
                     if count >= 20:
                         break
-                flash(f"{src.name}: {count} result(s).", "ok")
-                if src.name == "websearch":
+                if src.name != "websearch":
+                    flash(f"{src.name}: {count} result(s).", "ok")
+                else:
                     soft = sum(
                         1 for item in results
                         if getattr(item.get("job"), "raw", None)
                         and (item["job"].raw or {}).get("soft_verify")
                     ) if count else 0
                     if count and soft:
-                        flash(f"Web search: {count} result(s) for “{location or 'any'}” "
-                              f"— some links could not be fully verified live "
-                              f"(open a few to confirm they're still open).",
+                        flash(f"websearch: {count} result(s) for “{location or 'any'}” "
+                              f"— some links could not be fully verified live.",
                               "ok")
                     elif count:
-                        flash(f"Web search: live postings in “{location or 'any'}” "
-                              f"— closed links and abroad jobs were dropped.",
-                              "ok")
+                        flash(f"websearch: {count} live posting(s) in "
+                              f"“{location or 'any'}”.", "ok")
                     else:
-                        flash(f"Web search: no postings in “{location or 'any'}” "
-                              f"for this query. Try a shorter keyword (e.g. “automation” "
-                              f"instead of a long phrase), wait a minute and search again "
-                              f"(DuckDuckGo rate-limits), or check Settings → sites list.",
-                              "error")
+                        # DuckDuckGo is often rate-limited or empty; other
+                        # boards (Drushim/AllJobs/Matrix…) usually still work.
+                        others = sum(
+                            1 for item in results
+                            if not str(getattr(item.get("job"), "source", "")
+                                       ).startswith("web:")
+                        )
+                        tip = ("DuckDuckGo found nothing useful this time "
+                               f"for “{location or 'any'}”. Wait ~1 min and "
+                               "retry, or use a shorter keyword.")
+                        if others:
+                            flash(f"websearch: skipped — {tip} "
+                                  f"({others} result(s) from other sources).",
+                                  "ok")
+                        else:
+                            flash(f"websearch: {tip}", "error")
             except Exception as exc:
                 flash(f"{src.name}: {exc}", "error")
         results.sort(key=lambda x: x["score"], reverse=True)

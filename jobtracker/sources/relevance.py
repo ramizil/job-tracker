@@ -14,7 +14,8 @@ _QA_QUERY = re.compile(
 )
 _QA_TITLE = re.compile(
     r"\b(qa|q\.?a\.?|qe|sdet|qae|quality\s*assurance|test(\s|/)?automation|"
-    r"automation\s*(engineer|qa|tester)|software\s*test|manual\s*test|"
+    r"automation\s*(engineer|qa|tester|technician|developer|architect)|"
+    r"software\s*test|manual\s*test|"
     r"qa\s*engineer|test\s*engineer|testing)\b",
     re.I,
 )

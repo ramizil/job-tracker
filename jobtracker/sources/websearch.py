@@ -527,10 +527,22 @@ class WebSearchSource(JobSource):
 
         ddgs = DDGS(timeout=14)
         terms = _search_terms(query)
-        # Second-chance: if the query is a long phrase, also try its head word.
+        # Second-chance keywords: long phrases / OR-lists often get zero DDG
+        # hits — also try a short head word (and common QA shorthand).
+        extras: list[str] = []
         head = (query or "").strip().split()
-        if len(head) >= 2 and head[0].lower() not in {t.lower() for t in terms}:
-            terms = list(terms) + [head[0]]
+        if len(head) >= 2:
+            extras.append(head[0])
+        qlow = (query or "").lower()
+        if any(k in qlow for k in ("automation", "sdet", "qa ", " qa", "test")):
+            for short in ("automation", "QA", "SDET"):
+                if short.lower() not in {t.lower() for t in terms}:
+                    extras.append(short)
+        seen_t = {t.lower() for t in terms}
+        for e in extras:
+            if e and e.lower() not in seen_t:
+                terms.append(e)
+                seen_t.add(e.lower())
 
         def _collect(search_terms: list[str]) -> tuple[list[list[JobResult]], list[str]]:
             per_site: list[list[JobResult]] = []
