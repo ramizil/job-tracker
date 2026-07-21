@@ -109,6 +109,17 @@ CREATE TABLE IF NOT EXISTS search_hidden (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_search_hidden_ignored ON search_hidden(ignored);
+
+-- Per-result notes / read state for Search (search_meta.py), keyed like alerts.
+CREATE TABLE IF NOT EXISTS search_meta (
+    job_key    TEXT PRIMARY KEY,
+    title      TEXT,
+    company    TEXT,
+    url        TEXT,
+    comment    TEXT DEFAULT '',
+    seen       INTEGER DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
 """
 
 

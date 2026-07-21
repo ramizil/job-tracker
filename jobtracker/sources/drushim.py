@@ -108,7 +108,8 @@ class DrushimSource(JobSource):
                         url=url,
                         description=desc,
                         salary=(content.get("SalaryRangeText") or "") or "",
-                        posted="",
+                        posted=((info.get("Date") or info.get("JumpDate")
+                                 or "")[:10]),
                         external_id=str(code),
                         raw={"code": code},
                     ))

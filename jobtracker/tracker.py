@@ -120,6 +120,8 @@ def _job_url_keys(url: str) -> set[str]:
         (r"smartrecruiters\.com/[^/]+/(\d+)", "smartrecruiters"),
         (r"alljobs\.co\.il/[^?\s]*[?&]JobID=(\d+)", "alljobs"),
         (r"drushim\.co\.il/job/(\d+)", "drushim"),
+        (r"matrix\.co\.il/jobs/משרה/([^/?#]+)", "matrix"),
+        (r"matrix\.co\.il/jobs/%d7%9e%d7%a9%d7%a8%d7%94/([^/?#]+)", "matrix"),
     ]
     for pat, label in patterns:
         m = re.search(pat, url or "", re.I)
@@ -171,7 +173,7 @@ def match_job_to_application(*, url: str = "", company: str = "", title: str = "
         return None
     # Staffing-board placeholders are not real employers — never fuzzy-match
     # on them (would glue every SQLink/AllJobs hit to one application).
-    if j_company in {"alljobs", "sqlink", "unknown", "via sqlink"}:
+    if j_company in {"alljobs", "sqlink", "matrix", "unknown", "via sqlink"}:
         return None
     for app in apps:
         if (_company_matches_search(company, app["company"])

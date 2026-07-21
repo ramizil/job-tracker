@@ -20,8 +20,8 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                gmail_alerts, gmail_rejections, pitch, search_hidden, syncstatus,
-                tracker, tts,
+                gmail_alerts, gmail_rejections, pitch, search_hidden,
+                search_meta, syncstatus, tracker, tts,
                 usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
@@ -2452,7 +2452,39 @@ def _enrich_search_results(results: list, query: str = "",
                     key_set=hide_keys,
                 )
             ]
-    return tracker.enrich_search_results(results)
+    results = tracker.enrich_search_results(results)
+    return search_meta.attach_meta(results)
+
+
+def _short_posted(posted: str) -> str:
+    """Normalize assorted source timestamps to YYYY-MM-DD for the table."""
+    s = (posted or "").strip()
+    if not s:
+        return ""
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    if "T" in s and len(s) >= 10:
+        return s.split("T", 1)[0][:10]
+    try:
+        from email.utils import parsedate_to_datetime
+        return parsedate_to_datetime(s).date().isoformat()
+    except (TypeError, ValueError, IndexError):
+        return s[:16]
+
+
+def _parse_job_tokens(tokens: list[str]) -> list[dict]:
+    """Checkbox values are ``url|||title|||company``."""
+    out = []
+    for tok in tokens:
+        parts = (tok or "").split("|||", 2)
+        if len(parts) < 1 or not parts[0].strip():
+            continue
+        out.append({
+            "url": parts[0].strip(),
+            "title": parts[1].strip() if len(parts) > 1 else "",
+            "company": parts[2].strip() if len(parts) > 2 else "",
+        })
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -2569,6 +2601,10 @@ def search():
             flash(f"Heads-up: only {ju['remaining']} Jooble requests left of "
                   f"{ju['limit']}. Consider getting a fresh key soon.", "error")
     results = _enrich_search_results(results, query=query)
+    for item in results:
+        job = item.get("job")
+        if job is not None:
+            item["posted"] = _short_posted(getattr(job, "posted", "") or "")
     return render_template(
         "search.html", results=results, query=query, location=location,
         configured=configured, jooble_usage=ju, ready=rd, cached_at=cached_at,
@@ -2640,6 +2676,85 @@ def search_unignore():
         search_hidden.set_ignored(job_key, False)
         flash("Moved to dismissed — restore from there to show in results again.", "ok")
     return redirect(url_for("main.search", ignored=1))
+
+
+@bp.route("/search/open")
+def search_open():
+    """Open a result URL and mark it read (mailbox-style)."""
+    url = (request.args.get("url") or "").strip()
+    title = request.args.get("title") or ""
+    company = request.args.get("company") or ""
+    if url:
+        try:
+            search_meta.set_seen(url=url, title=title, company=company, seen=True)
+        except ValueError:
+            pass
+        return redirect(url)
+    return redirect(url_for("main.search"))
+
+
+@bp.route("/search/read", methods=["POST"])
+def search_read():
+    f = request.form
+    try:
+        search_meta.set_seen(
+            url=f.get("url", ""), title=f.get("title", ""),
+            company=f.get("company", ""), seen=True,
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.search"))
+
+
+@bp.route("/search/comment", methods=["POST"])
+def search_comment():
+    f = request.form
+    try:
+        search_meta.set_comment(
+            url=f.get("url", ""), title=f.get("title", ""),
+            company=f.get("company", ""), comment=f.get("comment", ""),
+        )
+        flash("Comment saved.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.search"))
+
+
+@bp.route("/search/bulk", methods=["POST"])
+def search_bulk():
+    action = (request.form.get("action") or "").strip()
+    jobs = _parse_job_tokens(request.form.getlist("jobs"))
+    if not jobs:
+        flash("Select at least one search result.", "error")
+        return redirect(url_for("main.search"))
+    if action == "read":
+        n = search_meta.set_seen_many(jobs, seen=True)
+        flash(f"Marked {n} result(s) as read.", "ok")
+    elif action == "dismiss":
+        n = 0
+        for j in jobs:
+            try:
+                search_hidden.hide(
+                    url=j["url"], title=j["title"], company=j["company"],
+                    ignored=False)
+                n += 1
+            except ValueError:
+                continue
+        flash(f"Dismissed {n} result(s).", "ok")
+    elif action == "ignore":
+        n = 0
+        for j in jobs:
+            try:
+                search_hidden.hide(
+                    url=j["url"], title=j["title"], company=j["company"],
+                    ignored=True)
+                n += 1
+            except ValueError:
+                continue
+        flash(f"Ignored {n} result(s).", "ok")
+    else:
+        flash("Unknown bulk action.", "error")
+    return redirect(url_for("main.search"))
 
 
 # --------------------------------------------------------------------------- #

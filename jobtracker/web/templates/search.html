@@ -34,7 +34,8 @@
 
 {% if cached_at and results and not show_dismissed and not show_ignored %}
 <p class="muted sm">Last search{% if request.method == 'GET' %} (saved){% endif %} · {{ cached_at[:16].replace('T', ' ') }} UTC
-  · ✕ Dismiss hides for now · 🔕 Ignore never shows again</p>
+  · ✕ Dismiss hides for now · 🔕 Ignore never shows again
+  · Unread = closed envelope + highlight · comments are kept across searches</p>
 {% endif %}
 
 {% if show_dismissed or show_ignored %}
@@ -70,16 +71,60 @@
   </tbody>
 </table>
 {% elif results %}
-<table class="grid sticky-head">
-  <thead><tr><th>Match</th><th>Title</th><th>Company</th><th>Location</th><th>Status</th><th>Src</th><th></th></tr></thead>
+<form id="search-bulk-form" method="post" action="{{ url_for('main.search_bulk') }}">
+  <div class="bulk-bar" id="search-bulk-bar" hidden>
+    <label class="bulk-select-all">
+      <input type="checkbox" id="search-select-all" title="Select all visible">
+      Select all
+    </label>
+    <span class="muted sm" id="search-selected-count">0 selected</span>
+    <button class="btn sm" type="submit" name="action" value="read">✉ Mark read</button>
+    <button class="btn sm" type="submit" name="action" value="dismiss">✕ Dismiss</button>
+    <button class="btn sm" type="submit" name="action" value="ignore">🔕 Ignore</button>
+  </div>
+</form>
+
+<table id="search-table" class="grid alerts-mail sticky-head">
+  <thead><tr>
+    <th class="col-check" title="Select for bulk actions"></th>
+    <th class="col-mail" title="Read / unread">✉</th>
+    <th>Match</th><th>Title</th><th>Company</th><th>Location</th>
+    <th>Posted</th><th>Status</th><th>Src</th>
+    <th title="Your note — kept when this job appears again">Comment</th>
+    <th></th>
+  </tr></thead>
   <tbody>
     {% for item in results %}
     {% set j = item.job %}
-    <tr>
+    {% set unread = not item.seen %}
+    {% set token = (j.url or '') ~ '|||' ~ (j.title or '') ~ '|||' ~ (j.company or '') %}
+    <tr class="{% if unread %} alert-unread{% endif %}">
+      <td class="col-check" onclick="event.stopPropagation()">
+        <input type="checkbox" form="search-bulk-form" name="jobs" value="{{ token }}"
+               class="search-check" aria-label="Select {{ j.title }}">
+      </td>
+      <td class="col-mail" onclick="event.stopPropagation()">
+        {% if unread %}
+          <form method="post" action="{{ url_for('main.search_read') }}" style="display:inline">
+            <input type="hidden" name="url" value="{{ j.url }}">
+            <input type="hidden" name="title" value="{{ j.title }}">
+            <input type="hidden" name="company" value="{{ j.company }}">
+            <button type="submit" class="mail-icon unread" title="Unread — click to mark as read">✉</button>
+          </form>
+        {% else %}
+          <span class="mail-icon read" title="Read">📭</span>
+        {% endif %}
+      </td>
       <td>{{ '%.0f'|format(item.score) }}%</td>
-      <td><a href="{{ j.url }}" target="_blank" rel="noopener">{{ j.title }}</a></td>
+      <td>
+        <a href="{{ url_for('main.search_open', url=j.url, title=j.title, company=j.company) }}"
+           target="_blank" rel="noopener"
+           class="alert-title-link{% if unread %} unread{% endif %}"
+           title="Open job and mark as read">{{ j.title }} ↗</a>
+      </td>
       <td>{{ j.company }}</td>
       <td>{{ j.location }}</td>
+      <td data-val="{{ item.posted or '' }}">{{ item.posted or '—' }}</td>
       <td>
         {% if item.app_id %}
           <a class="pill status-{{ item.app_status }}" href="{{ url_for('main.detail', app_id=item.app_id) }}"
@@ -89,7 +134,27 @@
         {% endif %}
       </td>
       <td>{{ j.source }}</td>
-      <td class="actions-cell">
+      <td class="col-comment" onclick="event.stopPropagation()">
+        <form method="post" action="{{ url_for('main.search_comment') }}" class="alert-comment-form">
+          <input type="hidden" name="url" value="{{ j.url }}">
+          <input type="hidden" name="title" value="{{ j.title }}">
+          <input type="hidden" name="company" value="{{ j.company }}">
+          <input type="text" name="comment" class="alert-comment-input"
+                 value="{{ item.comment or '' }}"
+                 placeholder="Add a note…" maxlength="500"
+                 title="Saved on this job — kept if it appears again in search">
+          <button class="btn sm" type="submit" title="Save comment">Save</button>
+        </form>
+      </td>
+      <td class="actions-cell" onclick="event.stopPropagation()">
+        {% if unread %}
+          <form method="post" action="{{ url_for('main.search_read') }}" style="display:inline">
+            <input type="hidden" name="url" value="{{ j.url }}">
+            <input type="hidden" name="title" value="{{ j.title }}">
+            <input type="hidden" name="company" value="{{ j.company }}">
+            <button class="btn sm" type="submit" title="Mark as read">✉ Read</button>
+          </form>
+        {% endif %}
         {% if not item.app_id %}
         <form method="post" action="{{ url_for('main.search_save') }}" style="display:inline">
           <input type="hidden" name="company" value="{{ j.company }}">
@@ -119,5 +184,52 @@
     {% endfor %}
   </tbody>
 </table>
+
+<script>
+(function () {
+  var form = document.getElementById('search-bulk-form');
+  if (!form) return;
+  var bar = document.getElementById('search-bulk-bar');
+  var countEl = document.getElementById('search-selected-count');
+  var selectAll = document.getElementById('search-select-all');
+  var table = document.getElementById('search-table');
+
+  function checks() {
+    return Array.prototype.slice.call(
+      (table || document).querySelectorAll('.search-check'));
+  }
+  function sync() {
+    var list = checks();
+    var n = list.filter(function (c) { return c.checked; }).length;
+    if (bar && list.length) bar.hidden = false;
+    if (countEl) countEl.textContent = n + ' selected';
+    if (selectAll && list.length) {
+      selectAll.checked = n === list.length;
+      selectAll.indeterminate = n > 0 && n < list.length;
+    }
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.classList.contains('search-check')) sync();
+  });
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      checks().forEach(function (c) {
+        var tr = c.closest('tr');
+        if (tr && tr.style.display === 'none') return;
+        c.checked = selectAll.checked;
+      });
+      sync();
+    });
+  }
+  form.addEventListener('submit', function (e) {
+    var n = checks().filter(function (c) { return c.checked; }).length;
+    if (!n) {
+      e.preventDefault();
+      alert('Select at least one result.');
+    }
+  });
+  sync();
+})();
+</script>
 {% endif %}
 {% endblock %}

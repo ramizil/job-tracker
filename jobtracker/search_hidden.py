@@ -10,7 +10,7 @@ from .db import get_connection, now_iso
 from .tracker import _job_url_keys, _norm_job_url, _norm_match_text
 
 
-def _primary_key(url: str, company: str = "", title: str = "") -> str:
+def job_key_for(url: str, company: str = "", title: str = "") -> str:
     keys = _job_url_keys(url)
     labeled = sorted(k for k in keys if ":" in k)
     if labeled:
@@ -27,18 +27,23 @@ def _primary_key(url: str, company: str = "", title: str = "") -> str:
     return ""
 
 
-def _keys_for(url: str, company: str = "", title: str = "") -> set[str]:
+def keys_for(url: str, company: str = "", title: str = "") -> set[str]:
     keys = set(_job_url_keys(url))
-    pk = _primary_key(url, company, title)
+    pk = job_key_for(url, company, title)
     if pk:
         keys.add(pk)
     return keys
 
 
+# Back-compat aliases used inside this module.
+_primary_key = job_key_for
+_keys_for = keys_for
+
+
 def hide(*, url: str, title: str = "", company: str = "",
          ignored: bool = False) -> str:
     """Dismiss (ignored=False) or ignore forever. Returns the job_key."""
-    job_key = _primary_key(url, company, title)
+    job_key = job_key_for(url, company, title)
     if not job_key:
         raise ValueError("Need a URL (or company+title) to hide a search result")
     ts = now_iso()

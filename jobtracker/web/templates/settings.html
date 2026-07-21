@@ -231,6 +231,19 @@
         Disable AllJobs
       </label>
     </div>
+    <div class="setting">
+      <label>Matrix — מטריקס משרות <span class="rec">no key needed</span></label>
+      <small>QA / automation categories via RSS:
+        <a href="https://www.matrix.co.il/jobs/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA/testing-automation/" target="_blank" rel="noopener">testing-automation</a>
+        ·
+        <a href="https://www.matrix.co.il/jobs/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA/%D7%A4%D7%99%D7%AA%D7%95%D7%97-%D7%90%D7%95%D7%98%D7%95%D7%9E%D7%A6%D7%99%D7%94/" target="_blank" rel="noopener">פיתוח אוטומציה</a>.
+      </small>
+      <label class="check-setting src-off">
+        <input type="checkbox" name="SOURCES_DISABLED" value="matrix" form="settings-form"
+               {{ 'checked' if 'matrix' in values.SOURCES_DISABLED }}>
+        Disable Matrix
+      </label>
+    </div>
     <div class="row">
       <div class="setting"><label for="ADZUNA_APP_ID">Adzuna app id (optional, no Israel)</label>
         <input type="text" id="ADZUNA_APP_ID" name="ADZUNA_APP_ID" form="settings-form" value="{{ values.ADZUNA_APP_ID }}" placeholder="optional" autocomplete="off"></div>

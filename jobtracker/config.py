@@ -116,7 +116,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "ADZUNA_APP_ID": "Adzuna app id (optional, no Israel)",
     "ADZUNA_APP_KEY": "Adzuna app key (optional)",
     "WEB_SEARCH_SITES": "Comma-separated site: filters for the web-search source (ATS job boards)",
-    "SOURCES_DISABLED": "Comma-separated source names to skip (jsearch, jooble, adzuna, websearch, remotive, drushim, sqlink, alljobs)",
+    "SOURCES_DISABLED": "Comma-separated source names to skip (jsearch, jooble, adzuna, websearch, remotive, drushim, sqlink, alljobs, matrix)",
     "AI_PROVIDER": "AI provider: gemini | openai | anthropic | groq | cursor",
     "AI_FALLBACK": "Auto-switch to another configured AI provider when one fails (1/0)",
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
