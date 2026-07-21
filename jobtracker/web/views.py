@@ -224,6 +224,8 @@ _SOURCE_DOMAINS = [
     ("linkedin.com", "linkedin"),
     ("alljobs.co.il", "alljobs"),
     ("drushim.co.il", "drushim"),
+    ("matrix.co.il", "matrix"),
+    ("sqlink.com", "sqlink"),
     ("jobmaster.co.il", "jobmaster"),
     ("jobinfo.co.il", "jobinfo"),
     ("ethosia.co.il", "ethosia"),
