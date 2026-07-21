@@ -39,14 +39,19 @@
 {% endif %}
 
 {% if show_dismissed or show_ignored %}
-<table class="grid sticky-head">
+<div class="tablebar" data-table-filter="#search-hidden-table" data-table-ux="#search-hidden-table">
+  <input type="search" data-tf="search" class="tf-search"
+         placeholder="🔎 Filter by title, company…">
+  <span class="muted sm tf-count" data-tf="count"></span>
+</div>
+<table id="search-hidden-table" class="grid sticky-head">
   <thead><tr>
-    <th>When</th><th>Title</th><th>Company</th><th></th>
+    <th data-sort="desc" class="sorted-desc">When</th><th>Title</th><th>Company</th><th></th>
   </tr></thead>
   <tbody>
     {% for r in hidden_rows %}
     <tr class="muted">
-      <td>{{ (r.created_at or '')[:10] }}</td>
+      <td data-val="{{ r.created_at or '' }}">{{ (r.created_at or '')[:10] }}</td>
       <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title or r.url }} ↗</a>{% else %}{{ r.title }}{% endif %}</td>
       <td>{{ r.company }}</td>
       <td class="actions-cell">
@@ -71,6 +76,24 @@
   </tbody>
 </table>
 {% elif results %}
+<div class="tablebar" data-table-filter="#search-table" data-table-ux="#search-table">
+  <input type="search" data-tf="search" class="tf-search"
+         placeholder="🔎 Filter by title, company, location, source, comment…">
+  <label class="tf-field">Status
+    <select data-tf="col" data-tf-col="7"><option value="">all</option></select>
+  </label>
+  <label class="tf-field">Src
+    <select data-tf="col" data-tf-col="8"><option value="">all</option></select>
+  </label>
+  <label class="tf-field">Location
+    <select data-tf="col" data-tf-col="5"><option value="">all</option></select>
+  </label>
+  <label class="tf-field">Match ≥
+    <input type="number" data-tf="minmatch" data-tf-col="2" min="0" max="100" step="5" class="tf-min" placeholder="0">%
+  </label>
+  <span class="muted sm tf-count" data-tf="count"></span>
+</div>
+
 <form id="search-bulk-form" method="post" action="{{ url_for('main.search_bulk') }}">
   <div class="bulk-bar" id="search-bulk-bar" hidden>
     <label class="bulk-select-all">
@@ -88,7 +111,8 @@
   <thead><tr>
     <th class="col-check" title="Select for bulk actions"></th>
     <th class="col-mail" title="Read / unread">✉</th>
-    <th>Match</th><th>Title</th><th>Company</th><th>Location</th>
+    <th data-sort="desc" class="sorted-desc">Match</th>
+    <th>Title</th><th>Company</th><th>Location</th>
     <th>Posted</th><th>Status</th><th>Src</th>
     <th title="Your note — kept when this job appears again">Comment</th>
     <th></th>
@@ -103,7 +127,7 @@
         <input type="checkbox" form="search-bulk-form" name="jobs" value="{{ token }}"
                class="search-check" aria-label="Select {{ j.title }}">
       </td>
-      <td class="col-mail" onclick="event.stopPropagation()">
+      <td class="col-mail" data-val="{{ '0' if unread else '1' }}" onclick="event.stopPropagation()">
         {% if unread %}
           <form method="post" action="{{ url_for('main.search_read') }}" style="display:inline">
             <input type="hidden" name="url" value="{{ j.url }}">
@@ -115,7 +139,7 @@
           <span class="mail-icon read" title="Read">📭</span>
         {% endif %}
       </td>
-      <td>{{ '%.0f'|format(item.score) }}%</td>
+      <td data-val="{{ '%.0f'|format(item.score) }}">{{ '%.0f'|format(item.score) }}%</td>
       <td>
         <a href="{{ url_for('main.search_open', url=j.url, title=j.title, company=j.company) }}"
            target="_blank" rel="noopener"
@@ -127,13 +151,14 @@
       <td data-val="{{ item.posted or '' }}">{{ item.posted or '—' }}</td>
       <td>
         {% if item.app_id %}
-          <a class="pill status-{{ item.app_status }}" href="{{ url_for('main.detail', app_id=item.app_id) }}"
+          <a class="pill status-{{ item.app_status }}" data-val="{{ item.app_status }}"
+             href="{{ url_for('main.detail', app_id=item.app_id) }}"
              title="Open application #{{ item.app_id }}">{{ item.app_status }}</a>
         {% else %}
-          <span class="pill status-new">new</span>
+          <span class="pill status-new" data-val="new">new</span>
         {% endif %}
       </td>
-      <td>{{ j.source }}</td>
+      <td data-val="{{ j.source }}">{{ j.source }}</td>
       <td class="col-comment" onclick="event.stopPropagation()">
         <form method="post" action="{{ url_for('main.search_comment') }}" class="alert-comment-form">
           <input type="hidden" name="url" value="{{ j.url }}">
