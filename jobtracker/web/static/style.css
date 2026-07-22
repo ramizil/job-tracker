@@ -375,6 +375,22 @@ html[data-theme="slate"] .digest.hot{background:#fffbeb;border-color:#fbbf24}
 @keyframes flow{to{background-position:200% 0}}
 @keyframes grow{from{width:0}}
 .funnel-num{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+/* Light themes: pale track + vivid status fills (dark track + muted fill was invisible) */
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-bar{
+  background:#e2e8f0;border-color:rgba(15,23,42,.12);box-shadow:inset 0 1px 2px rgba(15,23,42,.06)
+}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill{
+  box-shadow:none;animation:grow 1s ease
+}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-saved{background:#f59e0b!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-applied{background:#2563eb!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-screening{background:#ca8a04!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-interview{background:#9333ea!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-offer,
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-accepted{background:#16a34a!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-rejected{background:#dc2626!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-withdrawn,
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-ghosted{background:#64748b!important}
 
 /* tables */
 table.grid{width:100%;border-collapse:collapse;margin-top:10px}
