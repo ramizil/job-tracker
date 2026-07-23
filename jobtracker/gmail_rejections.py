@@ -788,24 +788,27 @@ def max_inbox_id() -> int:
 
 
 def list_applications_for_picker(*, company: str = "", title: str = "",
-                                 matched_app_id: int | None = None):
-    """Applications for the confirm dropdown — filtered by parsed company name.
+                                 matched_app_id: int | None = None
+                                 ) -> tuple[list, bool]:
+    """Applications for the confirm dropdown.
 
-    Title is shown for context but not used for filtering (rejection subjects
-    often differ slightly from the stored application title). Rejected
-    applications are included so a mailbox rejection can still be linked.
+    Returns ``(apps, company_filtered)``. When a company was parsed and at
+    least one application matches it, ``company_filtered`` is True and only
+    those apps are returned (plus the auto-matched id if missing). Otherwise
+    the full list is returned so the user can pick manually.
+    Rejected apps stay included so a mailbox rejection can still be linked.
     """
     with get_connection() as conn:
-        apps = conn.execute(
+        apps = list(conn.execute(
             """SELECT id, company, title, status, date_applied
                  FROM applications
                 WHERE status != 'withdrawn'
                 ORDER BY date_applied DESC, id DESC"""
-        ).fetchall()
+        ).fetchall())
 
     company = (company or "").strip()
     if not company:
-        return list(apps)
+        return apps, False
 
     matched = [a for a in apps if _company_matches(company, a["company"])]
     if matched_app_id:
@@ -818,7 +821,11 @@ def list_applications_for_picker(*, company: str = "", title: str = "",
                 ).fetchone()
             if extra:
                 matched = [extra] + matched
-    return matched
+    if matched:
+        return matched, True
+    # No company hits → full list for manual pick (parsed company is often
+    # a recruiter name / wrong token).
+    return apps, False
 
 
 # --------------------------------------------------------------------------- #
