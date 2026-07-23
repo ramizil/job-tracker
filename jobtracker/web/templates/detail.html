@@ -53,12 +53,22 @@
     <section class="panel">
       <h2>Resume sent</h2>
       {% if sent_resume %}
-      <p>Linked: <b>{{ sent_resume.label }}</b>
+      <p>Current: <b>{{ sent_resume.label }}</b>
         {% if sent_resume.original_name %}<span class="muted">({{ sent_resume.original_name }})</span>{% endif %}
         <span class="muted sm">· stored {{ (sent_resume.created_at or '')[:10] }}</span>
       </p>
       {% else %}
       <p class="muted">No resume linked yet — pick which CV you sent (or will send) for later stats.</p>
+      {% endif %}
+      {% if resume_history %}
+      <p class="muted sm" style="margin:6px 0 0">Previously sent (kept for insights):</p>
+      <ul class="muted sm" style="margin:4px 0 0;padding-left:18px">
+        {% for h in resume_history %}
+        <li>{{ h.label }}{% if h.original_name %} · {{ h.original_name }}{% endif %}
+          {% if h.content_hash %} · {{ h.content_hash[:8] }}{% endif %}
+          <span title="{{ h.note or '' }}">· archived {{ (h.attached_at or '')[:10] }}</span></li>
+        {% endfor %}
+      </ul>
       {% endif %}
       <form method="post" action="{{ url_for('main.set_sent_resume', app_id=app.id) }}"
             enctype="multipart/form-data" class="stack mt">

@@ -14,12 +14,26 @@
     {% for d in duplicates %}
     <li>
       <a href="{{ url_for('main.detail', app_id=d['id']) }}">#{{ d['id'] }} — {{ d['title'] }} @ {{ d['company'] }}</a>
-      <span class="muted sm">· status: {{ d['status'] }}{% if d['date_applied'] %} · applied {{ d['date_applied'][:10] }}{% endif %}</span>
+      <span class="muted sm">· status: <span class="pill status-{{ d['status'] }}">{{ d['status'] }}</span>{% if d['date_applied'] %} · applied {{ d['date_applied'][:10] }}{% endif %}</span>
+      {% if d.get('resume_label') %}
+      <span class="dw-prev-resume muted">Previous resume: {{ d['resume_label'] }}{% if d.get('resume_hash') %} · {{ d['resume_hash'] }}{% endif %}</span>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>
-  <p class="dw-sub">You can still add it again (e.g. you're re-applying or it's a
-    different posting) — just press <b>Proceed anyway</b> below.</p>
+  <p class="dw-sub">If the role resurfaced (e.g. after <b>ghosted</b>), pick an updated resume
+    below and click <b>Mark as reapplied</b> — the same application is updated, and the
+    older resume stays in the library for insights. Or <b>Proceed anyway</b> to create a
+    separate new row.</p>
+  <div class="dw-actions">
+    {% for d in duplicates %}
+    <button class="btn primary" type="submit" name="reapply_app_id" value="{{ d['id'] }}"
+            form="paste-form"
+            title="Update #{{ d['id'] }} → reapplied and link the resume chosen below">
+      Mark #{{ d['id'] }} as reapplied
+    </button>
+    {% endfor %}
+  </div>
 </div>
 {% endif %}
 
@@ -32,7 +46,7 @@
   <a href="{{ url_for('main.settings') }}">Settings</a> to auto-extract them.{% endif %}
 </p>
 
-<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"
+<form id="paste-form" class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"
       enctype="multipart/form-data"{% if ai_on %} data-loading="Capturing & generating with Gemini — company research, fit, recruiter note & cover letter. This can take a minute…"{% endif %}>
   {% if duplicates %}<input type="hidden" name="confirm_duplicate" value="1">{% endif %}
   <label class="fld">
@@ -66,7 +80,8 @@
     <legend>Resume sent <em>— which CV you used / will use for this job</em></legend>
     <p class="muted sm" style="margin:0 0 8px">Each unique <b>file content</b> is stored once (same bytes → same
       entry). Same filename with different content keeps <b>both</b> versions —
-      nothing is overwritten. Pick from the library or add a new file.</p>
+      nothing is overwritten. Pick from the library or add a new file.
+      {% if duplicates %}<b>For reapply:</b> choose or upload the updated CV here first.{% endif %}</p>
     <label class="fld">
       <span>From library</span>
       <select name="resume_id">

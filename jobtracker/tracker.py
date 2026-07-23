@@ -337,7 +337,10 @@ def update_status(app_id: int, new_status: str, note: str = "") -> bool:
             return False
         ts = now_iso()
         date_applied = row["date_applied"]
-        if new_status != "saved" and not date_applied:
+        # Re-apply refreshes the applied date; first move past "saved" stamps it.
+        if new_status == "reapplied":
+            date_applied = ts
+        elif new_status != "saved" and not date_applied:
             date_applied = ts
         conn.execute(
             "UPDATE applications SET status=?, date_applied=?, updated_at=? WHERE id=?",
@@ -350,6 +353,51 @@ def update_status(app_id: int, new_status: str, note: str = "") -> bool:
             (app_id, row["status"], new_status, note, ts),
         )
         return True
+
+
+def mark_reapplied(
+    app_id: int,
+    *,
+    resume_id: int | None = None,
+    note: str = "",
+    description: str = "",
+    url: str = "",
+) -> bool:
+    """Mark an existing application as reapplied (ghosted / role reposted).
+
+    Keeps the same application row, stamps a fresh ``date_applied``, optionally
+    refreshes description/URL from a new paste, and links a new resume while
+    archiving the previous one in ``application_resume_history``.
+    """
+    from . import resumes as resumes_mod
+
+    row = get_application(app_id)
+    if not row:
+        return False
+    hist_note = (note or "").strip() or "reapplied (job resurfaced)"
+    if not update_status(app_id, "reapplied", hist_note):
+        return False
+    with get_connection() as conn:
+        ts = now_iso()
+        fields: list[str] = []
+        vals: list[Any] = []
+        if description and description.strip():
+            fields.append("description=?")
+            vals.append(description.strip())
+        if url and url.strip():
+            fields.append("url=?")
+            vals.append(url.strip())
+        if fields:
+            fields.append("updated_at=?")
+            vals.extend([ts, app_id])
+            conn.execute(
+                f"UPDATE applications SET {', '.join(fields)} WHERE id=?",
+                vals,
+            )
+    if resume_id is not None:
+        resumes_mod.attach_to_application(
+            app_id, resume_id, note="reapplied — previous CV archived")
+    return True
 
 
 def set_rejection(app_id: int, *, stage: str = "", reason: str = "",
@@ -399,10 +447,10 @@ def set_star(app_id: int, starred: bool) -> None:
 
 
 def auto_ghost_stale(days: int = 30) -> list[sqlite3.Row]:
-    """Mark 'applied' rows with no movement for `days`+ days as ghosted.
+    """Mark applied/reapplied rows with no movement for `days`+ days as ghosted.
 
     Uses the application date (falling back to the last update) so a job that
-    has sat in "applied" for over a month without any response is closed out
+    has sat waiting for over a month without any response is closed out
     automatically. Each transition is recorded in the status history.
     """
     from datetime import datetime, timedelta, timezone
@@ -410,8 +458,8 @@ def auto_ghost_stale(days: int = 30) -> list[sqlite3.Row]:
         timespec="seconds")
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT id, company, title FROM applications
-                WHERE status='applied'
+            """SELECT id, company, title, status FROM applications
+                WHERE status IN ('applied', 'reapplied')
                   AND COALESCE(date_applied, updated_at, created_at) < ?""",
             (cutoff,)).fetchall()
         ts = now_iso()
@@ -423,7 +471,7 @@ def auto_ghost_stale(days: int = 30) -> list[sqlite3.Row]:
                 """INSERT INTO status_history
                      (application_id, old_status, new_status, note, changed_at)
                    VALUES (?,?,?,?,?)""",
-                (r["id"], "applied", "ghosted",
+                (r["id"], r["status"], "ghosted",
                  f"auto-ghosted after {days}+ days with no response", ts))
         return rows
 

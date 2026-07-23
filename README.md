@@ -191,8 +191,12 @@ python -m jobtracker web
 ```
 
 ## Status pipeline
-`saved → applied → screening → interview → offer → accepted`
+`saved → applied → reapplied → screening → interview → offer → accepted`
 (plus `rejected`, `withdrawn`, `ghosted`)
+
+`reapplied` is for when a ghosted (or previously applied) role comes back and
+you submit again — the same application row is updated, previous resume kept
+in history for insights.
 
 ## Project layout
 ```

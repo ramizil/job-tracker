@@ -23,7 +23,8 @@ console = Console()
 
 def _status_style(status: str) -> str:
     return {
-        "saved": "cyan", "applied": "blue", "screening": "yellow",
+        "saved": "cyan", "applied": "blue", "reapplied": "cyan",
+        "screening": "yellow",
         "interview": "magenta", "offer": "green", "accepted": "bold green",
         "rejected": "red", "withdrawn": "dim", "ghosted": "dim red",
     }.get(status, "white")

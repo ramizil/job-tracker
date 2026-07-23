@@ -1347,6 +1347,7 @@ def detail(app_id: int):
             mock = None
     resume_lib = resumes.ensure_defaults()
     sent_resume = resumes.for_application(app_id)
+    resume_history = resumes.history_for(app_id)
     return render_template(
         "detail.html", app=r, history=tracker.get_history(app_id),
         analysis=analysis, mock=mock, statuses=STATUSES, stages=REJECTION_STAGES,
@@ -1358,6 +1359,7 @@ def detail(app_id: int):
         company_brief=tracker.get_company_brief(app_id),
         ats=tracker.get_ats_check(app_id),
         resume_lib=resume_lib, sent_resume=sent_resume,
+        resume_history=resume_history,
     )
 
 
@@ -1459,6 +1461,9 @@ def paste_job():
         company = "(unknown)"
 
     def _form_ctx(**extra):
+        rid = extra.pop("resume_id", f.get("resume_id") or "")
+        if rid is None:
+            rid = ""
         return {
             "url": url, "description": text, "title": title,
             "company": company, "location": location, "salary": salary,
@@ -1466,11 +1471,31 @@ def paste_job():
             "source": (f.get("source") or "").strip(),
             "autogen": bool(f.get("autogen")),
             "starred": bool(f.get("starred")),
-            "resume_id": f.get("resume_id") or "",
+            "resume_id": rid,
             "resume_label": (f.get("resume_label") or "").strip(),
             "resume_path": (f.get("resume_path") or "").strip(),
             **extra,
         }
+
+    def _enrich_dups(rows):
+        """Attach previous-resume labels so the warning can show them."""
+        out = []
+        for d in rows:
+            item = dict(d)
+            rid = d["resume_id"] if "resume_id" in d.keys() else None
+            item["resume_label"] = ""
+            item["resume_hash"] = ""
+            if rid:
+                rr = resumes.get(int(rid))
+                if rr:
+                    item["resume_label"] = rr["label"] or ""
+                    item["resume_hash"] = (rr["content_hash"] or "")[:8]
+                elif d["resume_version"]:
+                    item["resume_label"] = d["resume_version"]
+            elif d["resume_version"]:
+                item["resume_label"] = d["resume_version"]
+            out.append(item)
+        return out
 
     # Resolve which resume was sent (optional). Same file content → same library row.
     resume_id = None
@@ -1489,6 +1514,61 @@ def paste_job():
             resume_lib=resumes.list_resumes(),
         )
 
+    # Mark an existing duplicate as reapplied (same row; archive previous CV).
+    reapply_raw = (f.get("reapply_app_id") or "").strip()
+    if reapply_raw:
+        try:
+            reapply_id = int(reapply_raw)
+        except ValueError:
+            flash("Invalid reapply target.", "error")
+            return redirect(url_for("main.paste_job"))
+        existing = tracker.get_application(reapply_id)
+        if not existing:
+            flash(f"Application #{reapply_id} not found.", "error")
+            return redirect(url_for("main.paste_job"))
+        ok = tracker.mark_reapplied(
+            reapply_id,
+            resume_id=resume_id,
+            note="reapplied from Paste a Job",
+            description=text,
+            url=url,
+        )
+        if not ok:
+            flash("Could not mark as reapplied.", "error")
+            return redirect(url_for("main.detail", app_id=reapply_id))
+        if f.get("starred"):
+            tracker.set_star(reapply_id, True)
+        flash(
+            f"Marked #{reapply_id} as reapplied.",
+            "ok",
+        )
+        if resume_id:
+            rr = resumes.get(resume_id)
+            if rr:
+                flash(f"Linked resume: {rr['label']}.", "ok")
+        app_id = reapply_id
+        # Fall through to optional autogen, then applications list.
+        if ai.is_configured() and f.get("autogen"):
+            r = tracker.get_application(app_id)
+            plan = [("company", "en"), ("analyze", "en"), ("resume", "en"),
+                    ("salary", "en"), ("note", "en"), ("cover", "en"),
+                    ("pitch", "he")]
+            done: list[str] = []
+            failed: list[str] = []
+            for idx, (key, lang) in enumerate(plan):
+                if idx:
+                    time.sleep(_AUTOGEN_GAP_S)
+                try:
+                    _generate_one(app_id, key, r, language=lang)
+                    done.append(_BATCH_ITEMS[key])
+                except Exception as exc:
+                    failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
+            if done:
+                flash("Generated: " + ", ".join(done) + ".", "ok")
+            if failed:
+                flash("Failed: " + "; ".join(failed) + ".", "error")
+        return redirect(url_for("main.applications"))
+
     # Warn if an application with the same title + company already exists, but
     # let the user proceed (re-applying, or a genuinely different posting). The
     # "Proceed anyway" submit resends with confirm_duplicate=1 to skip this.
@@ -1497,7 +1577,8 @@ def paste_job():
         if duplicates:
             return render_template(
                 "paste.html", statuses=STATUSES, ai_on=ai.is_configured(),
-                ready=rd, duplicates=duplicates, form=_form_ctx(),
+                ready=rd, duplicates=_enrich_dups(duplicates),
+                form=_form_ctx(resume_id=resume_id or ""),
                 resume_lib=resumes.list_resumes(),
             )
 

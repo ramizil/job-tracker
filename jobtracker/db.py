@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS resumes (
     created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_resumes_hash ON resumes(content_hash);
+
+-- Previous resumes linked to an application (kept when swapping / reapplying).
+CREATE TABLE IF NOT EXISTS application_resume_history (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL,
+    resume_id      INTEGER NOT NULL,
+    note           TEXT,
+    attached_at    TEXT NOT NULL,
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE,
+    FOREIGN KEY (resume_id) REFERENCES resumes(id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_resume_hist
+    ON application_resume_history(application_id);
 """
 
 

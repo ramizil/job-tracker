@@ -5,6 +5,7 @@ from __future__ import annotations
 STATUSES: list[str] = [
     "saved",       # discovered / interesting, not applied yet
     "applied",     # application submitted
+    "reapplied",   # applied again (e.g. after ghosted / role reposted)
     "screening",   # recruiter / HR screen
     "interview",   # one or more interviews
     "offer",       # received an offer
@@ -15,7 +16,7 @@ STATUSES: list[str] = [
 ]
 
 # Statuses that represent a "live" (still-in-play) application.
-ACTIVE_STATUSES = {"saved", "applied", "screening", "interview", "offer"}
+ACTIVE_STATUSES = {"saved", "applied", "reapplied", "screening", "interview", "offer"}
 
 # Statuses that count as a negative outcome (for analysis).
 NEGATIVE_STATUSES = {"rejected", "withdrawn", "ghosted"}

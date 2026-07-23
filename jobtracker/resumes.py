@@ -190,9 +190,25 @@ def set_label(resume_id: int, label: str) -> None:
         conn.execute("UPDATE resumes SET label=? WHERE id=?", (label, resume_id))
 
 
-def attach_to_application(app_id: int, resume_id: int | None) -> None:
-    """Link (or clear) which resume was sent for this application."""
+def attach_to_application(
+    app_id: int,
+    resume_id: int | None,
+    *,
+    note: str = "",
+) -> None:
+    """Link (or clear) which resume was sent for this application.
+
+    When replacing an existing resume with a different one, the previous link
+    is archived in ``application_resume_history`` so older CVs stay available
+    for insights (e.g. after a reapply).
+    """
     with get_connection() as conn:
+        prev = conn.execute(
+            "SELECT resume_id FROM applications WHERE id=?", (app_id,)
+        ).fetchone()
+        if not prev:
+            raise ValueError(f"Unknown application {app_id}")
+        old_id = prev["resume_id"]
         label = ""
         if resume_id:
             row = conn.execute(
@@ -201,12 +217,36 @@ def attach_to_application(app_id: int, resume_id: int | None) -> None:
             if not row:
                 raise ValueError(f"Unknown resume id {resume_id}")
             label = row["label"] or ""
+        ts = now_iso()
+        # Archive previous resume before overwriting the current link.
+        if old_id and old_id != resume_id:
+            conn.execute(
+                """INSERT INTO application_resume_history
+                     (application_id, resume_id, note, attached_at)
+                   VALUES (?,?,?,?)""",
+                (app_id, old_id,
+                 (note or "replaced").strip()[:200], ts),
+            )
         conn.execute(
             """UPDATE applications
                   SET resume_id=?, resume_version=?, updated_at=?
                 WHERE id=?""",
-            (resume_id, label, now_iso(), app_id),
+            (resume_id, label, ts, app_id),
         )
+
+
+def history_for(app_id: int) -> list[sqlite3.Row]:
+    """Previous resumes used for this application (newest first)."""
+    with get_connection() as conn:
+        return list(conn.execute(
+            """SELECT h.id, h.note, h.attached_at, h.resume_id,
+                      r.label, r.original_name, r.content_hash, r.created_at
+                 FROM application_resume_history h
+                 JOIN resumes r ON r.id = h.resume_id
+                WHERE h.application_id=?
+                ORDER BY h.attached_at DESC, h.id DESC""",
+            (app_id,),
+        ).fetchall())
 
 
 def for_application(app_id: int) -> sqlite3.Row | None:
@@ -220,11 +260,14 @@ def for_application(app_id: int) -> sqlite3.Row | None:
 
 
 def usage_counts() -> dict[int, int]:
-    """How many applications reference each resume (for future insights)."""
+    """How many applications reference each resume (current + history)."""
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT resume_id, COUNT(*) AS n FROM applications
-                WHERE resume_id IS NOT NULL
+            """SELECT resume_id, COUNT(*) AS n FROM (
+                  SELECT resume_id FROM applications WHERE resume_id IS NOT NULL
+                  UNION ALL
+                  SELECT resume_id FROM application_resume_history
+                )
                 GROUP BY resume_id"""
         ).fetchall()
     return {int(r["resume_id"]): int(r["n"]) for r in rows}
