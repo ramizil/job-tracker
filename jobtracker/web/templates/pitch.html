@@ -60,8 +60,9 @@
     <a class="btn sm" href="{{ url_for('main.my_pitch') }}">← Back to HTML view</a>
     {% endif %}
   </div>
-  <p class="muted sm">Simple text editor. Saving the spoken script updates Listen / AI.
-    {% if has_html %}To change the styled look, edit the HTML source below.{% endif %}</p>
+  <p class="muted sm">Simple text editor — content is taken from the HTML document and
+    saving writes back into it (Listen / AI stay in sync).
+    {% if has_html %}Advanced: edit raw HTML source below if you need to tweak markup.{% endif %}</p>
 
   <div class="tts-player mi-player" data-lang="he-IL" data-target="#pitch-text">
     <button class="btn sm primary" type="button" data-tts="play">▶ Listen</button>
