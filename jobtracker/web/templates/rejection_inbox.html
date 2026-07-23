@@ -2,7 +2,10 @@
 {% block title %}Rejection Inbox · Job Tracker{% endblock %}
 {% block content %}
 <div class="panel-head"><h1>📭 Rejection Inbox</h1>
-  <div style="display:flex; gap:.5rem; align-items:center">
+  <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap">
+    <a class="btn" href="{{ url_for('main.rejections') }}"
+       title="AI post-mortem of every rejection + overall patterns and action plan">
+      🧠 Rejection insights</a>
     {% if rejections_badge %}
     <form method="post" action="{{ url_for('main.rejection_inbox_seen', all=1 if show_all else none) }}">
       <button class="btn" type="submit"
