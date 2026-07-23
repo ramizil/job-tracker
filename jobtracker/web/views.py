@@ -20,7 +20,7 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                gmail_alerts, gmail_rejections, pitch, search_hidden,
+                gmail_alerts, gmail_rejections, pitch, resumes, search_hidden,
                 search_meta, syncstatus, tracker, tts,
                 usage)
 from .. import profiles as profiles_mod
@@ -1345,6 +1345,8 @@ def detail(app_id: int):
             mock = json.loads(r["mock_interview"])
         except (TypeError, ValueError):
             mock = None
+    resume_lib = resumes.ensure_defaults()
+    sent_resume = resumes.for_application(app_id)
     return render_template(
         "detail.html", app=r, history=tracker.get_history(app_id),
         analysis=analysis, mock=mock, statuses=STATUSES, stages=REJECTION_STAGES,
@@ -1355,7 +1357,34 @@ def detail(app_id: int):
         salary=tracker.get_salary_research(app_id),
         company_brief=tracker.get_company_brief(app_id),
         ats=tracker.get_ats_check(app_id),
+        resume_lib=resume_lib, sent_resume=sent_resume,
     )
+
+
+@bp.route("/application/<int:app_id>/resume", methods=["POST"])
+def set_sent_resume(app_id: int):
+    """Record which resume was sent for this application (library + optional upload)."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    f = request.form
+    rid = None
+    try:
+        rid = resumes.resolve_selection(
+            resume_id=f.get("resume_id"),
+            upload=request.files.get("resume_file"),
+            upload_label=(f.get("resume_label") or "").strip(),
+            path_text=(f.get("resume_path") or "").strip(),
+        )
+        resumes.attach_to_application(app_id, rid)
+    except (ValueError, FileNotFoundError, OSError) as exc:
+        flash(f"Could not save resume: {exc}", "error")
+        return redirect(url_for("main.detail", app_id=app_id))
+    if rid:
+        row = resumes.get(rid)
+        flash(f"Resume recorded: {row['label']}.", "ok")
+    else:
+        flash("Cleared sent-resume link.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id))
 
 
 @bp.route("/application/add", methods=["POST"])
@@ -1385,13 +1414,15 @@ def paste_job():
     description used for match scoring and fit analysis.
     """
     rd = _readiness()
+    resume_lib = resumes.ensure_defaults()
     if request.method == "GET":
         # Query params (from a Job Alerts "Capture" link) prefill the form.
         prefill = {k: request.args.get(k, "")
                    for k in ("url", "title", "company", "location", "salary")}
         return render_template("paste.html", statuses=STATUSES,
                                ai_on=ai.is_configured(), ready=rd,
-                               form=prefill, duplicates=None)
+                               form=prefill, duplicates=None,
+                               resume_lib=resume_lib)
 
     if not rd["ready"]:
         for msg in rd["issues"]:
@@ -1427,6 +1458,37 @@ def paste_job():
     if not company:
         company = "(unknown)"
 
+    def _form_ctx(**extra):
+        return {
+            "url": url, "description": text, "title": title,
+            "company": company, "location": location, "salary": salary,
+            "status": f.get("status", "saved"),
+            "source": (f.get("source") or "").strip(),
+            "autogen": bool(f.get("autogen")),
+            "starred": bool(f.get("starred")),
+            "resume_id": f.get("resume_id") or "",
+            "resume_label": (f.get("resume_label") or "").strip(),
+            "resume_path": (f.get("resume_path") or "").strip(),
+            **extra,
+        }
+
+    # Resolve which resume was sent (optional). Same file content → same library row.
+    resume_id = None
+    try:
+        resume_id = resumes.resolve_selection(
+            resume_id=f.get("resume_id"),
+            upload=request.files.get("resume_file"),
+            upload_label=(f.get("resume_label") or "").strip(),
+            path_text=(f.get("resume_path") or "").strip(),
+        )
+    except (ValueError, FileNotFoundError, OSError) as exc:
+        flash(f"Resume not saved: {exc}", "error")
+        return render_template(
+            "paste.html", statuses=STATUSES, ai_on=ai.is_configured(),
+            ready=rd, duplicates=None, form=_form_ctx(),
+            resume_lib=resumes.list_resumes(),
+        )
+
     # Warn if an application with the same title + company already exists, but
     # let the user proceed (re-applying, or a genuinely different posting). The
     # "Proceed anyway" submit resends with confirm_duplicate=1 to skip this.
@@ -1435,15 +1497,8 @@ def paste_job():
         if duplicates:
             return render_template(
                 "paste.html", statuses=STATUSES, ai_on=ai.is_configured(),
-                ready=rd, duplicates=duplicates,
-                form={
-                    "url": url, "description": text, "title": title,
-                    "company": company, "location": location, "salary": salary,
-                    "status": f.get("status", "saved"),
-                    "source": (f.get("source") or "").strip(),
-                    "autogen": bool(f.get("autogen")),
-                    "starred": bool(f.get("starred")),
-                },
+                ready=rd, duplicates=duplicates, form=_form_ctx(),
+                resume_lib=resumes.list_resumes(),
             )
 
     # Prefer a source auto-detected from the URL (e.g. linkedin, alljobs,
@@ -1457,10 +1512,15 @@ def paste_job():
         company=company, title=title, location=location, url=url,
         description=text, salary=salary, source=source,
         status=f.get("status", "saved"), match_score=score,
+        resume_id=resume_id,
     )
     if f.get("starred"):
         tracker.set_star(app_id, True)
     flash(f"Captured job as #{app_id}.", "ok")
+    if resume_id:
+        row = resumes.get(resume_id)
+        if row:
+            flash(f"Linked resume: {row['label']}.", "ok")
 
     # Auto-run the most useful AI artefacts right after capture (opt-out via the
     # checkbox). Company research and fit analysis are bilingual.

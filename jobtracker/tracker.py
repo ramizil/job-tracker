@@ -24,6 +24,7 @@ def add_application(
     status: str = "saved",
     match_score: float | None = None,
     resume_version: str = "",
+    resume_id: int | None = None,
     contact: str = "",
     date_applied: str | None = None,
     notes: str = "",
@@ -33,18 +34,26 @@ def add_application(
     ts = now_iso()
     if status != "saved" and not date_applied:
         date_applied = ts
+    # Keep resume_version in sync with the library label when a resume_id is set.
+    if resume_id and not resume_version:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT label FROM resumes WHERE id=?", (resume_id,)
+            ).fetchone()
+            if row:
+                resume_version = row["label"] or ""
     with get_connection() as conn:
         try:
             cur = conn.execute(
                 """
                 INSERT INTO applications
                   (company, title, location, source, url, description, salary,
-                   status, match_score, resume_version, contact, date_found,
-                   date_applied, notes, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                   status, match_score, resume_version, resume_id, contact,
+                   date_found, date_applied, notes, created_at, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (company, title, location, source, url, description, salary,
-                 status, match_score, resume_version, contact, ts,
+                 status, match_score, resume_version, resume_id, contact, ts,
                  date_applied, notes, ts, ts),
             )
             app_id = int(cur.lastrowid)

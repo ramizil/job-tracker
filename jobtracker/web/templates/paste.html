@@ -32,7 +32,8 @@
   <a href="{{ url_for('main.settings') }}">Settings</a> to auto-extract them.{% endif %}
 </p>
 
-<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"{% if ai_on %} data-loading="Capturing & generating with Gemini — company research, fit, recruiter note & cover letter. This can take a minute…"{% endif %}>
+<form class="addform paste-form" method="post" action="{{ url_for('main.paste_job') }}"
+      enctype="multipart/form-data"{% if ai_on %} data-loading="Capturing & generating with Gemini — company research, fit, recruiter note & cover letter. This can take a minute…"{% endif %}>
   {% if duplicates %}<input type="hidden" name="confirm_duplicate" value="1">{% endif %}
   <label class="fld">
     <span>Source URL <em>(where you copied it from)</em></span>
@@ -59,6 +60,39 @@
       <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == (form.get('status') or 'saved') }}>{{ s }}</option>{% endfor %}</select>
       <input name="source" placeholder="Source (auto-detected from URL, e.g. linkedin)" value="{{ form.get('source','') }}">
     </div>
+  </fieldset>
+
+  <fieldset class="paste-meta resume-sent">
+    <legend>Resume sent <em>— which CV you used / will use for this job</em></legend>
+    <p class="muted sm" style="margin:0 0 8px">Each unique file is stored once. Pick an existing resume or add a new file —
+      selecting the same file again just reuses it (ready for later stats).</p>
+    <label class="fld">
+      <span>From library</span>
+      <select name="resume_id">
+        <option value="">— none / decide later —</option>
+        {% for r in resume_lib %}
+        <option value="{{ r.id }}" {{ 'selected' if form.get('resume_id')|string == r.id|string }}>
+          {{ r.label }}{% if r.original_name and r.original_name != r.label %} ({{ r.original_name }}){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="row">
+      <label class="fld" style="flex:1">
+        <span>Or upload a new file</span>
+        <input type="file" name="resume_file" accept=".pdf,.html,.htm,.docx,.txt,.md">
+      </label>
+      <label class="fld" style="flex:1">
+        <span>Label for new file <em>(optional)</em></span>
+        <input name="resume_label" placeholder="e.g. English CV · automation focus"
+               value="{{ form.get('resume_label','') }}">
+      </label>
+    </div>
+    <label class="fld">
+      <span>Or path on this machine <em>(optional — imported into the library)</em></span>
+      <input name="resume_path" type="text" placeholder="/path/to/your-cv.pdf"
+             value="{{ form.get('resume_path','') }}">
+    </label>
   </fieldset>
 
   {% if ai_on %}

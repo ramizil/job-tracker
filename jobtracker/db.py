@@ -120,6 +120,20 @@ CREATE TABLE IF NOT EXISTS search_meta (
     seen       INTEGER DEFAULT 0,
     updated_at TEXT NOT NULL
 );
+
+-- Resume library: each unique CV file stored once (content_hash dedupe).
+-- Applications point at a resume via applications.resume_id for later stats.
+CREATE TABLE IF NOT EXISTS resumes (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    label         TEXT NOT NULL,
+    content_hash  TEXT NOT NULL UNIQUE,
+    filename      TEXT NOT NULL,
+    original_name TEXT,
+    source_path   TEXT,
+    bytes         INTEGER,
+    created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_resumes_hash ON resumes(content_hash);
 """
 
 
@@ -169,6 +183,7 @@ EXTRA_COLUMNS: dict[str, str] = {
     "feedback_request_at": "TEXT",
     "rejection_note": "TEXT",      # free-text note captured on rejection
     "starred": "INTEGER DEFAULT 0",  # preferred / favourite job flag
+    "resume_id": "INTEGER",          # FK → resumes.id (which CV was sent)
 }
 
 
