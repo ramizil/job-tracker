@@ -634,14 +634,33 @@ def set_recruiter_note(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
-def set_interview_prep(app_id: int, text: str) -> bool:
-    """Persist (generated or edited) interview / test prep guide."""
+def set_interview_prep(app_id: int, data: str | dict[str, Any]) -> bool:
+    """Persist interview / test prep (bilingual JSON dict or legacy Markdown)."""
+    import json
+    payload = (json.dumps(data, ensure_ascii=False)
+               if isinstance(data, dict) else data)
     with get_connection() as conn:
         cur = conn.execute(
             "UPDATE applications SET interview_prep=?, interview_prep_at=?, updated_at=? WHERE id=?",
-            (text, now_iso(), now_iso(), app_id),
+            (payload, now_iso(), now_iso(), app_id),
         )
         return cur.rowcount > 0
+
+
+def get_interview_prep(app_id: int) -> dict[str, Any] | None:
+    """Return prep as {en, he} (legacy plain Markdown → en only)."""
+    import json
+    row = get_application(app_id)
+    if not row or not row["interview_prep"]:
+        return None
+    raw = row["interview_prep"]
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and ("en" in data or "he" in data):
+            return data
+    except (TypeError, ValueError):
+        pass
+    return {"en": raw, "he": ""}
 
 
 def set_mock_interview(app_id: int, text: str) -> bool:
@@ -654,14 +673,33 @@ def set_mock_interview(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
-def set_qa_exercise(app_id: int, text: str) -> bool:
-    """Persist a (generated or edited) QA testing-scenario exercise (Markdown)."""
+def set_qa_exercise(app_id: int, data: str | dict[str, Any]) -> bool:
+    """Persist QA exercise (bilingual JSON dict or legacy Markdown)."""
+    import json
+    payload = (json.dumps(data, ensure_ascii=False)
+               if isinstance(data, dict) else data)
     with get_connection() as conn:
         cur = conn.execute(
             "UPDATE applications SET qa_exercise=?, qa_exercise_at=?, updated_at=? WHERE id=?",
-            (text, now_iso(), now_iso(), app_id),
+            (payload, now_iso(), now_iso(), app_id),
         )
         return cur.rowcount > 0
+
+
+def get_qa_exercise(app_id: int) -> dict[str, Any] | None:
+    """Return exercise as {en, he} (legacy plain Markdown → en only)."""
+    import json
+    row = get_application(app_id)
+    if not row or not row["qa_exercise"]:
+        return None
+    raw = row["qa_exercise"]
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and ("en" in data or "he" in data):
+            return data
+    except (TypeError, ValueError):
+        pass
+    return {"en": raw, "he": ""}
 
 
 def set_pitch(app_id: int, script: str, notes: str | None = None,

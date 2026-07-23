@@ -314,9 +314,12 @@
               <span><b>ATS keyword check</b><br><span class="muted">re-run alone (also included automatically with Fit analysis)</span></span></label>
           </div>
           <input name="instructions" placeholder="optional instructions (used by cover letter / recruiter note / interview prep)">
-          <p class="muted sm" style="margin:2px 0 0">Language applies to cover letter / interview prep / mock. <b>Fit analysis</b> is always English + Hebrew; <b>Note to recruiter</b> always includes an English version.</p>
+          <p class="muted sm" style="margin:2px 0 0">Language applies to <b>cover letter</b> only.
+            <b>Fit analysis</b>, <b>Company research</b>, <b>Interview prep</b>, <b>Mock interview</b>
+            and <b>QA exercise</b> are always English + Hebrew. <b>Note to recruiter</b> always
+            includes an English version. <b>Pitch</b> stays Hebrew (spoken script).</p>
           <div class="row">
-            <label class="lang">Language
+            <label class="lang">Cover letter language
               <select name="language"><option value="en">English</option><option value="he">עברית</option></select>
             </label>
             <button class="btn primary" type="submit">Generate selected →</button>
@@ -576,23 +579,44 @@
       <div class="panel-head"><h2>🎤 Interview &amp; test prep</h2>
         {% if app.interview_prep_at %}<span class="muted sm">saved {{ (app.interview_prep_at or '')[:16].replace('T',' ') }}</span>{% endif %}
       </div>
-      <p class="muted">Likely questions, take-home/test tips and practical questions to ask — generated from this job and your resume. Handy once you reach the interview or test stage.</p>
+      <p class="muted">Likely questions, take-home/test tips and practical questions to ask —
+        English + Hebrew side by side (like Company research).</p>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
-      {% elif not app.interview_prep %}
+      {% elif not interview_prep %}
         <p class="muted">Tick <b>Interview &amp; test prep</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
+        <form method="post" action="{{ url_for('main.interview_prep', app_id=app.id) }}" class="mt"
+              data-loading="Generating bilingual interview prep…">
+          <button class="btn primary" type="submit">🎤 Generate prep (EN + HE)</button>
+        </form>
       {% else %}
-        <div class="md mt" dir="auto">{{ app.interview_prep | md | safe }}</div>
+        {% if interview_prep.he %}
+        <div class="bi cols mt">
+          <div class="md" dir="ltr">{{ interview_prep.en | md | safe }}</div>
+          <div class="md he">{{ interview_prep.he | md | safe }}</div>
+        </div>
+        {% else %}
+        <div class="md mt" dir="auto">{{ interview_prep.en | md | safe }}</div>
+        {% endif %}
         <details class="mt">
           <summary class="btn sm">Edit prep</summary>
           <form method="post" action="{{ url_for('main.interview_prep_save', app_id=app.id) }}" class="stack mt">
-            <textarea name="text" rows="16" class="gen-text" dir="auto">{{ app.interview_prep }}</textarea>
+            {% if interview_prep.he or interview_prep.language == 'bi' %}
+            <label class="muted sm">English<textarea name="text_en" rows="14" class="gen-text" dir="ltr">{{ interview_prep.en }}</textarea></label>
+            <label class="muted sm">עברית<textarea name="text_he" rows="14" class="gen-text" dir="rtl">{{ interview_prep.he }}</textarea></label>
+            {% else %}
+            <textarea name="text" rows="16" class="gen-text" dir="auto">{{ interview_prep.en }}</textarea>
+            {% endif %}
             <div class="actions">
               <button class="btn" type="submit">Save edits</button>
-              <button class="btn sm" type="button" data-copy="prev">Copy</button>
             </div>
           </form>
         </details>
+        <form method="post" action="{{ url_for('main.interview_prep', app_id=app.id) }}" class="mt"
+              data-loading="Regenerating bilingual interview prep…"
+              onsubmit="return confirm('Regenerate prep? The current English + Hebrew versions will be replaced.')">
+          <button class="btn sm" type="submit">↻ Regenerate (EN + HE)</button>
+        </form>
       {% endif %}
     </section>
 
@@ -600,29 +624,63 @@
       <div class="panel-head"><h2>🎙️ Mock interview</h2>
         {% if app.mock_interview_at %}<span class="muted sm">saved {{ (app.mock_interview_at or '')[:16].replace('T',' ') }}</span>{% endif %}
       </div>
-      <p class="muted">A natural, relaxed interview simulation built from your resume — starts with “Tell me about yourself”. You can listen to it like a recording.</p>
+      <p class="muted">A natural interview simulation from your resume — English + Hebrew side by side.
+        Starts with “Tell me about yourself”. Listen in either language.</p>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
       {% elif not (mock and mock.qa) %}
         <p class="muted">Tick <b>Mock interview</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
+        <form method="post" action="{{ url_for('main.mock_interview', app_id=app.id) }}" class="mt"
+              data-loading="Generating bilingual mock interview…">
+          <button class="btn primary" type="submit">🎙️ Generate mock (EN + HE)</button>
+        </form>
       {% else %}
-        <div class="mi-player mt" data-lang="{{ 'he-IL' if mock.language == 'he' else 'en-US' }}">
+        {% set mock_bi = mock.language == 'bi' or (mock.qa and mock.qa[0].q_he) %}
+        <div class="mi-player mt" data-lang="en-US" data-bi="{{ '1' if mock_bi else '0' }}">
           <button class="btn sm primary" type="button" id="mi-play">▶ Listen</button>
           <button class="btn sm" type="button" id="mi-pause" disabled>⏸ Pause</button>
           <button class="btn sm" type="button" id="mi-stop" disabled>⏹ Stop</button>
+          {% if mock_bi %}
+          <label class="lang">Listen in
+            <select id="mi-listen-lang">
+              <option value="en-US" selected>English</option>
+              <option value="he-IL">עברית</option>
+            </select>
+          </label>
+          {% endif %}
           <label class="lang">Speed
             <select id="mi-rate"><option value="0.9">0.9×</option><option value="1" selected>1×</option><option value="1.1">1.1×</option><option value="1.25">1.25×</option></select>
           </label>
           <span class="muted sm" id="mi-status"></span>
         </div>
-        <div class="mock-qa mt" dir="auto">
+        <div class="mock-qa mt">
           {% for p in mock.qa %}
           <div class="mi-pair{{ ' first' if loop.first }}">
-            <p class="mi-q"><span class="mi-tag">Q{{ loop.index }}</span> {{ p.q }}</p>
-            <p class="mi-a">{{ p.a }}</p>
+            {% if p.q_he or p.a_he %}
+            <div class="bi">
+              <div dir="ltr">
+                <p class="mi-q" data-side="en"><span class="mi-tag">Q{{ loop.index }}</span> {{ p.q }}</p>
+                <p class="mi-a" data-side="en">{{ p.a }}</p>
+              </div>
+              <div class="he">
+                <p class="mi-q" data-side="he"><span class="mi-tag">ש{{ loop.index }}</span> {{ p.q_he or p.q }}</p>
+                <p class="mi-a" data-side="he">{{ p.a_he or p.a }}</p>
+              </div>
+            </div>
+            {% else %}
+            <div dir="auto">
+              <p class="mi-q" data-side="en"><span class="mi-tag">Q{{ loop.index }}</span> {{ p.q }}</p>
+              <p class="mi-a" data-side="en">{{ p.a }}</p>
+            </div>
+            {% endif %}
           </div>
           {% endfor %}
         </div>
+        <form method="post" action="{{ url_for('main.mock_interview', app_id=app.id) }}" class="mt"
+              data-loading="Regenerating bilingual mock interview…"
+              onsubmit="return confirm('Regenerate mock interview? Current EN + HE will be replaced.')">
+          <button class="btn sm" type="submit">↻ Regenerate (EN + HE)</button>
+        </form>
       {% endif %}
     </section>
 
@@ -630,37 +688,41 @@
       <div class="panel-head"><h2>🧪 QA exercise</h2>
         {% if app.qa_exercise_at %}<span class="muted sm">saved {{ (app.qa_exercise_at or '')[:16].replace('T',' ') }}</span>{% endif %}
       </div>
-      <p class="muted">A hands-on testing-scenario exercise in this company's domain — business rules,
-        full test-case suite (Happy Path / Negative / Boundary / Edge) and data-driven automation
-        pseudo-code. Practice it like the real interview task.</p>
+      <p class="muted">A hands-on testing-scenario exercise in this company's domain — English + Hebrew
+        side by side. Full test-case suite and data-driven automation pseudo-code.</p>
       {% if not ai_on %}
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to generate one.</p>
-      {% elif not app.qa_exercise %}
+      {% elif not qa_exercise %}
         <p class="muted">Tick <b>QA exercise</b> in <a href="#ai-generate">Generate with AI</a> above, then click Generate.</p>
         <form method="post" action="{{ url_for('main.qa_exercise', app_id=app.id) }}" class="mt"
-              data-loading="Building a practice QA exercise for this job…">
-          <label class="lang">Language
-            <select name="language"><option value="he" selected>עברית</option><option value="en">English</option></select>
-          </label>
-          <button class="btn primary" type="submit">🧪 Generate exercise (AI)</button>
+              data-loading="Building a bilingual practice QA exercise…">
+          <button class="btn primary" type="submit">🧪 Generate exercise (EN + HE)</button>
         </form>
       {% else %}
-        <div class="md mt" dir="auto">{{ app.qa_exercise | md | safe }}</div>
+        {% if qa_exercise.he %}
+        <div class="bi cols mt">
+          <div class="md" dir="ltr">{{ qa_exercise.en | md | safe }}</div>
+          <div class="md he">{{ qa_exercise.he | md | safe }}</div>
+        </div>
+        {% else %}
+        <div class="md mt" dir="auto">{{ qa_exercise.en | md | safe }}</div>
+        {% endif %}
         <form method="post" action="{{ url_for('main.qa_exercise', app_id=app.id) }}" class="mt"
-              data-loading="Building a fresh QA exercise for this job…"
-              onsubmit="return confirm('Generate a new exercise? The current one will be replaced.')">
-          <label class="lang">Language
-            <select name="language"><option value="he" selected>עברית</option><option value="en">English</option></select>
-          </label>
-          <button class="btn sm" type="submit">↻ New exercise</button>
+              data-loading="Building a fresh bilingual QA exercise…"
+              onsubmit="return confirm('Generate a new exercise? The current EN + HE versions will be replaced.')">
+          <button class="btn sm" type="submit">↻ New exercise (EN + HE)</button>
         </form>
         <details class="mt">
           <summary class="btn sm">Edit exercise</summary>
           <form method="post" action="{{ url_for('main.qa_exercise_save', app_id=app.id) }}" class="stack mt">
-            <textarea name="text" rows="16" class="gen-text" dir="auto">{{ app.qa_exercise }}</textarea>
+            {% if qa_exercise.he or qa_exercise.language == 'bi' %}
+            <label class="muted sm">English<textarea name="text_en" rows="14" class="gen-text" dir="ltr">{{ qa_exercise.en }}</textarea></label>
+            <label class="muted sm">עברית<textarea name="text_he" rows="14" class="gen-text" dir="rtl">{{ qa_exercise.he }}</textarea></label>
+            {% else %}
+            <textarea name="text" rows="16" class="gen-text" dir="auto">{{ qa_exercise.en }}</textarea>
+            {% endif %}
             <div class="actions">
               <button class="btn" type="submit">Save edits</button>
-              <button class="btn sm" type="button" data-copy="prev">Copy</button>
             </div>
           </form>
         </details>
@@ -871,8 +933,8 @@
   var pauseBtn = document.getElementById('mi-pause');
   var stopBtn = document.getElementById('mi-stop');
   var rateSel = document.getElementById('mi-rate');
+  var listenLang = document.getElementById('mi-listen-lang');
   var status = document.getElementById('mi-status');
-  var lang = player.getAttribute('data-lang') || 'en-US';
 
   if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
     status.textContent = 'Audio playback not supported in this browser.';
@@ -882,7 +944,14 @@
 
   var pairs = Array.prototype.slice.call(document.querySelectorAll('.mock-qa .mi-pair'));
 
-  function pickVoices() {
+  function currentLang() {
+    return (listenLang && listenLang.value) || player.getAttribute('data-lang') || 'en-US';
+  }
+  function currentSide() {
+    return currentLang().indexOf('he') === 0 ? 'he' : 'en';
+  }
+
+  function pickVoices(lang) {
     var voices = synth.getVoices() || [];
     var base = lang.split('-')[0];
     var match = voices.filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf(base) === 0; });
@@ -890,7 +959,9 @@
   }
 
   function buildQueue() {
-    var v = pickVoices();
+    var lang = currentLang();
+    var side = currentSide();
+    var v = pickVoices(lang);
     if (v.count === 0) {
       status.textContent = 'No ' + lang + ' voice installed — using the default voice.';
     } else {
@@ -899,12 +970,13 @@
     var rate = parseFloat(rateSel.value) || 1;
     var utts = [];
     pairs.forEach(function (pair) {
-      var q = pair.querySelector('.mi-q');
-      var a = pair.querySelector('.mi-a');
+      var q = pair.querySelector('.mi-q[data-side="' + side + '"]') || pair.querySelector('.mi-q');
+      var a = pair.querySelector('.mi-a[data-side="' + side + '"]') || pair.querySelector('.mi-a');
       [[q, v.interviewer, 0.95], [a, v.candidate, 1.05]].forEach(function (row) {
         var el = row[0];
         if (!el) return;
-        var u = new SpeechSynthesisUtterance(el.textContent.replace(/^Q\d+\s*/, ''));
+        var u = new SpeechSynthesisUtterance(
+          el.textContent.replace(/^(Q|ש)\d+\s*/, ''));
         u.lang = lang;
         if (row[1]) u.voice = row[1];
         u.pitch = row[2];

@@ -1507,6 +1507,8 @@ def detail(app_id: int):
         base_pitch=pitch.load_base_pitch(),
         salary=tracker.get_salary_research(app_id),
         company_brief=tracker.get_company_brief(app_id),
+        interview_prep=tracker.get_interview_prep(app_id),
+        qa_exercise=tracker.get_qa_exercise(app_id),
         ats=tracker.get_ats_check(app_id),
         resume_lib=resume_lib, sent_resume=sent_resume,
         resume_history=resume_history,
@@ -2087,15 +2089,13 @@ def interview_prep(app_id: int):
     if not r:
         abort(404)
     instructions = request.form.get("instructions", "").strip()
-    language = request.form.get("language", "en")
     try:
-        text = ai.interview_prep(
+        data = ai.interview_prep(
             title=r["title"], company=r["company"], location=r["location"] or "",
             description=r["description"] or "", instructions=instructions,
-            language=language,
         )
-        tracker.set_interview_prep(app_id, text)
-        flash("Interview prep generated.", "ok")
+        tracker.set_interview_prep(app_id, data)
+        flash("Interview prep generated (English + Hebrew).", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#prep")
@@ -2105,7 +2105,12 @@ def interview_prep(app_id: int):
 def interview_prep_save(app_id: int):
     if not tracker.get_application(app_id):
         abort(404)
-    tracker.set_interview_prep(app_id, request.form.get("text", ""))
+    en = (request.form.get("text_en") or request.form.get("text") or "").strip()
+    he = (request.form.get("text_he") or "").strip()
+    if he or (request.form.get("text_en") is not None):
+        tracker.set_interview_prep(app_id, {"en": en, "he": he, "language": "bi"})
+    else:
+        tracker.set_interview_prep(app_id, en)
     flash("Interview prep saved.", "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#prep")
 
@@ -2115,14 +2120,13 @@ def mock_interview(app_id: int):
     r = tracker.get_application(app_id)
     if not r:
         abort(404)
-    language = request.form.get("language", "en")
     try:
         data = ai.mock_interview(
             title=r["title"], company=r["company"], location=r["location"] or "",
-            description=r["description"] or "", language=language,
+            description=r["description"] or "",
         )
         tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
-        flash("Mock interview generated.", "ok")
+        flash("Mock interview generated (English + Hebrew).", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#mock")
@@ -2134,14 +2138,13 @@ def qa_exercise(app_id: int):
     r = tracker.get_application(app_id)
     if not r:
         abort(404)
-    language = request.form.get("language", "he")
     try:
-        text = ai.qa_exercise(
+        data = ai.qa_exercise(
             title=r["title"], company=r["company"], location=r["location"] or "",
-            description=r["description"] or "", language=language,
+            description=r["description"] or "",
         )
-        tracker.set_qa_exercise(app_id, text)
-        flash("QA exercise generated.", "ok")
+        tracker.set_qa_exercise(app_id, data)
+        flash("QA exercise generated (English + Hebrew).", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#exercise")
@@ -2151,7 +2154,12 @@ def qa_exercise(app_id: int):
 def qa_exercise_save(app_id: int):
     if not tracker.get_application(app_id):
         abort(404)
-    tracker.set_qa_exercise(app_id, request.form.get("text", ""))
+    en = (request.form.get("text_en") or request.form.get("text") or "").strip()
+    he = (request.form.get("text_he") or "").strip()
+    if he or (request.form.get("text_en") is not None):
+        tracker.set_qa_exercise(app_id, {"en": en, "he": he, "language": "bi"})
+    else:
+        tracker.set_qa_exercise(app_id, en)
     flash("QA exercise saved.", "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#exercise")
 
@@ -2179,9 +2187,9 @@ _AUTOGEN_GAP_S = 1.0
 def _generate_one(app_id, key, r, language="en", instructions=""):
     """Generate a single AI artefact and persist it. Raises on failure.
 
-    ``company`` honours the given language (so callers can force Hebrew);
-    fit analysis is always bilingual and the recruiter note always includes an
-    English version, regardless of ``language``.
+    Fit analysis, company research, interview prep, mock interview and QA
+    exercise are always bilingual (EN+HE). The recruiter note always includes
+    an English version. ``language`` still applies to cover letter.
     """
     title, company = r["title"], r["company"]
     location, description = r["location"] or "", r["description"] or ""
@@ -2203,16 +2211,16 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
     elif key == "prep":
         tracker.set_interview_prep(app_id, ai.interview_prep(
             title=title, company=company, location=location,
-            description=description, instructions=instructions, language=language))
+            description=description, instructions=instructions))
     elif key == "mock":
         data = ai.mock_interview(
             title=title, company=company, location=location,
-            description=description, language=language)
+            description=description)
         tracker.set_mock_interview(app_id, json.dumps(data, ensure_ascii=False))
     elif key == "exercise":
         tracker.set_qa_exercise(app_id, ai.qa_exercise(
             title=title, company=company, location=location,
-            description=description, language=language))
+            description=description))
     elif key == "pitch":
         base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
         res = ai.tailor_pitch(

@@ -931,8 +931,8 @@ lists, keep it skimmable):
 ## Quick prep checklist
 - 4-6 actionable things to review/practise before the interview.
 
-Write everything in {lang} (natural, professional {lang}). Output Markdown only,
-no preamble.
+Write in English ONLY (a Hebrew version is produced separately). Output Markdown
+only, no preamble.
 
 {extra}JOB:
 Title: {title}
@@ -945,22 +945,42 @@ CANDIDATE RESUME (plain text):
 {resume}
 """
 
+_INTERVIEW_PREP_TRANSLATE_HE = """Translate the following interview prep guide into
+natural, professional Hebrew. Keep the SAME Markdown structure and sections, but
+use Hebrew section headings (e.g. ## שאלות טכניות צפויות, ## שאלות התנהגותיות /
+התאמה, ## מבחן בית / מבחן חי, ## איך להתמודד עם פערים, ## שאלות פרקטיות לשאול
+אותם, ## צ'קליסט הכנה מהיר). Do NOT add or remove facts. Output Hebrew Markdown
+only, no code fences.
+
+ENGLISH PREP GUIDE:
+{brief}
+"""
+
 
 def interview_prep(*, title: str, company: str, location: str = "",
                    description: str = "", instructions: str = "",
-                   resume: str | None = None, language: str = "en") -> str:
-    """Generate an interview / test preparation guide (Markdown)."""
+                   resume: str | None = None, language: str = "en"
+                   ) -> dict[str, Any]:
+    """Generate a bilingual interview / test prep guide (Markdown).
+
+    Returns ``{"en", "he", "language": "bi"}``. English is authored first; Hebrew
+    is a faithful translation. ``language`` is accepted for API compatibility
+    but both languages are always produced.
+    """
     extra = f"ADDITIONAL INSTRUCTIONS:\n{instructions.strip()}\n\n" if instructions.strip() else ""
     prompt = _INTERVIEW_PREP_PROMPT.format(
-        lang=_lang_name(language),
         extra=extra, title=title or "", company=company or "",
         location=location or "", description=(description or "")[:7000],
         resume=(resume or resume_text())[:9000],
     )
-    text = _generate(prompt, as_json=False).strip()
-    text = re.sub(r"^```\w*\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    return text
+    text_en = _generate(prompt, as_json=False).strip()
+    text_en = re.sub(r"^```\w*\s*", "", text_en)
+    text_en = re.sub(r"\s*```$", "", text_en)
+    he_prompt = _INTERVIEW_PREP_TRANSLATE_HE.format(brief=text_en[:12000])
+    text_he = _generate(he_prompt, as_json=False).strip()
+    text_he = re.sub(r"^```\w*\s*", "", text_he)
+    text_he = re.sub(r"\s*```$", "", text_he)
+    return {"en": text_en, "he": text_he, "language": "bi"}
 
 
 # --------------------------------------------------------------------------- #
@@ -976,14 +996,13 @@ STYLE (very important):
 - First-person answers, spoken aloud (they will be read by a text-to-speech
   voice), so keep sentences easy to say. No bullet points, no markdown inside
   answers.
-- The VERY FIRST question must be the classic opener "Tell me about yourself"
-  (translated naturally if not English), and its answer is a relaxed ~45-75s
-  personal pitch built from the resume.
+- The VERY FIRST question must be the classic opener "Tell me about yourself",
+  and its answer is a relaxed ~45-75s personal pitch built from the resume.
 - 7 to 9 questions total: mix the opener, a few role-specific technical ones,
   a couple of behavioural ones, and end with the candidate asking 1 good
   question back.
 
-Write everything in {lang} (natural, native-sounding {lang}).
+Write everything in English ONLY (a Hebrew version is produced separately).
 {bank}
 Return ONLY valid JSON with EXACTLY this shape:
 {{
@@ -1003,23 +1022,35 @@ CANDIDATE RESUME (plain text):
 {resume}
 """
 
+_MOCK_TRANSLATE_HE = """Translate this mock-interview Q&A into natural, spoken
+Hebrew (the way Israelis actually talk in interviews). Keep the SAME number of
+pairs and the SAME meaning — do not add or drop questions. Return ONLY valid
+JSON with EXACTLY this shape:
+{{
+  "qa": [
+    {{"q": "Hebrew interviewer question", "a": "Hebrew candidate answer"}}
+  ]
+}}
 
-def _mock_interview_bank_block(language: str) -> str:
-    """Prompt block injecting the curated Hebrew QA question bank (Hebrew only)."""
-    if (language or "").lower() != "he":
-        return ""
+ENGLISH INTERVIEW JSON:
+{payload}
+"""
+
+
+def _mock_interview_bank_block() -> str:
+    """Prompt block injecting classic Israeli QA questions (for EN generation)."""
     picks = question_bank.sample_interview_questions(10)
     if not picks:
         return ""
     lines = "\n".join(
-        f"- {q['q']} (כיוון לתשובה: {q['a']})" for q in picks)
+        f"- {q['q']} (answer angle: {q['a']})" for q in picks)
     return f"""
-QUESTION BANK — real Israeli QA/automation interview questions (Hebrew):
-Weave 3-5 of these classic questions into the interview, picking the ones most
-relevant to THIS job, alongside your own role-specific questions. Keep their
-original Hebrew phrasing (light touch-ups allowed). Use the answer hints only
-as direction — the candidate's spoken answers must still be grounded in their
-actual resume.
+QUESTION BANK — classic Israeli QA/automation interview themes (translated
+ideas; write the English interview in natural English):
+Weave 3-5 of these themes into the interview, picking the ones most relevant
+to THIS job, alongside your own role-specific questions. Use the answer angles
+only as direction — the candidate's spoken answers must still be grounded in
+their actual resume.
 {lines}
 """
 
@@ -1027,16 +1058,14 @@ actual resume.
 def mock_interview(*, title: str, company: str, location: str = "",
                    description: str = "", resume: str | None = None,
                    language: str = "en") -> dict[str, Any]:
-    """Generate a natural mock-interview Q&A simulation grounded in the resume.
+    """Generate a bilingual mock-interview Q&A grounded in the resume.
 
-    Hebrew simulations also draw on the bundled bank of classic Israeli QA
-    interview questions (see question_bank.py), so every run mixes real
-    interviewer favourites with job-specific questions.
-    Returns {"language": "...", "qa": [{"q": ..., "a": ...}, ...]}.
+    Returns ``{"language": "bi", "qa": [{"q","a","q_he","a_he"}, ...]}``.
+    English is authored first; Hebrew is a faithful translation of the same
+    pairs. ``language`` is accepted for API compatibility but ignored.
     """
     prompt = _MOCK_INTERVIEW_PROMPT.format(
-        lang=_lang_name(language),
-        bank=_mock_interview_bank_block(language),
+        bank=_mock_interview_bank_block(),
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:7000],
         resume=(resume or resume_text())[:9000],
@@ -1048,13 +1077,35 @@ def mock_interview(*, title: str, company: str, location: str = "",
     if not isinstance(data, dict):
         raise AIError("Gemini returned an unexpected interview format. Please try again.")
     qa = data.get("qa") or []
-    clean = [
+    clean_en = [
         {"q": str(p.get("q", "")).strip(), "a": str(p.get("a", "")).strip()}
         for p in qa if isinstance(p, dict) and (p.get("q") or p.get("a"))
     ]
-    if not clean:
+    if not clean_en:
         raise AIError("Gemini didn't return any interview questions. Please try again.")
-    return {"language": (language or "en").lower(), "qa": clean}
+
+    he_raw = _generate(
+        _MOCK_TRANSLATE_HE.format(
+            payload=json.dumps({"qa": clean_en}, ensure_ascii=False)[:14000]),
+        as_json=True,
+    )
+    he_data = _parse_json(he_raw)
+    if isinstance(he_data, list):
+        he_data = {"qa": he_data}
+    he_qa = (he_data or {}).get("qa") if isinstance(he_data, dict) else None
+    if not isinstance(he_qa, list):
+        he_qa = []
+
+    merged = []
+    for i, en in enumerate(clean_en):
+        he = he_qa[i] if i < len(he_qa) and isinstance(he_qa[i], dict) else {}
+        merged.append({
+            "q": en["q"],
+            "a": en["a"],
+            "q_he": str(he.get("q", "")).strip(),
+            "a_he": str(he.get("a", "")).strip(),
+        })
+    return {"language": "bi", "qa": merged}
 
 
 # --------------------------------------------------------------------------- #
@@ -1076,15 +1127,14 @@ Follow EXACTLY the structure, depth and spirit of the EXAMPLE EXERCISE below
 3. The FULL model solution: the categorised test cases with expected results
    (boundary values spelled out exactly), a "golden tip" sentence the candidate
    can say to impress the interviewer, and the data-driven pseudo-code with a
-   simulator/API abstraction — code identifiers in English, comments may follow
-   the output language.
+   simulator/API abstraction — code identifiers in English, comments in English.
 4. A short closing note on WHY this solution impresses interviewers.
 
 Ground the scenario in the job description's domain; if it is too vague,
 invent a plausible system for that company. Do NOT copy the example's fleet
-scenario — create a NEW one. Write everything in {lang} (natural, native
-{lang}); keep standard QA terms (Happy Path, BVA, etc.) in English. Output
-Markdown only (## headings, bullet lists, one ```python code block), no
+scenario — create a NEW one. Write in English ONLY (a Hebrew version is
+produced separately); keep standard QA terms (Happy Path, BVA, etc.) in English.
+Output Markdown only (## headings, bullet lists, one ```python code block), no
 preamble.
 
 EXAMPLE EXERCISE (structure + quality bar to imitate):
@@ -1098,27 +1148,41 @@ Description:
 {description}
 """
 
+_QA_EXERCISE_TRANSLATE_HE = """Translate the following QA interview exercise into
+natural, professional Hebrew. Keep the SAME Markdown structure and sections
+(translate headings), keep the ```python code block identifiers in English, and
+translate comments inside the code to Hebrew. Do NOT add or remove facts or test
+cases. Output Hebrew Markdown only, no outer code fences around the whole doc.
+
+ENGLISH EXERCISE:
+{brief}
+"""
+
 
 def qa_exercise(*, title: str, company: str, location: str = "",
-                description: str = "", language: str = "he") -> str:
-    """Generate a practical QA testing-scenario exercise for this job (Markdown).
+                description: str = "", language: str = "he") -> dict[str, Any]:
+    """Generate a bilingual QA testing-scenario exercise for this job.
 
-    Modeled on the bundled worked example (rule-based alerting system) so the
-    output always has the full test-design + data-driven automation structure.
+    Returns ``{"en", "he", "language": "bi"}``. English is authored first; Hebrew
+    is a faithful translation. ``language`` is accepted for API compatibility
+    but both languages are always produced.
     """
     example = question_bank.load_exercise_example()
     prompt = _QA_EXERCISE_PROMPT.format(
-        lang=_lang_name(language),
         example=example[:9000],
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:7000],
     )
-    text = _generate(prompt, as_json=False).strip()
-    text = re.sub(r"^```(?:markdown|md)?\s*\n", "", text)
-    text = re.sub(r"\n```$", "", text)
-    if not text:
+    text_en = _generate(prompt, as_json=False).strip()
+    text_en = re.sub(r"^```(?:markdown|md)?\s*\n", "", text_en)
+    text_en = re.sub(r"\n```$", "", text_en)
+    if not text_en:
         raise AIError("The AI returned an empty exercise. Please try again.")
-    return text
+    he_prompt = _QA_EXERCISE_TRANSLATE_HE.format(brief=text_en[:12000])
+    text_he = _generate(he_prompt, as_json=False).strip()
+    text_he = re.sub(r"^```(?:markdown|md)?\s*\n", "", text_he)
+    text_he = re.sub(r"\n```$", "", text_he)
+    return {"en": text_en, "he": text_he, "language": "bi"}
 
 
 # --------------------------------------------------------------------------- #
