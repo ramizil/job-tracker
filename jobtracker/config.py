@@ -55,7 +55,7 @@ def _migrate_legacy_layout() -> None:
         return
     default_dir = PROFILES_DIR / DEFAULT_PROFILE
     default_dir.mkdir(parents=True)
-    for pattern in ("jobtracker.db*", "profile.yaml", "pitch.md",
+    for pattern in ("jobtracker.db*", "profile.yaml", "pitch.md", "pitch.html",
                     "built_resume.html", "usage.json", "google_token.json"):
         for src in DATA_DIR.glob(pattern):
             if src.is_file():
@@ -82,6 +82,7 @@ ENV_PATH = ROOT_ENV_PATH
 DB_PATH = PROFILE_DIR / "jobtracker.db"
 PROFILE_PATH = PROFILE_DIR / "profile.yaml"
 PITCH_PATH = PROFILE_DIR / "pitch.md"
+PITCH_HTML_PATH = PROFILE_DIR / "pitch.html"
 BUILT_RESUME_PATH = PROFILE_DIR / "built_resume.html"
 TAILORED_DIR = PROFILE_DIR / "tailored"
 
@@ -174,7 +175,7 @@ GMAIL_REJECTION_LABEL = "job-rejection"
 def reload() -> None:
     """(Re)compute per-profile paths and load the active profile's .env."""
     global ACTIVE_PROFILE, PROFILE_DIR, ENV_PATH
-    global DB_PATH, PROFILE_PATH, PITCH_PATH, BUILT_RESUME_PATH, TAILORED_DIR
+    global DB_PATH, PROFILE_PATH, PITCH_PATH, PITCH_HTML_PATH, BUILT_RESUME_PATH, TAILORED_DIR
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
     global WEB_SEARCH_SITES, SOURCES_DISABLED
     global AI_PROVIDER, AI_FALLBACK, GEMINI_API_KEY, GEMINI_MODEL
@@ -192,6 +193,7 @@ def reload() -> None:
     DB_PATH = Path(os.getenv("JOBTRACKER_DB") or PROFILE_DIR / "jobtracker.db")
     PROFILE_PATH = PROFILE_DIR / "profile.yaml"
     PITCH_PATH = PROFILE_DIR / "pitch.md"
+    PITCH_HTML_PATH = PROFILE_DIR / "pitch.html"
     BUILT_RESUME_PATH = PROFILE_DIR / "built_resume.html"
     TAILORED_DIR = PROFILE_DIR / "tailored"
     TAILORED_DIR.mkdir(exist_ok=True)

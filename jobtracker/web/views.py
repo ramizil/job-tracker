@@ -534,12 +534,36 @@ def help_page():
 @bp.route("/pitch", methods=["GET", "POST"])
 def my_pitch():
     """View / edit / listen to the global about-me pitch (interview script)."""
+    pitch.ensure_html()
     if request.method == "POST":
+        kind = (request.form.get("kind") or "text").strip()
+        if kind == "html":
+            pitch.save_html(request.form.get("html", ""), sync_text=True)
+            flash("Pitch HTML saved (text synced for Listen / AI).", "ok")
+            return redirect(url_for("main.my_pitch"))
         pitch.save_base_pitch(request.form.get("text", ""))
         flash("Pitch saved.", "ok")
-        return redirect(url_for("main.my_pitch"))
-    return render_template("pitch.html", pitch_text=pitch.load_base_pitch(),
-                           ai_on=ai.is_configured(), has_draft=pitch.has_draft())
+        return redirect(url_for("main.my_pitch", edit=1))
+    edit = request.args.get("edit") == "1"
+    return render_template(
+        "pitch.html",
+        pitch_text=pitch.load_base_pitch(),
+        pitch_html=pitch.load_html(),
+        has_html=pitch.has_html(),
+        edit_mode=edit,
+        ai_on=ai.is_configured(),
+        has_draft=pitch.has_draft(),
+    )
+
+
+@bp.route("/pitch/view")
+def pitch_view():
+    """Raw styled pitch HTML (iframe / open in tab) — same as the linked file."""
+    pitch.ensure_html()
+    html = pitch.load_html()
+    if not html:
+        abort(404)
+    return Response(html, mimetype="text/html; charset=utf-8")
 
 
 @bp.route("/pitch/draft", methods=["POST"])
@@ -550,7 +574,7 @@ def my_pitch_draft():
         flash("Drafted a new pitch from your resume.", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
-    return redirect(url_for("main.my_pitch"))
+    return redirect(url_for("main.my_pitch", edit=1))
 
 
 def _pitch_sections(text: str) -> tuple[str, list[dict]]:

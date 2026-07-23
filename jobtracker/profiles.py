@@ -18,7 +18,7 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
 
 # Files copied when a new profile "imports" from an existing one.
 # The applications DB is intentionally NOT copied — a new profile starts empty.
-_IMPORT_FILES = ("profile.yaml", "pitch.md", "built_resume.html")
+_IMPORT_FILES = ("profile.yaml", "pitch.md", "pitch.html", "built_resume.html")
 
 
 class ProfileError(ValueError):
