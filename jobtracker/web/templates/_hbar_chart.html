@@ -1,0 +1,24 @@
+{# Horizontal bar chart for (label, count) pairs.
+   Expects: items — list of (label, count) tuples. #}
+{% set mx = namespace(v=0, t=0) %}
+{% for _s, _n in items %}
+  {% set mx.t = mx.t + _n %}
+  {% if _n > mx.v %}{% set mx.v = _n %}{% endif %}
+{% endfor %}
+{% set maxv = mx.v or 1 %}
+{% set total = mx.t or 1 %}
+<div class="hbar-chart">
+{% for s, n in items %}
+  <div class="hbar-row" title="{{ s }}: {{ n }} · {{ ((n / total) * 100)|round(0) }}% of total">
+    <span class="hbar-label">{{ s|replace('_', ' ') }}</span>
+    <div class="hbar-track">
+      <div class="hbar-fill hbar-c{{ loop.index0 % 8 }}"
+           style="width: {{ ((n / maxv) * 100)|round(0, 'floor') }}%"></div>
+    </div>
+    <span class="hbar-num">{{ n }}</span>
+    <span class="hbar-pct">{{ ((n / total) * 100)|round(0) }}%</span>
+  </div>
+{% else %}
+  <p class="muted sm">No data yet.</p>
+{% endfor %}
+</div>

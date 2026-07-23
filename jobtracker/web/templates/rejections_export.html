@@ -44,8 +44,23 @@
   pre.prompt{white-space:pre-wrap;word-break:break-word;background:#f0f3f7;
     border:1px solid var(--rule);border-radius:10px;padding:12px 14px;
     font-size:12.5px;line-height:1.45;margin-top:6px;}
+  .hbar-chart{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+  .hbar-row{display:grid;grid-template-columns:minmax(96px,132px) 1fr 28px 40px;
+            align-items:center;gap:8px 10px;}
+  .hbar-label{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;
+              white-space:nowrap;text-transform:capitalize;}
+  .hbar-track{background:#e5e7eb;border-radius:8px;height:16px;overflow:hidden;
+              border:1px solid var(--rule);}
+  .hbar-fill{height:100%;border-radius:8px;min-width:2px;}
+  .hbar-num,.hbar-pct{font-variant-numeric:tabular-nums;font-size:12.5px;text-align:right;}
+  .hbar-num{font-weight:700;} .hbar-pct{color:var(--muted);}
+  .hbar-c0{background:#2563eb} .hbar-c1{background:#dc2626}
+  .hbar-c2{background:#ca8a04} .hbar-c3{background:#9333ea}
+  .hbar-c4{background:#0d9488} .hbar-c5{background:#ea580c}
+  .hbar-c6{background:#16a34a} .hbar-c7{background:#64748b}
   @media(max-width:640px){.bi,.grid2{grid-template-columns:1fr}
-    .he{border-top:1px dashed var(--rule);padding-top:4px}}
+    .he{border-top:1px dashed var(--rule);padding-top:4px}
+    .hbar-row{grid-template-columns:minmax(80px,110px) 1fr 24px 36px}}
   @media print{body{background:#fff;padding:6px}.panel{box-shadow:none}}
 </style>
 </head>
@@ -105,15 +120,13 @@
   <div class="grid2">
     <div class="panel">
       <h2>By stage</h2>
-      <table><tbody>
-      {% for s, n in baseline.by_stage %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
-      </tbody></table>
+      <p class="muted" style="margin:0 0 8px">Where in the process rejections happen</p>
+      {% with items=baseline.by_stage %}{% include "_hbar_chart.html" %}{% endwith %}
     </div>
     <div class="panel">
       <h2>By reason</h2>
-      <table><tbody>
-      {% for s, n in baseline.by_reason %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
-      </tbody></table>
+      <p class="muted" style="margin:0 0 8px">Why companies said no (when known)</p>
+      {% with items=baseline.by_reason %}{% include "_hbar_chart.html" %}{% endwith %}
     </div>
   </div>
 

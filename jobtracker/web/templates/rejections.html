@@ -85,15 +85,13 @@
 <div class="grid2">
   <section class="panel">
     <h2>By stage</h2>
-    <table class="mini"><tbody>
-    {% for s, n in baseline.by_stage %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
-    </tbody></table>
+    <p class="muted sm" style="margin:0 0 8px">Where in the process rejections happen</p>
+    {% with items=baseline.by_stage %}{% include "_hbar_chart.html" %}{% endwith %}
   </section>
   <section class="panel">
     <h2>By reason</h2>
-    <table class="mini"><tbody>
-    {% for s, n in baseline.by_reason %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
-    </tbody></table>
+    <p class="muted sm" style="margin:0 0 8px">Why companies said no (when known)</p>
+    {% with items=baseline.by_reason %}{% include "_hbar_chart.html" %}{% endwith %}
   </section>
 </div>
 

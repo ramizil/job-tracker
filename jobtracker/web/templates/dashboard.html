@@ -85,13 +85,9 @@
          title="AI post-mortem of every rejection + overall patterns and action plan">🧠 Rejection insights</a></div>
     {% if rej_stage %}
       <h3>By stage</h3>
-      <table class="mini"><tbody>
-      {% for s, n in rej_stage %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
-      </tbody></table>
-      <h3>By reason</h3>
-      <table class="mini"><tbody>
-      {% for s, n in rej_reason %}<tr><td>{{ s }}</td><td class="r">{{ n }}</td></tr>{% endfor %}
-      </tbody></table>
+      {% with items=rej_stage %}{% include "_hbar_chart.html" %}{% endwith %}
+      <h3 style="margin-top:14px">By reason</h3>
+      {% with items=rej_reason %}{% include "_hbar_chart.html" %}{% endwith %}
     {% else %}
       <p class="muted">No rejections logged yet.</p>
     {% endif %}

@@ -440,6 +440,46 @@ html.table-dense .alert-comment-input{padding:3px 6px}
 table.mini{width:100%;border-collapse:collapse;font-size:13px}
 table.mini td{padding:6px;border-bottom:1px solid var(--rule);vertical-align:top}
 table.mini td.r{text-align:right;color:var(--muted)}
+
+/* Horizontal bar charts (rejection stage / reason, etc.) */
+.hbar-chart{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.hbar-row{
+  display:grid;grid-template-columns:minmax(96px,132px) 1fr 28px 40px;
+  align-items:center;gap:8px 10px;
+}
+.hbar-label{
+  font-size:12.5px;font-weight:600;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-transform:capitalize;
+}
+.hbar-track{
+  background:rgba(8,14,24,.7);border-radius:8px;height:16px;
+  overflow:hidden;border:1px solid var(--rule);
+}
+.hbar-fill{
+  height:100%;border-radius:8px;min-width:2px;
+  transition:width .45s ease;
+}
+.hbar-num,.hbar-pct{
+  font-variant-numeric:tabular-nums;font-size:12.5px;text-align:right;
+}
+.hbar-num{font-weight:700;color:var(--ink)}
+.hbar-pct{color:var(--muted)}
+.hbar-c0{background:#2563eb}
+.hbar-c1{background:#dc2626}
+.hbar-c2{background:#ca8a04}
+.hbar-c3{background:#9333ea}
+.hbar-c4{background:#0d9488}
+.hbar-c5{background:#ea580c}
+.hbar-c6{background:#16a34a}
+.hbar-c7{background:#64748b}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .hbar-track{
+  background:#e5e7eb;border-color:#d1d5db;
+}
+@media(max-width:640px){
+  .hbar-row{grid-template-columns:minmax(80px,110px) 1fr 24px 36px;gap:6px 8px}
+  .hbar-label{font-size:11.5px}
+}
 .reqs td.m-strong{color:var(--ok);font-weight:700;text-transform:capitalize}
 .reqs td.m-partial{color:var(--warn);font-weight:700;text-transform:capitalize}
 .reqs td.m-gap{color:var(--bad);font-weight:700;text-transform:capitalize}
