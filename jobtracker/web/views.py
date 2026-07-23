@@ -803,13 +803,123 @@ def _rejection_verdicts_digest(rows, analyses) -> str:
     return json.dumps(items, ensure_ascii=False, indent=1)
 
 
+_RESUME_PROMPT_TRUTH_RULES = """\
+CRITICAL — DO NOT LIE OR FABRICATE:
+- Never invent employers, titles, dates, tools, metrics, certifications, or \
+projects I did not do.
+- Never claim proficiency I do not have. If a skill is weak or missing, either \
+omit it, mark it honestly as familiar/learning, or suggest a truthful way to \
+bridge the gap (course, lab, transferable work) — do not fake mastery.
+- You may only: rephrase, reorder, emphasize real experience, tighten wording, \
+add honest metrics I already have evidence for, and improve clarity/ATS \
+keywords that accurately describe what I did.
+- If an improvement cannot be made truthfully from my real background, say so \
+explicitly and propose an honest alternative (e.g. cover-letter angle or skill \
+to learn) instead of changing the resume falsely.
+- Keep my voice; preserve factual accuracy over sounding impressive."""
+
+
+def _resume_tune_prompt_for_rejection(r, analysis: dict) -> str:
+    """Copyable AI prompt: tune the resume from one rejection's improvement."""
+    improvement = (analysis.get("improvement") or "").strip()
+    if not improvement:
+        return ""
+    missed = [
+        (m.get("en") or "").strip()
+        for m in (analysis.get("missed_requirements") or [])
+        if isinstance(m, dict) and (m.get("en") or "").strip()
+    ]
+    missed_block = (
+        "\n".join(f"- {m}" for m in missed)
+        if missed else "- (none listed)"
+    )
+    company = (r["company"] or "").strip() or "Unknown company"
+    title = (r["title"] or "").strip() or "Unknown role"
+    return f"""You are helping me revise my resume after a rejection.
+
+Target role context: {title} at {company}
+
+Improvement to address (from rejection analysis):
+{improvement}
+
+Requirements that likely hurt this application:
+{missed_block}
+
+{_RESUME_PROMPT_TRUTH_RULES}
+
+Task:
+1. Propose specific, truthful resume edits (summary / bullets / skills) that \
+address the improvement above using ONLY my real experience.
+2. Show before → after for each edited bullet (or say "no truthful change \
+possible" for that bullet).
+3. List any suggested keywords only if they honestly match my background.
+4. End with a short checklist of what I should verify before saving.
+
+My current resume (paste below / attached):
+"""
+
+
+def _resume_tune_prompt_overall(overall: dict | None, analyses: dict) -> str:
+    """Copyable AI prompt from overall rejection patterns + improvements."""
+    if not overall and not any(analyses.values()):
+        return ""
+    actions = []
+    for p in (overall or {}).get("actions") or []:
+        if isinstance(p, dict) and (p.get("en") or "").strip():
+            actions.append(p["en"].strip())
+    patterns = []
+    for p in (overall or {}).get("patterns") or []:
+        if isinstance(p, dict) and (p.get("en") or "").strip():
+            patterns.append(p["en"].strip())
+    improvements = []
+    for a in analyses.values():
+        if not a:
+            continue
+        imp = (a.get("improvement") or "").strip()
+        if imp and imp not in improvements:
+            improvements.append(imp)
+    if not actions and not improvements and not patterns:
+        return ""
+    parts = ["You are helping me revise my resume using rejection insights "
+             "from my job search."]
+    if patterns:
+        parts.append("Recurring patterns:\n" +
+                     "\n".join(f"- {p}" for p in patterns[:8]))
+    if actions:
+        parts.append("Prioritised action plan:\n" +
+                     "\n".join(f"- {p}" for p in actions[:8]))
+    if improvements:
+        parts.append("Per-rejection improvements to consider:\n" +
+                     "\n".join(f"- {p}" for p in improvements[:12]))
+    parts.append(_RESUME_PROMPT_TRUTH_RULES)
+    parts.append(
+        "Task:\n"
+        "1. Propose a focused set of truthful resume changes that address the "
+        "highest-priority gaps above — no fabrications.\n"
+        "2. Prefer presentation / emphasis / ordering of REAL experience over "
+        "adding new claims.\n"
+        "3. For each change: before → after, and why it is truthful.\n"
+        "4. Call out improvements that cannot be fixed on the resume without "
+        "lying, and suggest honest next steps instead.\n"
+        "\nMy current resume (paste below / attached):\n"
+    )
+    return "\n\n".join(parts)
+
+
 @bp.route("/rejections")
 def rejections():
     rows = tracker.list_applications(status="rejected")
     analyses = {r["id"]: tracker.get_rejection_analysis(r["id"]) for r in rows}
+    overall = _load_rejection_insights()
+    resume_prompts = {
+        r["id"]: _resume_tune_prompt_for_rejection(r, analyses[r["id"]])
+        for r in rows if analyses[r["id"]] and analyses[r["id"]].get("improvement")
+    }
     return render_template(
         "rejections.html", rows=rows, analyses=analyses,
-        overall=_load_rejection_insights(),
+        overall=overall,
+        overall_resume_prompt=_resume_tune_prompt_overall(overall, analyses),
+        resume_prompts=resume_prompts,
         baseline=analytics.rejection_baseline(),
         pending=sum(1 for r in rows if not analyses[r["id"]]),
         ai_on=ai.is_configured(),
@@ -904,9 +1014,16 @@ def rejections_export():
     """Standalone HTML dashboard of the rejection insights — email-shareable."""
     rows = tracker.list_applications(status="rejected")
     analyses = {r["id"]: tracker.get_rejection_analysis(r["id"]) for r in rows}
+    overall = _load_rejection_insights()
+    resume_prompts = {
+        r["id"]: _resume_tune_prompt_for_rejection(r, analyses[r["id"]])
+        for r in rows if analyses[r["id"]] and analyses[r["id"]].get("improvement")
+    }
     html = render_template(
         "rejections_export.html", rows=rows, analyses=analyses,
-        overall=_load_rejection_insights(),
+        overall=overall,
+        overall_resume_prompt=_resume_tune_prompt_overall(overall, analyses),
+        resume_prompts=resume_prompts,
         baseline=analytics.rejection_baseline(),
         generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )

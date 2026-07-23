@@ -66,6 +66,16 @@
     <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
   {% endfor %}</ol>
   {% endif %}
+
+  {% if overall_resume_prompt %}
+  <h3>✍️ Suggested AI prompt — tune current resume</h3>
+  <p class="muted sm">Copy into ChatGPT / Claude / Gemini with your resume pasted at the end.
+    The prompt instructs the model to <b>improve presentation only</b> — never invent experience.</p>
+  <div class="rej-prompt">
+    <textarea class="rej-prompt-ta" rows="12" readonly>{{ overall_resume_prompt }}</textarea>
+    <button class="btn sm" type="button" data-copy="prev">Copy prompt</button>
+  </div>
+  {% endif %}
 </section>
 {% elif rows and ai_on %}
 <div class="panel"><p class="muted">No overall analysis yet — press
@@ -131,6 +141,17 @@
   {% if a.improvement_he %}
   <div class="bi"><div dir="ltr"><b>{{ a.improvement }}</b></div><div class="he"><b>{{ a.improvement_he }}</b></div></div>
   {% else %}<p><b>{{ a.improvement }}</b></p>{% endif %}
+
+  {% set prompt = resume_prompts.get(r.id) %}
+  {% if prompt %}
+  <h3>✍️ Suggested AI prompt for this resume</h3>
+  <p class="muted sm">Paste into an AI chat with your current resume. It asks for truthful
+    edits only — no invented skills, jobs, or metrics.</p>
+  <div class="rej-prompt">
+    <textarea class="rej-prompt-ta" rows="10" readonly>{{ prompt }}</textarea>
+    <button class="btn sm" type="button" data-copy="prev">Copy prompt</button>
+  </div>
+  {% endif %}
   {% endif %}
   {% else %}
   <p class="muted">Not analyzed yet — press “🤖 Analyze” above.</p>
@@ -139,4 +160,22 @@
 {% else %}
 <div class="panel"><p class="muted">No rejected applications — nothing to analyze (long may it last).</p></div>
 {% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  document.querySelectorAll('button[data-copy="prev"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ta = btn.previousElementSibling;
+      if (!ta) return;
+      navigator.clipboard.writeText(ta.value).then(function () {
+        var old = btn.textContent;
+        btn.textContent = 'Copied ✓';
+        setTimeout(function () { btn.textContent = old; }, 1200);
+      });
+    });
+  });
+})();
+</script>
 {% endblock %}

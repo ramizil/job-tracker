@@ -41,6 +41,9 @@
   li{margin-bottom:6px;}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   .footer{color:var(--muted);font-size:12px;text-align:center;margin-top:8px;}
+  pre.prompt{white-space:pre-wrap;word-break:break-word;background:#f0f3f7;
+    border:1px solid var(--rule);border-radius:10px;padding:12px 14px;
+    font-size:12.5px;line-height:1.45;margin-top:6px;}
   @media(max-width:640px){.bi,.grid2{grid-template-columns:1fr}
     .he{border-top:1px dashed var(--rule);padding-top:4px}}
   @media print{body{background:#fff;padding:6px}.panel{box-shadow:none}}
@@ -89,6 +92,12 @@
     <ol>{% for p in overall.actions %}
       <li>{% if p.he %}<div class="bi"><span dir="ltr">{{ p.en }}</span><span class="he">{{ p.he }}</span></div>{% else %}{{ p.en }}{% endif %}</li>
     {% endfor %}</ol>
+    {% endif %}
+
+    {% if overall_resume_prompt %}
+    <h3>✍️ Suggested AI prompt — tune current resume</h3>
+    <p class="muted">Truthful edits only — do not invent experience. Paste into an AI chat with your resume.</p>
+    <pre class="prompt">{{ overall_resume_prompt }}</pre>
     {% endif %}
   </div>
   {% endif %}
@@ -141,6 +150,12 @@
     {% if a.improvement_he %}
     <div class="bi"><div dir="ltr"><b>{{ a.improvement }}</b></div><div class="he"><b>{{ a.improvement_he }}</b></div></div>
     {% else %}<p><b>{{ a.improvement }}</b></p>{% endif %}
+    {% set prompt = resume_prompts.get(r.id) if resume_prompts else none %}
+    {% if prompt %}
+    <h3>✍️ Suggested AI prompt for this resume</h3>
+    <p class="muted">Truthful edits only — do not invent experience. Paste into an AI chat with your resume.</p>
+    <pre class="prompt">{{ prompt }}</pre>
+    {% endif %}
     {% endif %}
   </div>
   {% endif %}

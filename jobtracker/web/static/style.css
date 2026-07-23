@@ -307,6 +307,10 @@ html[data-theme="slate"] .dp-btn:hover:not(:disabled){background:rgba(29,78,216,
 .dup-warning .dw-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
 .dup-warning .dw-prev-resume{display:block;margin-top:2px;font-size:12px;opacity:.9}
 
+/* Rejection insights — copyable resume-tune prompts */
+.rej-prompt{display:flex;flex-direction:column;gap:8px;margin-top:6px;max-width:920px}
+.rej-prompt-ta{font-size:12.5px;line-height:1.45;min-height:140px;white-space:pre-wrap}
+
 /* Action digest (dashboard) */
 .digest{display:flex;align-items:center;gap:13px;padding:14px 16px;border-radius:13px;margin-bottom:16px;
   background:linear-gradient(135deg,rgba(96,165,250,.14),rgba(52,211,153,.08));border:1px solid rgba(96,165,250,.4);color:var(--ink)}
