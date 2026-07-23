@@ -664,20 +664,40 @@ def set_qa_exercise(app_id: int, text: str) -> bool:
         return cur.rowcount > 0
 
 
-def set_pitch(app_id: int, script: str, notes: str | None = None) -> bool:
+def set_pitch(app_id: int, script: str, notes: str | None = None,
+              *, prev: str | None = None) -> bool:
     """Persist the per-job about-me pitch. ``notes`` (AI suggestions) is only
-    updated when provided, so hand-edits to the script keep the last notes."""
+    updated when provided, so hand-edits to the script keep the last notes.
+
+    When ``prev`` is set (AI tailor), it is stored in ``pitch_prev`` so the UI
+    can show a styled Before / After HTML comparison.
+    """
     with get_connection() as conn:
-        if notes is None:
+        ts = now_iso()
+        if prev is not None:
+            if notes is None:
+                cur = conn.execute(
+                    """UPDATE applications
+                         SET pitch=?, pitch_prev=?, pitch_at=?, updated_at=? WHERE id=?""",
+                    (script, prev, ts, ts, app_id),
+                )
+            else:
+                cur = conn.execute(
+                    """UPDATE applications
+                         SET pitch=?, pitch_prev=?, pitch_notes=?, pitch_at=?,
+                             updated_at=? WHERE id=?""",
+                    (script, prev, notes, ts, ts, app_id),
+                )
+        elif notes is None:
             cur = conn.execute(
                 "UPDATE applications SET pitch=?, pitch_at=?, updated_at=? WHERE id=?",
-                (script, now_iso(), now_iso(), app_id),
+                (script, ts, ts, app_id),
             )
         else:
             cur = conn.execute(
                 """UPDATE applications
                      SET pitch=?, pitch_notes=?, pitch_at=?, updated_at=? WHERE id=?""",
-                (script, notes, now_iso(), now_iso(), app_id),
+                (script, notes, ts, ts, app_id),
             )
         return cur.rowcount > 0
 

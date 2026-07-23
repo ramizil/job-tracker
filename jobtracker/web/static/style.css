@@ -906,6 +906,16 @@ html[data-theme="slate"] .mail-icon.unread{filter:none}
 /* Resume compare: rendered previews */
 .cmp-frame{width:100%;height:560px;border:1px solid var(--rule);border-radius:10px;background:#fff}
 
+/* Per-job pitch Before/After HTML frames (Interview prep) */
+.pitch-html-cmp .frame-wrap.pitch-frame-sm,
+.frame-wrap.pitch-frame-sm{
+  height:min(62vh,520px);min-height:280px;resize:both;
+}
+.pitch-html-cmp .diff-pane h3{margin:0 0 8px;font-size:14px}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .pitch-notes{
+  background:#f3e8ff;border-color:#c4b5fd;
+}
+
 /* Pitch: side-by-side AI-revision compare with diff highlighting */
 .diff-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
 @media (max-width:900px){.diff-cols{grid-template-columns:1fr}}

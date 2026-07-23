@@ -671,7 +671,9 @@
       <div class="panel-head"><h2>🎤 My pitch (תסריט)</h2>
         {% if app.pitch_at %}<span class="muted sm">saved {{ (app.pitch_at or '')[:16].replace('T',' ') }}</span>{% endif %}
       </div>
-      <p class="muted">Your about-me script for this job — tailor it with AI, listen, and memorize. The base version lives on <a href="{{ url_for('main.my_pitch') }}">My Pitch</a>.</p>
+      <p class="muted">Your about-me script for this job — shown as styled HTML (same as
+        <a href="{{ url_for('main.my_pitch') }}">My Pitch</a>). Tailor with AI to get a
+        Before / After view.</p>
 
       {% if app.pitch_notes %}
       <div class="pitch-notes" dir="auto">
@@ -689,19 +691,56 @@
         </label>
         <span class="muted sm" data-tts="status"></span>
       </div>
+      {# Hidden plain text for TTS — mirrors the HTML body #}
+      <pre id="pitch-text-{{ app.id }}" class="sr-only" dir="auto" aria-hidden="true">{{ app.pitch or base_pitch }}</pre>
 
-      <form method="post" action="{{ url_for('main.pitch_save', app_id=app.id) }}" class="stack mt">
-        <textarea id="pitch-text-{{ app.id }}" name="text" rows="18" class="gen-text" dir="auto">{{ app.pitch or base_pitch }}</textarea>
-        <div class="actions">
-          <button class="btn" type="submit">Save for this job</button>
-          <button class="btn sm" type="button" data-copy="prev">Copy</button>
+      {% set show_pitch_cmp = app.pitch_prev or (app.pitch and app.pitch.strip() != base_pitch.strip()) %}
+      {% if show_pitch_cmp %}
+      <h3 class="mt">Before / After (styled HTML)</h3>
+      <p class="muted sm">Left = pitch before AI tailor · Right = tailored for this job
+        (same styled document as My Pitch)</p>
+      <div class="diff-cols pitch-html-cmp">
+        <section class="panel diff-pane">
+          <h3>Before</h3>
+          <div class="frame-wrap pitch-frame-sm">
+            <iframe title="Pitch before AI" src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before') }}"></iframe>
+          </div>
+        </section>
+        <section class="panel diff-pane">
+          <h3>✨ After (this job)</h3>
+          <div class="frame-wrap pitch-frame-sm">
+            <iframe title="Pitch after AI" src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after') }}"></iframe>
+          </div>
+        </section>
+      </div>
+      {% else %}
+      <div class="review wide mt">
+        <div class="preview">
+          <div class="frame-wrap" id="app-pitch-frame-wrap">
+            <iframe id="app-pitch-frame" title="Interview script for this job"
+                    src="{{ url_for('main.app_pitch_view', app_id=app.id) }}"></iframe>
+          </div>
+          <span class="muted sm frame-tip">Styled like My Pitch — drag the corner to resize.</span>
         </div>
-      </form>
+      </div>
+      {% endif %}
+
+      <details class="mt" id="pitch-edit">
+        <summary><b>✏️ Edit text</b>
+          <span class="muted sm">— plain text; saving updates the HTML view above</span></summary>
+        <form method="post" action="{{ url_for('main.pitch_save', app_id=app.id) }}" class="stack mt">
+          <textarea name="text" rows="18" class="gen-text" dir="auto">{{ app.pitch or base_pitch }}</textarea>
+          <div class="actions">
+            <button class="btn" type="submit">Save for this job</button>
+            <button class="btn sm" type="button" data-copy="prev">Copy</button>
+          </div>
+        </form>
+      </details>
 
       {% if ai_on %}
       <form method="post" action="{{ url_for('main.pitch_tailor', app_id=app.id) }}" data-loading="Tailoring your pitch for this job…" class="mt">
         <button class="btn primary" type="submit">✨ Tailor for this job (AI)</button>
-        <span class="muted sm">Uses the saved pitch above — Save first if you edited it.</span>
+        <span class="muted sm">Keeps your script, adds a job-specific close — then shows Before / After in HTML.</span>
       </form>
       {% endif %}
     </section>

@@ -184,6 +184,7 @@ EXTRA_COLUMNS: dict[str, str] = {
     "pitch": "TEXT",               # per-job tailored about-me pitch (script text)
     "pitch_notes": "TEXT",         # latest AI tailoring suggestions for the pitch
     "pitch_at": "TEXT",
+    "pitch_prev": "TEXT",          # pitch text before last AI tailor (for before/after HTML)
     "company_brief": "TEXT",       # AI web research about the company (Markdown)
     "company_brief_at": "TEXT",
     "salary_research": "TEXT",     # AI expected-salary research (JSON)

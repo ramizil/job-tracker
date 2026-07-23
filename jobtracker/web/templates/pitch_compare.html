@@ -17,6 +17,23 @@
   <a class="btn" href="{{ url_for('main.my_pitch') }}">← Back to My Pitch</a>
 </div>
 
+<h2 class="mt">Styled HTML</h2>
+<div class="diff-cols pitch-html-cmp">
+  <section class="panel diff-pane">
+    <h3>Current pitch</h3>
+    <div class="frame-wrap pitch-frame-sm">
+      <iframe title="Current pitch" src="{{ url_for('main.pitch_view') }}"></iframe>
+    </div>
+  </section>
+  <section class="panel diff-pane">
+    <h3>✨ AI revision</h3>
+    <div class="frame-wrap pitch-frame-sm">
+      <iframe title="AI revision" src="{{ url_for('main.pitch_view', which='draft') }}"></iframe>
+    </div>
+  </section>
+</div>
+
+<h2 class="mt">Text differences</h2>
 <div class="diff-cols">
   <section class="panel diff-pane">
     <h2>Current pitch</h2>

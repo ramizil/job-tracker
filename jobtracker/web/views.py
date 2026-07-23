@@ -560,7 +560,16 @@ def my_pitch():
 def pitch_view():
     """Raw styled pitch HTML (iframe / open in tab) — same as the linked file."""
     pitch.ensure_html()
-    html = pitch.load_html()
+    which = (request.args.get("which") or "").strip().lower()
+    if which in ("draft", "after", "new"):
+        draft = pitch.load_draft()
+        if not draft:
+            abort(404)
+        html = pitch.html_from_plain(draft)
+    else:
+        html = pitch.load_html()
+        if not html:
+            html = pitch.html_from_plain(pitch.load_base_pitch())
     if not html:
         abort(404)
     return Response(html, mimetype="text/html; charset=utf-8")
@@ -2210,7 +2219,7 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
             title=title, company=company, location=location,
             description=description, base_pitch=base, language="he")
         notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
-        tracker.set_pitch(app_id, res["script"], notes=notes)
+        tracker.set_pitch(app_id, res["script"], notes=notes, prev=base)
     elif key == "company":
         tracker.set_company_brief(app_id, ai.company_research(
             company=company, location=location, title=title,
@@ -2371,6 +2380,25 @@ def pitch_save(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id) + "#pitch")
 
 
+@bp.route("/application/<int:app_id>/pitch/view")
+def app_pitch_view(app_id: int):
+    """Styled pitch HTML for this job (iframe) — same look as My Pitch tab.
+
+    ``?which=before`` serves the pre-tailor text; default is the current pitch.
+    """
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    which = (request.args.get("which") or "after").strip().lower()
+    pitch.ensure_html()
+    if which in ("before", "prev", "base"):
+        text = (r["pitch_prev"] or "").strip() or pitch.load_base_pitch()
+    else:
+        text = (r["pitch"] or "").strip() or pitch.load_base_pitch()
+    html = pitch.html_from_plain(text)
+    return Response(html, mimetype="text/html; charset=utf-8")
+
+
 @bp.route("/application/<int:app_id>/pitch/tailor", methods=["POST"])
 def pitch_tailor(app_id: int):
     r = tracker.get_application(app_id)
@@ -2383,8 +2411,8 @@ def pitch_tailor(app_id: int):
             description=r["description"] or "", base_pitch=base, language="he",
         )
         notes = "\n".join(f"- {s}" for s in result.get("suggestions", []))
-        tracker.set_pitch(app_id, result["script"], notes=notes)
-        flash("Pitch tailored for this job.", "ok")
+        tracker.set_pitch(app_id, result["script"], notes=notes, prev=base)
+        flash("Pitch tailored for this job — Before / After HTML below.", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#pitch")
