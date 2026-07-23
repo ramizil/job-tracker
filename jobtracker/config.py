@@ -135,7 +135,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "DATA_BACKUP_REMOTE": "Private git repo URL to mirror your data to (GitHub backup)",
     "GDRIVE_FOLDER": "Google Drive folder URL for the online applications sheet",
     "GOOGLE_CLIENT_SECRET": "Path to the Google OAuth client JSON (Desktop app)",
-    "GMAIL_LABEL": "Gmail label whose emails are scanned for job alerts",
+    "GMAIL_LABEL": "Gmail label(s) to scan for job alerts — comma-separated for several (e.g. linkedin-jobs, indeed-job-posting)",
     "GMAIL_REJECTION_LABEL": "Gmail label for rejection emails (rejections mailbox)",
 }
 

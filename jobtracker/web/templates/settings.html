@@ -346,14 +346,16 @@
   <section class="panel">
     <h2>📬 Gmail job alerts</h2>
     <div class="setting">
-      <label for="GMAIL_LABEL">Gmail label to scan</label>
-      <input type="text" id="GMAIL_LABEL" name="GMAIL_LABEL" form="settings-form" value="{{ values.GMAIL_LABEL }}" placeholder="linkedin-jobs" autocomplete="off">
-      <small>Point your LinkedIn job-alert emails at a Gmail label (e.g. a filter
-        that applies <code>{{ values.GMAIL_LABEL or 'linkedin-jobs' }}</code>).
-        The <b>Job Alerts</b> page reads emails under this label (<b>read-only</b> —
-        the app can never send or delete mail), extracts the jobs and flags the ones
-        you haven't applied to yet. Requires the <b>Gmail API</b> enabled on the same
-        Cloud project (<a href="#rb-google-cloud">📖 setup guide</a>).</small>
+      <label for="GMAIL_LABEL">Gmail label(s) to scan</label>
+      <input type="text" id="GMAIL_LABEL" name="GMAIL_LABEL" form="settings-form" value="{{ values.GMAIL_LABEL }}" placeholder="linkedin-jobs, indeed-job-posting" autocomplete="off">
+      <small>Point LinkedIn / Indeed job-alert emails at Gmail labels (filters that
+        apply them). You can list <b>several labels</b>, comma-separated — e.g.
+        <code>linkedin-jobs, indeed-job-posting</code>.
+        The <b>Job Alerts</b> page reads emails under these labels (<b>read-only</b> —
+        the app can never send or delete mail), extracts LinkedIn <b>and</b> Indeed
+        jobs, and flags the ones you haven't applied to yet. Requires the
+        <b>Gmail API</b> enabled on the same Cloud project
+        (<a href="#rb-google-cloud">📖 setup guide</a>).</small>
     </div>
     <div class="actions">
       {% if not gmail_connected %}

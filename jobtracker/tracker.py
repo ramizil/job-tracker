@@ -131,6 +131,7 @@ def _job_url_keys(url: str) -> set[str]:
         (r"drushim\.co\.il/job/(\d+)", "drushim"),
         (r"matrix\.co\.il/jobs/משרה/([^/?#]+)", "matrix"),
         (r"matrix\.co\.il/jobs/%d7%9e%d7%a9%d7%a8%d7%94/([^/?#]+)", "matrix"),
+        (r"indeed\.[^/\s\"']+/[^?\s\"']*[?&](?:jk|vjk)=([a-f0-9]{10,20})", "indeed"),
     ]
     for pat, label in patterns:
         m = re.search(pat, url or "", re.I)

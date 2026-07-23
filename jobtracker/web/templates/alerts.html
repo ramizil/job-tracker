@@ -21,8 +21,8 @@
 
 {% if not connected %}
 <div class="panel">
-  <p class="muted">Job Alerts reads <b>LinkedIn job-alert emails</b> from a Gmail
-    mailbox (label <code>{{ label }}</code>), lists every job they contain and
+  <p class="muted">Job Alerts reads <b>LinkedIn &amp; Indeed job-alert emails</b> from a Gmail
+    mailbox (label(s) <code>{{ label }}</code>), lists every job they contain and
     marks the ones you already applied to — so nothing slips by.</p>
   <p class="muted">Connect the mailbox in
     <a href="{{ url_for('main.settings') }}">Settings → Gmail job alerts</a>
@@ -31,7 +31,7 @@
 {% endif %}
 {% if connected or rows %}
 
-<p class="muted">Jobs from LinkedIn alert emails under the Gmail label
+<p class="muted">Jobs from LinkedIn / Indeed alert emails under Gmail label(s)
   <code>{{ label }}</code>.
   {% if show_queue and queue_count is not none %}
     <b>{{ queue_count }}</b> need action (not applied yet).

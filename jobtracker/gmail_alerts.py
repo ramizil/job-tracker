@@ -1,11 +1,11 @@
-"""Read LinkedIn job-alert emails from Gmail and track them as leads.
+"""Read job-alert emails from Gmail (LinkedIn + Indeed) and track them as leads.
 
-A dedicated mailbox (or a Gmail label such as ``linkedin-jobs``) collects
-LinkedIn job-alert emails. On demand we fetch new messages under that label
-via the Gmail API (read-only scope), extract the individual job postings
-(title, company, location, link) from each email, and store them in the
-``job_alerts`` table. Each alert is then cross-checked against the
-applications list, so the UI can show "applied" vs "not applied yet".
+A dedicated mailbox (or Gmail labels such as ``linkedin-jobs`` and
+``indeed-job-posting``) collects job-alert emails. On demand we fetch new
+messages under those labels via the Gmail API (read-only scope), extract the
+individual job postings (title, company, location, link) from each email, and
+store them in the ``job_alerts`` table. Each alert is then cross-checked
+against the applications list, so the UI can show "applied" vs "not applied yet".
 
 Auth mirrors gsheets.py: the same Desktop-app OAuth client JSON, but a
 separate per-profile token (``gmail_token.json``) with the minimal
@@ -136,11 +136,19 @@ def _label_id(svc, name: str) -> str:
 _JOB_URL_RE = re.compile(
     r"linkedin\.com/(?:comm/)?jobs/view/(?:[^\s/?#]*?-)?(\d{6,})")
 
+# Indeed job key in viewjob / click-through URLs (stable ~16-char hex).
+_INDEED_JK_RE = re.compile(
+    r"(?:[?&#](?:jk|vjk)=|/viewjob[^\"'\s]*?[?&]jk=)([a-f0-9]{10,20})",
+    re.I,
+)
+_INDEED_HOST_RE = re.compile(r"indeed\.[a-z.]+", re.I)
+
 # Anchor texts that are buttons/boilerplate, never a job title.
 _BOILERPLATE = {
     "view job", "view jobs", "see all jobs", "see more jobs", "see jobs",
     "apply", "apply now", "easy apply", "save", "saved", "see similar jobs",
     "job alert", "manage job alerts", "unsubscribe", "help", "view all",
+    "click here", "learn more", "sign in", "update alert", "delete alert",
 }
 
 
@@ -150,12 +158,29 @@ def _clean(text: str) -> str:
 
 def _split_company_loc(text: str) -> tuple[str, str] | None:
     """LinkedIn cards show 'Company · Location' — split on the middle dot."""
-    if "·" not in text:
+    if "·" not in text and "•" not in text and "∙" not in text:
         return None
-    parts = [p.strip() for p in text.split("·") if p.strip()]
+    parts = [p.strip() for p in re.split(r"[·•∙]", text) if p.strip()]
     if not parts:
         return None
     return parts[0], ", ".join(parts[1:])
+
+
+def _subject_title_company(subject: str) -> tuple[str, str]:
+    """Indeed often uses 'Title @ Company' (or 'Title at Company') as subject."""
+    subj = _clean(subject or "")
+    # Strip common prefixes: "Indeed: ", "New job: ", etc.
+    subj = re.sub(
+        r"^(?:indeed\s*[:\-–]\s*|new jobs?\s*[:\-–]\s*)",
+        "", subj, flags=re.I,
+    ).strip()
+    m = re.match(r"^(.+?)\s+[@＠]\s+(.+)$", subj)
+    if m:
+        return m.group(1).strip()[:200], m.group(2).strip()[:120]
+    m = re.match(r"^(.+?)\s+at\s+(.+)$", subj, re.I)
+    if m and len(m.group(1)) > 3:
+        return m.group(1).strip()[:200], m.group(2).strip()[:120]
+    return (subj[:200] if subj else ""), ""
 
 
 def parse_linkedin_alert(html: str) -> list[dict]:
@@ -212,6 +237,166 @@ def parse_linkedin_alert(html: str) -> list[dict]:
     return [j for j in jobs.values() if j["title"]]
 
 
+def _indeed_jk(href: str) -> str | None:
+    if not href:
+        return None
+    # Prefer explicit jk= / vjk=; ignore bare indeed.com without a job key.
+    m = _INDEED_JK_RE.search(href)
+    if m:
+        return m.group(1).lower()
+    # Some redirects encode jk later in the URL after unescape
+    from urllib.parse import unquote
+    m = _INDEED_JK_RE.search(unquote(href))
+    return m.group(1).lower() if m else None
+
+
+def parse_indeed_alert(html: str, subject: str = "") -> list[dict]:
+    """Extract job postings from an Indeed job-alert email (HTML body)."""
+    from bs4 import BeautifulSoup
+    from urllib.parse import urlparse, parse_qs, unquote
+
+    soup = BeautifulSoup(html or "", "html.parser")
+    jobs: dict[str, dict] = {}
+    anchor_of: dict[str, object] = {}
+
+    for a in soup.find_all("a", href=True):
+        href = unquote(a["href"] or "")
+        # Skip obvious non-job indeed links
+        if _INDEED_HOST_RE.search(href) is None and "jk=" not in href.lower():
+            continue
+        jk = _indeed_jk(href)
+        if not jk:
+            continue
+        # Canonicalise URL
+        url = f"https://www.indeed.com/viewjob?jk={jk}"
+        # Prefer a cleaner host from the href when it's an indeed domain
+        try:
+            p = urlparse(href)
+            if p.netloc and "indeed." in p.netloc.lower():
+                qs = parse_qs(p.query)
+                if "jk" in qs or "vjk" in qs:
+                    url = f"https://{p.netloc.split('@')[-1]}/viewjob?jk={jk}"
+        except Exception:
+            pass
+
+        job = jobs.setdefault(jk, {
+            "job_key": f"indeed:{jk}",
+            "title": "", "company": "", "location": "",
+            "url": url,
+        })
+        anchor_of.setdefault(jk, a)
+        text = _clean(a.get_text(" ", strip=True))
+        if not text or len(text) < 2 or text.lower() in _BOILERPLATE:
+            continue
+        # Title is usually the link text; company rarely is.
+        if not job["title"] and not text.lower().startswith("http"):
+            job["title"] = text[:200]
+
+    # Enrich company / location from nearby card text (stay local — don't walk
+    # all the way to <body>, or every job inherits the last card's company).
+    for jk, job in jobs.items():
+        a = anchor_of.get(jk)
+        if a is None:
+            continue
+        snippets: list[str] = []
+
+        def _add_segs(node, limit: int = 6):
+            if node is None:
+                return
+            for segment in getattr(node, "stripped_strings", []) or []:
+                seg = _clean(segment)
+                if not seg or seg == job["title"] or seg.lower() in _BOILERPLATE:
+                    continue
+                if seg.lower().startswith("http"):
+                    continue
+                if seg not in snippets:
+                    snippets.append(seg)
+                if len(snippets) >= limit:
+                    return
+
+        # 1) Immediate following siblings of the link
+        for sib in (a.next_siblings or []):
+            _add_segs(sib, 4)
+            if len(snippets) >= 4:
+                break
+        # 2) Only if the link had no nearby text, try the parent's following siblings
+        #    (don't do this when siblings already gave us lines — next card would leak in).
+        parent = a.parent
+        if parent is not None and not snippets:
+            for sib in (parent.next_siblings or []):
+                _add_segs(sib, 6)
+                if len(snippets) >= 6:
+                    break
+        # 3) One level up only if that parent doesn't contain other job links
+        if parent is not None and len(snippets) < 2:
+            gp = parent.parent
+            if gp is not None:
+                other_jks = {
+                    _indeed_jk(unquote(x.get("href") or ""))
+                    for x in gp.find_all("a", href=True)
+                }
+                other_jks.discard(None)
+                other_jks.discard(jk)
+                if not other_jks:
+                    _add_segs(gp, 6)
+        for seg in snippets:
+            pair = _split_company_loc(seg)
+            if pair:
+                if not job["company"]:
+                    job["company"], job["location"] = pair
+                break
+        if not job["company"]:
+            for seg in snippets:
+                if seg == job["title"]:
+                    continue
+                if re.search(
+                    r"(\$|₪|€|£|\d[\d,]+\s*/\s*(?:yr|year|mo|month|hr|hour))",
+                    seg, re.I,
+                ):
+                    continue
+                if re.match(r"^(today|just posted|\d+\s*day)", seg, re.I):
+                    continue
+                if 2 <= len(seg) <= 80 and not job["company"]:
+                    job["company"] = seg[:120]
+                    continue
+                if job["company"] and not job["location"] and 2 <= len(seg) <= 80:
+                    job["location"] = seg[:120]
+                    break
+
+    # Subject fallback for single-job alerts: "Title @ Company"
+    subj_title, subj_company = _subject_title_company(subject)
+    if len(jobs) == 1:
+        job = next(iter(jobs.values()))
+        if not job["title"] and subj_title:
+            job["title"] = subj_title
+        if not job["company"] and subj_company:
+            job["company"] = subj_company
+    elif not jobs and subj_title:
+        # No parseable links — nothing to store without a stable key
+        pass
+
+    return [j for j in jobs.values() if j["title"]]
+
+
+def parse_alert_email(html: str, subject: str = "",
+                      from_addr: str = "") -> list[dict]:
+    """Parse a job-alert email — LinkedIn and/or Indeed."""
+    found: list[dict] = []
+    if html:
+        found.extend(parse_linkedin_alert(html))
+        # Indeed alerts (and LinkedIn-labelled Indeed forwards) use indeed URLs
+        indeed = parse_indeed_alert(html, subject=subject)
+        # Prefer Indeed parse when the sender is Indeed or we found Indeed URLs
+        if indeed:
+            # Merge: Indeed jobs aren't in LinkedIn list (different keys)
+            found.extend(indeed)
+        elif not found and _INDEED_HOST_RE.search(from_addr or ""):
+            # Sender is Indeed but HTML had no jk= — try subject-only is useless
+            # without a key; leave empty.
+            pass
+    return found
+
+
 def _html_body(payload: dict) -> str:
     """Walk a Gmail message payload for the text/html part (base64url)."""
     stack = [payload]
@@ -226,6 +411,20 @@ def _html_body(payload: dict) -> str:
     return ""
 
 
+def _header(msg: dict, name: str) -> str:
+    for h in (msg.get("payload") or {}).get("headers") or []:
+        if (h.get("name") or "").lower() == name.lower():
+            return h.get("value") or ""
+    return ""
+
+
+def _label_names() -> list[str]:
+    """GMAIL_LABEL may be a single label or comma-separated list."""
+    raw = (config.GMAIL_LABEL or "").strip() or "linkedin-jobs"
+    names = [p.strip() for p in raw.split(",") if p.strip()]
+    return names or ["linkedin-jobs"]
+
+
 # --------------------------------------------------------------------------- #
 # Fetch + store
 # --------------------------------------------------------------------------- #
@@ -238,33 +437,52 @@ def fetch_alerts() -> dict:
         raise AlertsError("Google client libraries are missing.") from exc
 
     try:
-        label = _label_id(svc, config.GMAIL_LABEL)
-        # Walk the WHOLE label (paginated). Listing only returns message ids —
-        # cheap — and already-parsed emails are skipped below, so every fetch
-        # after the first only downloads what's new.
+        # Union of messages across all configured labels (LinkedIn + Indeed, …).
         message_ids: list[str] = []
-        page_token = None
-        while True:
-            listing = svc.users().messages().list(
-                userId="me", labelIds=[label], maxResults=100,
-                pageToken=page_token).execute()
-            message_ids.extend(m["id"] for m in listing.get("messages", []))
-            page_token = listing.get("nextPageToken")
-            if not page_token or len(message_ids) >= 2000:
-                break
+        seen_mid: set[str] = set()
+        for name in _label_names():
+            label = _label_id(svc, name)
+            page_token = None
+            while True:
+                listing = svc.users().messages().list(
+                    userId="me", labelIds=[label], maxResults=100,
+                    pageToken=page_token).execute()
+                for m in listing.get("messages", []) or []:
+                    mid = m["id"]
+                    if mid not in seen_mid:
+                        seen_mid.add(mid)
+                        message_ids.append(mid)
+                page_token = listing.get("nextPageToken")
+                if not page_token or len(message_ids) >= 2000:
+                    break
 
         with get_connection() as conn:
             seen = {r["gmail_id"] for r in
                     conn.execute("SELECT gmail_id FROM alert_emails")}
+            # Re-parse emails we already saw but that yielded no jobs (e.g. Indeed
+            # messages ingested before the Indeed parser existed).
+            orphans = {
+                r["gmail_id"] for r in conn.execute(
+                    """SELECT e.gmail_id FROM alert_emails e
+                        WHERE NOT EXISTS (
+                          SELECT 1 FROM job_alerts a WHERE a.gmail_id = e.gmail_id
+                        )""")
+            }
+        # New messages first, then orphans that are still under a scanned label
         new_ids = [mid for mid in message_ids if mid not in seen]
+        retry_ids = [mid for mid in message_ids
+                     if mid in orphans and mid not in set(new_ids)]
+        to_process = new_ids + retry_ids
 
         new_emails = 0
         new_jobs = 0
-        for mid in new_ids:
+        for mid in to_process:
             msg = svc.users().messages().get(
                 userId="me", id=mid, format="full").execute()
             html = _html_body(msg.get("payload", {}))
-            found = parse_linkedin_alert(html) if html else []
+            subject = _header(msg, "Subject")
+            from_addr = _header(msg, "From")
+            found = parse_alert_email(html, subject=subject, from_addr=from_addr)
             # Email arrival time (ms epoch) -> ISO, for the alert list ordering.
             try:
                 from datetime import datetime, timezone
@@ -297,7 +515,8 @@ def fetch_alerts() -> dict:
                 conn.execute(
                     "INSERT OR IGNORE INTO alert_emails (gmail_id, fetched_at) "
                     "VALUES (?,?)", (mid, now_iso()))
-            new_emails += 1
+            if mid in set(new_ids):
+                new_emails += 1
     except HttpError as exc:
         if exc.resp.status == 403:
             raise AlertsError(
@@ -323,10 +542,32 @@ def _sim(a: str, b: str) -> float:
 
 def _match_one(alert, apps) -> int | None:
     """Best application match for an alert: URL job-id first, then fuzzy."""
+    from .tracker import _job_url_keys
+
     key = alert["job_key"] or ""
+    alert_keys = {key} if key else set()
+    # Also derive keys from the stored URL (Indeed jk, LinkedIn id, …).
+    # job_alerts rows don't always have url in the SELECT — handle both shapes.
+    url = ""
+    try:
+        url = alert["url"] or ""
+    except (KeyError, IndexError, TypeError):
+        url = ""
+    alert_keys |= _job_url_keys(url)
+    # LinkedIn legacy keys are bare numeric ids
+    if key.isdigit():
+        alert_keys.add(f"linkedin:{key}")
+    if key.startswith("indeed:"):
+        alert_keys.add(key)
+
     for app in apps:
+        app_keys = _job_url_keys(app["url"] or "")
+        # Legacy LinkedIn bare-id equality
         m = _JOB_URL_RE.search(app["url"] or "")
-        if m and key and m.group(1) == key:
+        if m:
+            app_keys.add(m.group(1))
+            app_keys.add(f"linkedin:{m.group(1)}")
+        if alert_keys & app_keys:
             return app["id"]
 
     a_company = _norm(alert["company"])
@@ -350,7 +591,7 @@ def refresh_matches() -> None:
         apps = conn.execute(
             "SELECT id, company, title, url FROM applications").fetchall()
         alerts = conn.execute(
-            "SELECT id, job_key, title, company FROM job_alerts").fetchall()
+            "SELECT id, job_key, title, company, url FROM job_alerts").fetchall()
         for alert in alerts:
             conn.execute("UPDATE job_alerts SET matched_app_id=? WHERE id=?",
                          (_match_one(alert, apps), alert["id"]))
