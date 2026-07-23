@@ -447,9 +447,9 @@ table.mini td.r{text-align:right;color:var(--muted)}
 /* pills / badges */
 .pill,.fit{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:capitalize}
 .fit.big{font-size:14px;padding:5px 14px}
-.fit-yes{background:rgba(16,52,34,.7);color:#9af3c4;border:1px solid rgba(52,211,153,.55);box-shadow:0 0 16px -4px rgba(52,211,153,.6)}
-.fit-maybe{background:rgba(40,34,14,.7);color:#ffe6a3;border:1px solid rgba(251,191,36,.5);box-shadow:0 0 16px -4px rgba(251,191,36,.5)}
-.fit-no{background:rgba(46,18,22,.7);color:#ffc0c8;border:1px solid rgba(251,113,133,.5);box-shadow:0 0 16px -4px rgba(251,113,133,.55)}
+.fit-yes{background:#16a34a;color:#fff;border:1px solid #16a34a;box-shadow:none}
+.fit-maybe{background:#ca8a04;color:#fff;border:1px solid #ca8a04;box-shadow:none}
+.fit-no{background:#dc2626;color:#fff;border:1px solid #dc2626;box-shadow:none}
 [class*="status-"]{border:1px solid transparent;text-shadow:none;transition:box-shadow .2s,transform .15s}
 .pchip[class*="status-"]:hover,.pill[class*="status-"]:hover{transform:translateY(-1px)}
 /* Status pills: solid status color + white text (matches Pipeline funnel labels) */
@@ -831,9 +831,17 @@ html[data-theme="light"] .rej-hit,
 html[data-theme="professional"] .rej-hit,
 html[data-theme="slate"] .rej-hit{background:rgba(217,119,6,.28);color:var(--ink)}
 html[data-theme="professional"] .fit-yes,
-html[data-theme="slate"] .fit-yes{background:#ecfdf5;color:#047857;border-color:#6ee7b7;box-shadow:none}
+html[data-theme="slate"] .fit-yes,
+html[data-theme="futuristic-light"] .fit-yes,
+html[data-theme="light"] .fit-yes{background:#16a34a;color:#fff;border-color:#16a34a;box-shadow:none}
+html[data-theme="professional"] .fit-maybe,
+html[data-theme="slate"] .fit-maybe,
+html[data-theme="futuristic-light"] .fit-maybe,
+html[data-theme="light"] .fit-maybe{background:#ca8a04;color:#fff;border-color:#ca8a04;box-shadow:none}
 html[data-theme="professional"] .fit-no,
-html[data-theme="slate"] .fit-no{background:#fff1f2;color:#be123c;border-color:#fda4af;box-shadow:none}
+html[data-theme="slate"] .fit-no,
+html[data-theme="futuristic-light"] .fit-no,
+html[data-theme="light"] .fit-no{background:#dc2626;color:#fff;border-color:#dc2626;box-shadow:none}
 .rb-group{margin:22px 0 8px;font-size:13px;color:var(--muted);
   text-transform:uppercase;letter-spacing:.6px}
 .runbook{border:1px solid var(--rule);border-radius:10px;margin:8px 0;
