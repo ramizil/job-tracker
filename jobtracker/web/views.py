@@ -3070,5 +3070,5 @@ def export_xlsx():
     return send_file(
         io.BytesIO(data),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True, download_name="applications.xlsx",
+        as_attachment=True, download_name=exporter.download_name(),
     )
