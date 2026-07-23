@@ -1,0 +1,17 @@
+{# Switchable chart for (label, count) pairs.
+   Expects: items — list of (label, count) tuples; chart_id — unique string. #}
+{% set items_json = items | list %}
+<div class="sw-chart" data-sw-chart data-chart-id="{{ chart_id }}"
+     data-items='{{ items_json | tojson }}'>
+  <div class="chart-types" role="group" aria-label="Chart type">
+    <button type="button" class="btn sm chart-type" data-type="bars"
+            title="Horizontal bars">Bars</button>
+    <button type="button" class="btn sm chart-type" data-type="pie"
+            title="Pie chart (cake)">Pie</button>
+    <button type="button" class="btn sm chart-type" data-type="donut"
+            title="Donut chart">Donut</button>
+    <button type="button" class="btn sm chart-type" data-type="cols"
+            title="Vertical columns">Columns</button>
+  </div>
+  <div class="chart-canvas" aria-live="polite"></div>
+</div>

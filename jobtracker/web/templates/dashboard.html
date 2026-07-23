@@ -66,36 +66,20 @@
   <div class="metric" title="Rejected / applied applications"><span class="num">{{ totals.rejection_rate_pct }}%</span><span class="lbl">Rejection rate</span></div>
 </section>
 
-<div class="grid2">
-  <section class="panel">
-    <h2>Pipeline funnel</h2>
-    {% set maxv = (funnel.values() | list | max) or 1 %}
-    {% for st, n in funnel.items() %}
-      <div class="funnel-row">
-        <span class="funnel-label status-{{ st }}">{{ st }}</span>
-        <div class="funnel-bar"><div class="funnel-fill status-{{ st }}" style="width: {{ (n / maxv * 100) | round(0, 'floor') }}%"></div></div>
-        <span class="funnel-num">{{ n }}</span>
-      </div>
-    {% endfor %}
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Why rejected</h2>
-      <a class="btn sm" href="{{ url_for('main.rejections') }}"
-         title="AI post-mortem of every rejection + overall patterns and action plan">🧠 Rejection insights</a></div>
-    {% if rej_stage %}
-      <h3>By stage</h3>
-      {% with items=rej_stage %}{% include "_hbar_chart.html" %}{% endwith %}
-      <h3 style="margin-top:14px">By reason</h3>
-      {% with items=rej_reason %}{% include "_hbar_chart.html" %}{% endwith %}
-    {% else %}
-      <p class="muted">No rejections logged yet.</p>
-    {% endif %}
-    {% if insight.avg_match_advanced is not none or insight.avg_match_rejected is not none %}
-      <p class="muted">Match signal — advanced avg <b>{{ insight.avg_match_advanced }}%</b>, rejected avg <b>{{ insight.avg_match_rejected }}%</b></p>
-    {% endif %}
-  </section>
-</div>
+<section class="panel">
+  <div class="panel-head"><h2>Pipeline funnel</h2>
+    <a class="btn sm" href="{{ url_for('main.rejections') }}"
+       title="Stage/reason charts + AI post-mortem of every rejection">🧠 Rejection insights</a>
+  </div>
+  {% set maxv = (funnel.values() | list | max) or 1 %}
+  {% for st, n in funnel.items() %}
+    <div class="funnel-row">
+      <span class="funnel-label status-{{ st }}">{{ st }}</span>
+      <div class="funnel-bar"><div class="funnel-fill status-{{ st }}" style="width: {{ (n / maxv * 100) | round(0, 'floor') }}%"></div></div>
+      <span class="funnel-num">{{ n }}</span>
+    </div>
+  {% endfor %}
+</section>
 
 <section class="panel">
   <div class="panel-head"><h2>Recent applications</h2><a class="btn sm" href="{{ url_for('main.applications') }}">View all</a></div>

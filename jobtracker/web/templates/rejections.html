@@ -85,13 +85,13 @@
 <div class="grid2">
   <section class="panel">
     <h2>By stage</h2>
-    <p class="muted sm" style="margin:0 0 8px">Where in the process rejections happen</p>
-    {% with items=baseline.by_stage %}{% include "_hbar_chart.html" %}{% endwith %}
+    <p class="muted sm" style="margin:0 0 8px">Where in the process rejections happen — switch Bars / Pie / Donut / Columns</p>
+    {% with items=baseline.by_stage, chart_id='rej-stage' %}{% include "_switchable_chart.html" %}{% endwith %}
   </section>
   <section class="panel">
     <h2>By reason</h2>
-    <p class="muted sm" style="margin:0 0 8px">Why companies said no (when known)</p>
-    {% with items=baseline.by_reason %}{% include "_hbar_chart.html" %}{% endwith %}
+    <p class="muted sm" style="margin:0 0 8px">Why companies said no (when known) — chart type is shared with By stage</p>
+    {% with items=baseline.by_reason, chart_id='rej-reason' %}{% include "_switchable_chart.html" %}{% endwith %}
   </section>
 </div>
 

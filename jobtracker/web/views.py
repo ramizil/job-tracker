@@ -761,10 +761,7 @@ def dashboard():
     recent = tracker.list_applications()[:10]
     return render_template(
         "dashboard.html", funnel=funnel, totals=totals, recent=recent,
-        rej_stage=analytics.rejection_by_stage(),
-        rej_reason=analytics.rejection_by_reason(),
         sources=analytics.source_stats(),
-        insight=analytics.match_score_insight(),
         reminders=analytics.saved_reminders(),
         digest=analytics.action_digest(),
         ai_on=ai.is_configured(),
