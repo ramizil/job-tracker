@@ -64,15 +64,16 @@
 
   <fieldset class="paste-meta resume-sent">
     <legend>Resume sent <em>— which CV you used / will use for this job</em></legend>
-    <p class="muted sm" style="margin:0 0 8px">Each unique file is stored once. Pick an existing resume or add a new file —
-      selecting the same file again just reuses it (ready for later stats).</p>
+    <p class="muted sm" style="margin:0 0 8px">Each unique <b>file content</b> is stored once (same bytes → same
+      entry). Same filename with different content keeps <b>both</b> versions —
+      nothing is overwritten. Pick from the library or add a new file.</p>
     <label class="fld">
       <span>From library</span>
       <select name="resume_id">
         <option value="">— none / decide later —</option>
         {% for r in resume_lib %}
         <option value="{{ r.id }}" {{ 'selected' if form.get('resume_id')|string == r.id|string }}>
-          {{ r.label }}{% if r.original_name and r.original_name != r.label %} ({{ r.original_name }}){% endif %}
+          {{ r.label }}{% if r.original_name %} · {{ r.original_name }}{% endif %}{% if r.created_at %} · {{ r.created_at[:10] }}{% endif %}{% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
         </option>
         {% endfor %}
       </select>

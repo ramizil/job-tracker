@@ -38,6 +38,33 @@ def _label_from_name(name: str) -> str:
     return stem[:80] or "Resume"
 
 
+def _distinct_label(desired: str, original_name: str, content_hash: str) -> str:
+    """Keep human label; if another resume already uses it, append a version hint.
+
+    Identity is always ``content_hash`` — this only makes the dropdown readable
+    when two different files share the same display name.
+    """
+    base = (desired or _label_from_name(original_name)).strip()[:80] or "Resume"
+    short = content_hash[:8]
+    with get_connection() as conn:
+        clash = conn.execute(
+            """SELECT id FROM resumes
+                WHERE lower(label)=lower(?) AND content_hash!=?""",
+            (base, content_hash),
+        ).fetchone()
+        name_clash = conn.execute(
+            """SELECT id FROM resumes
+                WHERE lower(original_name)=lower(?) AND content_hash!=?""",
+            (Path(original_name).name.lower(), content_hash),
+        ).fetchone() if original_name else None
+    if not clash and not name_clash:
+        return base
+    # e.g. "Senior QA Engineer (v·a1b2c3d4)" — stable, unique, not an overwrite
+    suffix = f" (v·{short})"
+    out = (base[: max(1, 80 - len(suffix))] + suffix)
+    return out
+
+
 def list_resumes() -> list[sqlite3.Row]:
     with get_connection() as conn:
         return list(conn.execute(
@@ -87,7 +114,9 @@ def ensure_from_bytes(
 ) -> tuple[int, bool]:
     """Store bytes if new; return ``(resume_id, created)``.
 
-    If the same content hash already exists, returns that id and ``created=False``.
+    Dedupes by **file content** (SHA-256), not by filename/label. Uploading
+    ``CV.pdf`` twice with different bytes keeps both rows; identical bytes
+    reuse the existing row and never overwrite it.
     """
     if not data:
         raise ValueError("Empty resume file")
@@ -105,11 +134,14 @@ def ensure_from_bytes(
     safe = _safe_name(original_name)
     if not Path(safe).suffix and ext:
         safe = f"{safe}{ext}"
+    # Hash prefix in the stored filename → same original name never clobbers
+    # an older version on disk.
     stored = f"{content_hash[:_HASH_PREFIX]}_{safe}"
     dest = _dir() / stored
     dest.write_bytes(data)
     rid = _insert(
-        label=(label or _label_from_name(original_name)).strip()[:80],
+        label=_distinct_label(
+            (label or "").strip(), original_name, content_hash),
         content_hash=content_hash,
         filename=stored,
         original_name=Path(original_name).name,
