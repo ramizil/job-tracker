@@ -450,25 +450,26 @@ table.mini td.r{text-align:right;color:var(--muted)}
 .fit-yes{background:rgba(16,52,34,.7);color:#9af3c4;border:1px solid rgba(52,211,153,.55);box-shadow:0 0 16px -4px rgba(52,211,153,.6)}
 .fit-maybe{background:rgba(40,34,14,.7);color:#ffe6a3;border:1px solid rgba(251,191,36,.5);box-shadow:0 0 16px -4px rgba(251,191,36,.5)}
 .fit-no{background:rgba(46,18,22,.7);color:#ffc0c8;border:1px solid rgba(251,113,133,.5);box-shadow:0 0 16px -4px rgba(251,113,133,.55)}
-[class*="status-"]{border:1px solid transparent;text-shadow:0 0 8px currentColor;transition:box-shadow .2s,transform .15s}
+[class*="status-"]{border:1px solid transparent;text-shadow:none;transition:box-shadow .2s,transform .15s}
 .pchip[class*="status-"]:hover,.pill[class*="status-"]:hover{transform:translateY(-1px)}
-.status-saved{background:rgba(67,34,4,.85);color:#ffa733;border-color:rgba(255,150,40,.55);box-shadow:0 0 14px -2px rgba(255,150,40,.65)}
-.status-applied{background:rgba(16,42,68,.85);color:#69b4ff;border-color:rgba(105,180,255,.4);box-shadow:0 0 14px -2px rgba(105,180,255,.55)}
-.status-reapplied{background:rgba(14,48,52,.85);color:#5eead4;border-color:rgba(94,234,212,.45);box-shadow:0 0 14px -2px rgba(94,234,212,.55)}
-.status-screening{background:rgba(42,36,16,.85);color:#ffe08a;border-color:rgba(255,224,138,.4);box-shadow:0 0 14px -2px rgba(255,224,138,.5)}
-.status-interview{background:rgba(42,16,48,.85);color:#e6a8ff;border-color:rgba(230,168,255,.45);box-shadow:0 0 16px -2px rgba(230,168,255,.6)}
-.status-offer{background:rgba(14,42,24,.85);color:#7ff0a6;border-color:rgba(127,240,166,.45);box-shadow:0 0 16px -2px rgba(127,240,166,.6)}
-.status-accepted{background:rgba(14,42,24,.85);color:#7ff0a6;border-color:rgba(127,240,166,.45);box-shadow:0 0 16px -2px rgba(127,240,166,.6)}
-.status-rejected{background:rgba(42,18,18,.85);color:#ffb4b4;border-color:rgba(255,180,180,.4);box-shadow:0 0 14px -2px rgba(255,180,180,.5)}
-.status-withdrawn{background:rgba(28,37,48,.85);color:#9aa7b6;border-color:rgba(154,167,182,.3)}
-.status-ghosted{background:rgba(28,37,48,.85);color:#9aa7b6;border-color:rgba(154,167,182,.3)}
-.status-new{background:rgba(18,36,54,.85);color:#7dd3fc;border-color:rgba(125,211,252,.45);box-shadow:0 0 14px -2px rgba(125,211,252,.45)}
-.status-not-applied{background:rgba(66,48,8,.9);color:#fde68a;border-color:rgba(251,191,36,.55);box-shadow:0 0 14px -2px rgba(251,191,36,.45)}
+/* Status pills: solid status color + white text (matches Pipeline funnel labels) */
+.status-saved{background:#f59e0b;color:#fff;border-color:#f59e0b;box-shadow:none}
+.status-applied{background:#2563eb;color:#fff;border-color:#2563eb;box-shadow:none}
+.status-reapplied{background:#0d9488;color:#fff;border-color:#0d9488;box-shadow:none}
+.status-screening{background:#ca8a04;color:#fff;border-color:#ca8a04;box-shadow:none}
+.status-interview{background:#9333ea;color:#fff;border-color:#9333ea;box-shadow:none}
+.status-offer{background:#16a34a;color:#fff;border-color:#16a34a;box-shadow:none}
+.status-accepted{background:#16a34a;color:#fff;border-color:#16a34a;box-shadow:none}
+.status-rejected{background:#dc2626;color:#fff;border-color:#dc2626;box-shadow:none}
+.status-withdrawn{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none}
+.status-ghosted{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none}
+.status-new{background:#0ea5e9;color:#fff;border-color:#0ea5e9;box-shadow:none}
+.status-not-applied{background:#ca8a04;color:#fff;border-color:#ca8a04;box-shadow:none}
 html[data-theme="professional"] .status-not-applied,
 html[data-theme="slate"] .status-not-applied,
 html[data-theme="futuristic-light"] .status-not-applied,
 html[data-theme="light"] .status-not-applied{
-  background:#fffbeb;color:#a16207;border-color:#fbbf24;box-shadow:none}
+  background:#ca8a04;color:#fff;border-color:#ca8a04;box-shadow:none}
 
 /* buttons / forms */
 .btn{
