@@ -610,8 +610,20 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 .paste-form .fld{display:flex;flex-direction:column;gap:5px}
 .paste-form .fld>span{font-size:13px;color:var(--muted)}
 .paste-form .fld em,.paste-meta em{color:var(--muted);font-style:normal;font-size:12px}
-.paste-meta{border:1px solid var(--rule);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:8px;background:rgba(8,14,24,.4)}
+.paste-meta{
+  border:1px solid rgba(124,58,237,.35);border-radius:12px;padding:13px;
+  display:flex;flex-direction:column;gap:8px;
+  background:rgba(124,58,237,.08);
+}
 .paste-meta legend{padding:0 6px;font-size:13px;color:var(--ink)}
+/* Light themes: clearer lavender so the boxes don't look like dark slabs */
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .paste-meta{
+  background:#f3e8ff;
+  border-color:#c4b5fd;
+}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .paste-meta legend{
+  background:transparent;
+}
 
 .loading-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(4,7,14,.78);backdrop-filter:blur(6px)}
 .loading-overlay[hidden]{display:none}
