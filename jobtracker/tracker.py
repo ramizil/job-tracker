@@ -326,8 +326,58 @@ def status_paths_for_apps(app_ids: list[int]) -> dict[int, list[str]]:
     }
 
 
-def update_status(app_id: int, new_status: str, note: str = "") -> bool:
-    """Transition status, recording history. Auto-stamps date_applied."""
+def format_contact(
+    *,
+    name: str = "",
+    role: str = "",
+    email: str = "",
+    phone: str = "",
+    other: str = "",
+) -> str:
+    """Build a readable contact block from structured fields."""
+    lines: list[str] = []
+    name = (name or "").strip()
+    role = (role or "").strip()
+    email = (email or "").strip()
+    phone = (phone or "").strip()
+    other = (other or "").strip()
+    if name and role:
+        lines.append(f"{name} ({role})")
+    elif name:
+        lines.append(name)
+    elif role:
+        lines.append(role)
+    if email:
+        lines.append(email)
+    if phone:
+        lines.append(phone)
+    if other:
+        lines.append(other)
+    return "\n".join(lines)
+
+
+def set_contact(app_id: int, contact: str) -> bool:
+    """Save recruiter / interviewer contact details for an application."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM applications WHERE id=?", (app_id,)
+        ).fetchone()
+        if not row:
+            return False
+        conn.execute(
+            "UPDATE applications SET contact=?, updated_at=? WHERE id=?",
+            ((contact or "").strip(), now_iso(), app_id),
+        )
+        return True
+
+
+def update_status(app_id: int, new_status: str, note: str = "",
+                  contact: str | None = None) -> bool:
+    """Transition status, recording history. Auto-stamps date_applied.
+
+    If ``contact`` is a non-empty string, it is saved on the application
+    (typical when moving applied → screening and capturing the recruiter).
+    """
     new_status = normalize_status(new_status)
     with get_connection() as conn:
         row = conn.execute(
@@ -342,10 +392,17 @@ def update_status(app_id: int, new_status: str, note: str = "") -> bool:
             date_applied = ts
         elif new_status != "saved" and not date_applied:
             date_applied = ts
-        conn.execute(
-            "UPDATE applications SET status=?, date_applied=?, updated_at=? WHERE id=?",
-            (new_status, date_applied, ts, app_id),
-        )
+        if contact is not None and str(contact).strip():
+            conn.execute(
+                "UPDATE applications SET status=?, date_applied=?, contact=?, "
+                "updated_at=? WHERE id=?",
+                (new_status, date_applied, str(contact).strip(), ts, app_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE applications SET status=?, date_applied=?, updated_at=? WHERE id=?",
+                (new_status, date_applied, ts, app_id),
+            )
         conn.execute(
             """INSERT INTO status_history
                  (application_id, old_status, new_status, note, changed_at)

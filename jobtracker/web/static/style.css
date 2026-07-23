@@ -532,6 +532,20 @@ select option{background:var(--bg2);color:var(--ink)}
 textarea{width:100%;resize:vertical}
 form.inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .stack{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.contact-capture{
+  margin-top:4px;padding:12px 14px;border-radius:10px;
+  border:1px dashed var(--rule);background:rgba(8,14,24,.35);
+}
+.contact-capture-head{font-weight:700;font-size:13px;margin-bottom:8px}
+.contact-preview{
+  white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.45;
+  margin:0;padding:10px 12px;border-radius:8px;border:1px solid var(--rule);
+  background:rgba(8,14,24,.4);
+}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .contact-capture,
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .contact-preview{
+  background:#f8fafc;
+}
 .row{display:flex;gap:8px;margin-bottom:8px}
 .row>*{flex:1}
 .addform{margin-top:10px;display:flex;flex-direction:column;gap:8px}

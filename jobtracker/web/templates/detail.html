@@ -10,6 +10,7 @@
 <p class="sub">{{ app.company }}{% if app.location %} · {{ app.location }}{% endif %}
   · match {{ '%.0f'|format(app.match_score or 0) }}%
   {% if app.url %} · <a href="{{ app.url }}" target="_blank" rel="noopener">job link ↗</a>{% endif %}
+  {% if app.contact %} · <span title="{{ app.contact }}">👤 {{ app.contact.splitlines()[0] }}</span>{% endif %}
   · <a href="#company">🔎 company insight</a>
   · <a href="{{ url_for('main.share', app_id=app.id) }}" title="Download the AI insights as a standalone HTML page you can email">📤 export analysis (HTML)</a></p>
 
@@ -26,10 +27,41 @@
   <div>
     <section class="panel">
       <h2>Move status</h2>
-      <form method="post" action="{{ url_for('main.set_status', app_id=app.id) }}" class="inline">
-        <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s==app.status }}>{{ s }}</option>{% endfor %}</select>
-        <input name="note" placeholder="note (optional)">
-        <button class="btn" type="submit">Update</button>
+      <form method="post" action="{{ url_for('main.set_status', app_id=app.id) }}"
+            class="stack" id="status-form"
+            data-current-status="{{ app.status }}">
+        <div class="inline">
+          <select name="status" id="status-select">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s==app.status }}>{{ s }}</option>{% endfor %}</select>
+          <input name="note" placeholder="note (optional)" style="flex:1;min-width:140px">
+          <button class="btn" type="submit">Update</button>
+        </div>
+        <div class="contact-capture" id="contact-on-screening" hidden>
+          <div class="contact-capture-head">👤 Contact person
+            <span class="muted sm">— recruiter / interviewer (optional, saved with status)</span>
+          </div>
+          <div class="row">
+            <input name="contact_name" placeholder="Name" autocomplete="name"
+                   value="">
+            <select name="contact_role">
+              <option value="">Role…</option>
+              <option value="Recruiter">Recruiter</option>
+              <option value="HR">HR</option>
+              <option value="Hiring Manager">Hiring Manager</option>
+              <option value="Coordinator">Coordinator</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="row">
+            <input name="contact_email" type="email" placeholder="Email" autocomplete="email">
+            <input name="contact_phone" type="tel" placeholder="Phone" autocomplete="tel">
+          </div>
+          <input name="contact_other" placeholder="LinkedIn / other note (optional)">
+          {% if app.contact %}
+          <p class="muted sm">Current contact stays unless you fill the fields above
+            (they replace it):</p>
+          <pre class="contact-preview">{{ app.contact }}</pre>
+          {% endif %}
+        </div>
       </form>
       <details class="mt"><summary class="btn danger sm">Mark rejected…</summary>
         <form method="post" action="{{ url_for('main.reject', app_id=app.id) }}" class="stack">
@@ -37,6 +69,42 @@
           <label>Reason <select name="reason">{% for s in reasons %}<option>{{ s }}</option>{% endfor %}</select></label>
           <input name="note" placeholder="free-text note">
           <button class="btn danger" type="submit">Confirm rejection</button>
+        </form>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>👤 Contact</h2>
+      {% if app.contact %}
+      <pre class="contact-preview">{{ app.contact }}</pre>
+      {% else %}
+      <p class="muted sm">No contact yet — usually filled when you move to
+        <b>screening</b> (recruiter name / email / phone).</p>
+      {% endif %}
+      <details class="mt">
+        <summary class="btn sm">{{ 'Edit contact' if app.contact else 'Add contact' }}</summary>
+        <form method="post" action="{{ url_for('main.set_contact', app_id=app.id) }}"
+              class="stack mt">
+          <div class="row">
+            <input name="contact_name" placeholder="Name" autocomplete="name">
+            <select name="contact_role">
+              <option value="">Role…</option>
+              <option value="Recruiter">Recruiter</option>
+              <option value="HR">HR</option>
+              <option value="Hiring Manager">Hiring Manager</option>
+              <option value="Coordinator">Coordinator</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="row">
+            <input name="contact_email" type="email" placeholder="Email">
+            <input name="contact_phone" type="tel" placeholder="Phone">
+          </div>
+          <input name="contact_other" placeholder="LinkedIn / other note (optional)">
+          <label class="muted sm">Or paste / edit full contact text
+            <textarea name="contact" rows="4" placeholder="Name (Recruiter)&#10;email@company.com&#10;+972…">{{ app.contact or '' }}</textarea>
+          </label>
+          <button class="btn primary" type="submit">Save contact</button>
         </form>
       </details>
     </section>
@@ -656,6 +724,20 @@
   }
   if (toggle) toggle.addEventListener('click', function () { showEdit(true); });
   if (cancel) cancel.addEventListener('click', function () { showEdit(false); });
+})();
+</script>
+<script>
+// Show contact-person fields when moving to screening (or interview).
+(function () {
+  var sel = document.getElementById('status-select');
+  var box = document.getElementById('contact-on-screening');
+  if (!sel || !box) return;
+  var SHOW_FOR = { screening: 1, interview: 1 };
+  function sync() {
+    box.hidden = !SHOW_FOR[sel.value];
+  }
+  sel.addEventListener('change', sync);
+  sync();
 })();
 </script>
 <script>

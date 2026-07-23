@@ -1813,14 +1813,53 @@ def set_status(app_id: int):
     if request.is_json:
         new = (request.json or {}).get("status")
         note = ""
+        contact = None
     else:
-        new = request.form.get("status")
-        note = request.form.get("note", "")
-    ok = tracker.update_status(app_id, new, note)
+        f = request.form
+        new = f.get("status")
+        note = f.get("note", "")
+        # Structured contact fields (shown when moving to screening).
+        contact = tracker.format_contact(
+            name=f.get("contact_name", ""),
+            role=f.get("contact_role", ""),
+            email=f.get("contact_email", ""),
+            phone=f.get("contact_phone", ""),
+            other=f.get("contact_other", ""),
+        ) or None
+        # Free-text override / paste (also used when editing existing contact).
+        raw = (f.get("contact") or "").strip()
+        if raw:
+            contact = raw
+    ok = tracker.update_status(app_id, new, note, contact=contact)
     if request.is_json:
         return ({"ok": ok}, 200 if ok else 404)
-    flash("Status updated." if ok else "Update failed.", "ok" if ok else "error")
+    if ok and contact:
+        flash("Status updated — contact saved.", "ok")
+    else:
+        flash("Status updated." if ok else "Update failed.", "ok" if ok else "error")
     return redirect(request.referrer or url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/contact", methods=["POST"])
+def set_contact(app_id: int):
+    """Save / update recruiter contact details independently of status."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    f = request.form
+    contact = tracker.format_contact(
+        name=f.get("contact_name", ""),
+        role=f.get("contact_role", ""),
+        email=f.get("contact_email", ""),
+        phone=f.get("contact_phone", ""),
+        other=f.get("contact_other", ""),
+    )
+    raw = (f.get("contact") or "").strip()
+    if raw:
+        contact = raw
+    ok = tracker.set_contact(app_id, contact)
+    flash("Contact saved." if ok else "Could not save contact.",
+          "ok" if ok else "error")
+    return redirect(url_for("main.detail", app_id=app_id))
 
 
 @bp.route("/application/<int:app_id>/reject", methods=["POST"])
