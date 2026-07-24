@@ -758,10 +758,14 @@
 
       {% set show_pitch_cmp = app.pitch_prev or (app.pitch and app.pitch.strip() != base_pitch.strip()) %}
       {% if show_pitch_cmp %}
-      <h3 class="mt">Before / After (styled HTML)</h3>
+      <div class="pitch-fs-bar mt">
+        <h3>Before / After (styled HTML)</h3>
+        <button type="button" class="btn sm" data-pitch-fs title="Open pitch full screen">
+          ⛶ Fullscreen</button>
+      </div>
       <p class="muted sm">Left = pitch before AI tailor · Right = tailored for this job
         (same styled document as My Pitch)</p>
-      <div class="diff-cols pitch-html-cmp">
+      <div class="diff-cols pitch-html-cmp" id="pitch-inline">
         <section class="panel diff-pane">
           <h3>Before</h3>
           <div class="frame-wrap pitch-frame-sm">
@@ -775,14 +779,56 @@
           </div>
         </section>
       </div>
+      <div class="pitch-fs-overlay" id="pitch-fs" hidden>
+        <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
+          <header class="pitch-fs-head">
+            <h2>🎤 Pitch — Before / After</h2>
+            <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
+          </header>
+          <div class="diff-cols pitch-fs-body">
+            <section class="diff-pane">
+              <h3>Before</h3>
+              <div class="frame-wrap pitch-fs-frame">
+                <iframe title="Pitch before AI (fullscreen)"
+                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before') }}"></iframe>
+              </div>
+            </section>
+            <section class="diff-pane">
+              <h3>✨ After (this job)</h3>
+              <div class="frame-wrap pitch-fs-frame">
+                <iframe title="Pitch after AI (fullscreen)"
+                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after') }}"></iframe>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
       {% else %}
-      <div class="review wide mt">
+      <div class="pitch-fs-bar mt">
+        <span class="muted sm">Styled like My Pitch — drag the corner to resize.</span>
+        <button type="button" class="btn sm" data-pitch-fs title="Open pitch full screen">
+          ⛶ Fullscreen</button>
+      </div>
+      <div class="review wide mt" id="pitch-inline">
         <div class="preview">
           <div class="frame-wrap" id="app-pitch-frame-wrap">
             <iframe id="app-pitch-frame" title="Interview script for this job"
                     src="{{ url_for('main.app_pitch_view', app_id=app.id) }}"></iframe>
           </div>
-          <span class="muted sm frame-tip">Styled like My Pitch — drag the corner to resize.</span>
+        </div>
+      </div>
+      <div class="pitch-fs-overlay" id="pitch-fs" hidden>
+        <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
+          <header class="pitch-fs-head">
+            <h2>🎤 My pitch</h2>
+            <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
+          </header>
+          <div class="pitch-fs-body single">
+            <div class="frame-wrap pitch-fs-frame">
+              <iframe title="Interview script (fullscreen)"
+                      data-src="{{ url_for('main.app_pitch_view', app_id=app.id) }}"></iframe>
+            </div>
+          </div>
         </div>
       </div>
       {% endif %}
@@ -814,6 +860,43 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Pitch fullscreen overlay (Before/After or single view).
+(function () {
+  var overlay = document.getElementById('pitch-fs');
+  if (!overlay) return;
+  var openBtn = document.querySelector('[data-pitch-fs]');
+  var closeBtn = overlay.querySelector('[data-pitch-fs-close]');
+
+  function loadFrames() {
+    Array.prototype.forEach.call(overlay.querySelectorAll('iframe[data-src]'), function (f) {
+      if (!f.getAttribute('src')) f.setAttribute('src', f.getAttribute('data-src'));
+    });
+  }
+  function openFs() {
+    loadFrames();
+    overlay.hidden = false;
+    document.body.classList.add('pitch-fs-open');
+    if (closeBtn) closeBtn.focus();
+  }
+  function closeFs() {
+    overlay.hidden = true;
+    document.body.classList.remove('pitch-fs-open');
+    if (openBtn) openBtn.focus();
+  }
+  if (openBtn) openBtn.addEventListener('click', openFs);
+  if (closeBtn) closeBtn.addEventListener('click', closeFs);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeFs();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlay.hidden) {
+      e.preventDefault();
+      closeFs();
+    }
+  });
+})();
+</script>
 <script>
 (function () {
   var panel = document.getElementById('job-description');
