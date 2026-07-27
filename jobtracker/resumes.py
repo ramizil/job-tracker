@@ -525,12 +525,94 @@ def set_default(resume_id: int, *, update_settings_path: bool = True) -> None:
                 pass
 
 
+def rename_file(resume_id: int, new_name: str) -> str:
+    """Rename a library resume's display name and on-disk library file.
+
+    Keeps the original extension (HTML stays HTML, PDF stays PDF). Also renames
+    ``source_path`` on disk when that file is writable. Returns the new
+    ``original_name``.
+    """
+    row = get(resume_id)
+    if not row:
+        raise ValueError(f"Unknown resume id {resume_id}")
+
+    old_orig = row["original_name"] or row["filename"] or "resume.bin"
+    old_ext = Path(old_orig).suffix.lower() or Path(row["filename"] or "").suffix.lower()
+    desired = _safe_name(Path(new_name or "").name)
+    if not desired:
+        raise ValueError("Filename cannot be empty")
+    if not Path(desired).suffix and old_ext:
+        desired = f"{desired}{old_ext}"
+    # Lock extension so HTML/PDF type (and twin grouping) stay consistent.
+    if old_ext and Path(desired).suffix.lower() != old_ext:
+        desired = f"{Path(desired).stem}{old_ext}"
+    new_ext = Path(desired).suffix.lower()
+    if new_ext and new_ext not in SUPPORTED_RESUME_EXTS:
+        raise ValueError(
+            f"Unsupported resume type {new_ext} "
+            f"(use {', '.join(sorted(SUPPORTED_RESUME_EXTS))})"
+        )
+    if desired == Path(old_orig).name:
+        return desired
+
+    content_hash = row["content_hash"] or ""
+    prefix = (content_hash[:_HASH_PREFIX] or f"id{resume_id}")
+    new_stored = f"{prefix}_{desired}"
+    old_path = path_for(row)
+    new_path = _dir() / new_stored
+    if new_path.resolve() != old_path.resolve():
+        if new_path.exists():
+            raise ValueError(f"A library file named {new_stored} already exists")
+        if old_path.is_file():
+            old_path.rename(new_path)
+        elif not new_path.exists():
+            # Library copy missing — still update DB names so downloads/labels work.
+            pass
+
+    new_source = (row["source_path"] or "").strip()
+    if new_source:
+        src = Path(new_source)
+        target = src.with_name(desired)
+        if src.is_file() and target.resolve() != src.resolve():
+            try:
+                if not target.exists():
+                    src.rename(target)
+                    new_source = str(target)
+                # If target already exists, keep pointing at the old path.
+            except OSError:
+                # External path not writable — leave source_path unchanged.
+                pass
+        elif not src.exists():
+            # Recorded path is stale; update basename for display consistency.
+            new_source = str(src.with_name(desired))
+
+    with get_connection() as conn:
+        conn.execute(
+            """UPDATE resumes
+                  SET original_name=?, filename=?, source_path=?
+                WHERE id=?""",
+            (desired, new_stored, new_source[:500] if new_source else "",
+             resume_id),
+        )
+
+    if row["is_default"] and new_path.is_file():
+        try:
+            config.update_env_file({"RESUME_PATH": str(new_path.resolve())})
+            config.reload()
+        except OSError:
+            pass
+    return desired
+
+
 def update_meta(resume_id: int, *, label: str | None = None,
-                color: str | None = None) -> None:
+                color: str | None = None,
+                original_name: str | None = None) -> None:
     if label is not None:
         set_label(resume_id, label)
     if color is not None:
         set_color(resume_id, color)
+    if original_name is not None and original_name.strip():
+        rename_file(resume_id, original_name)
 
 
 def save_html(resume_id: int, html: str) -> None:

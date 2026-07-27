@@ -2842,12 +2842,32 @@ def resume_lib_edit(resume_id: int):
 def resume_lib_meta(resume_id: int):
     if not resumes.get(resume_id):
         abort(404)
-    resumes.update_meta(
-        resume_id,
-        label=request.form.get("label"),
-        color=request.form.get("color"),
-    )
-    flash("Label / colour saved.", "ok")
+    try:
+        resumes.update_meta(
+            resume_id,
+            label=request.form.get("label"),
+            color=request.form.get("color"),
+        )
+        group = resumes.group_for(resume_id)
+        renamed = []
+        html_name = (request.form.get("html_filename") or "").strip()
+        pdf_name = (request.form.get("pdf_filename") or "").strip()
+        single_name = (request.form.get("filename") or "").strip()
+        if group and group.get("html") and html_name:
+            resumes.rename_file(int(group["html"]["id"]), html_name)
+            renamed.append("HTML")
+        if group and group.get("pdf") and pdf_name:
+            resumes.rename_file(int(group["pdf"]["id"]), pdf_name)
+            renamed.append("PDF")
+        if single_name and not (html_name or pdf_name):
+            resumes.rename_file(resume_id, single_name)
+            renamed.append("file")
+        if renamed:
+            flash("Saved label / colour / filename(s).", "ok")
+        else:
+            flash("Label / colour saved.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
     return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
 
 
