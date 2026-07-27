@@ -533,43 +533,48 @@ def help_page():
 
 @bp.route("/pitch", methods=["GET", "POST"])
 def my_pitch():
-    """View / edit / listen to the global about-me pitch (interview script)."""
+    """View / edit / listen to a global pitch (interview or recruiter)."""
+    pk = pitch.normalize_kind(request.values.get("pitch") or request.args.get("pitch"))
     pitch.ensure_html()
     if request.method == "POST":
         kind = (request.form.get("kind") or "text").strip()
         if kind == "html":
-            pitch.save_html(request.form.get("html", ""), sync_text=True)
-            flash("Pitch HTML saved (text synced for Listen / AI).", "ok")
-            return redirect(url_for("main.my_pitch"))
-        pitch.save_base_pitch(request.form.get("text", ""))
-        flash("Pitch saved.", "ok")
-        return redirect(url_for("main.my_pitch", edit=1))
+            pitch.save_html(request.form.get("html", ""), kind=pk, sync_text=True)
+            flash(f"{pitch.KIND_LABELS[pk]} HTML saved (text synced).", "ok")
+            return redirect(url_for("main.my_pitch", pitch=pk))
+        pitch.save_base_pitch(request.form.get("text", ""), kind=pk)
+        flash(f"{pitch.KIND_LABELS[pk]} saved.", "ok")
+        return redirect(url_for("main.my_pitch", pitch=pk, edit=1))
     edit = request.args.get("edit") == "1"
     return render_template(
         "pitch.html",
-        pitch_text=pitch.load_base_pitch(),
-        pitch_html=pitch.load_html(),
-        has_html=pitch.has_html(),
+        pitch_kind=pk,
+        pitch_kinds=pitch.PITCH_KINDS,
+        pitch_labels=pitch.KIND_LABELS,
+        pitch_text=pitch.load_base_pitch(pk),
+        pitch_html=pitch.load_html(pk),
+        has_html=pitch.has_html(pk),
         edit_mode=edit,
         ai_on=ai.is_configured(),
-        has_draft=pitch.has_draft(),
+        has_draft=pitch.has_draft(pk),
     )
 
 
 @bp.route("/pitch/view")
 def pitch_view():
     """Raw styled pitch HTML (iframe / open in tab) — same as the linked file."""
-    pitch.ensure_html()
+    pk = pitch.normalize_kind(request.args.get("pitch"))
+    pitch.ensure_html(pk)
     which = (request.args.get("which") or "").strip().lower()
     if which in ("draft", "after", "new"):
-        draft = pitch.load_draft()
+        draft = pitch.load_draft(pk)
         if not draft:
             abort(404)
-        html = pitch.html_from_plain(draft)
+        html = pitch.html_from_plain(draft, kind=pk)
     else:
-        html = pitch.load_html()
+        html = pitch.load_html(pk)
         if not html:
-            html = pitch.html_from_plain(pitch.load_base_pitch())
+            html = pitch.html_from_plain(pitch.load_base_pitch(pk), kind=pk)
     if not html:
         abort(404)
     return Response(html, mimetype="text/html; charset=utf-8")
@@ -578,12 +583,13 @@ def pitch_view():
 @bp.route("/pitch/draft", methods=["POST"])
 def my_pitch_draft():
     """Draft a fresh base pitch from the resume with Gemini (Hebrew)."""
+    pk = pitch.normalize_kind(request.form.get("pitch") or request.args.get("pitch"))
     try:
-        pitch.save_base_pitch(ai.pitch_from_resume(language="he"))
-        flash("Drafted a new pitch from your resume.", "ok")
+        pitch.save_base_pitch(ai.pitch_from_resume(language="he"), kind=pk)
+        flash(f"Drafted a new {pitch.KIND_LABELS[pk].lower()} from your resume.", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
-    return redirect(url_for("main.my_pitch", edit=1))
+    return redirect(url_for("main.my_pitch", pitch=pk, edit=1))
 
 
 def _pitch_sections(text: str) -> tuple[str, list[dict]]:
@@ -645,24 +651,28 @@ def _pitch_sections(text: str) -> tuple[str, list[dict]]:
     return title, sections
 
 
-def _render_pitch_export() -> tuple[str, str]:
+def _render_pitch_export(pk: str = "interview") -> tuple[str, str]:
     """Render the standalone styled pitch document. Returns (html, title)."""
-    text = pitch.load_base_pitch()
+    pk = pitch.normalize_kind(pk)
+    text = pitch.load_base_pitch(pk)
     title, sections = _pitch_sections(text)
     rtl = bool(re.search(r"[\u0590-\u05FF]", text))
     html = render_template(
-        "pitch_export.html", title=title or "My Pitch", sections=sections,
-        rtl=rtl, generated=datetime.now().strftime("%Y-%m-%d %H:%M"))
+        "pitch_export.html", title=title or pitch.KIND_LABELS[pk],
+        sections=sections, rtl=rtl,
+        generated=datetime.now().strftime("%Y-%m-%d %H:%M"))
     return html, title
 
 
 @bp.route("/pitch/export.html")
 def pitch_export_html():
     """Download the pitch as a standalone, nicely styled HTML document."""
-    html, _ = _render_pitch_export()
+    pk = pitch.normalize_kind(request.args.get("pitch"))
+    html, _ = _render_pitch_export(pk)
+    fname = ("recruiter-pitch.html" if pk == "recruiter" else "my-pitch.html")
     resp = make_response(html)
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
-    resp.headers["Content-Disposition"] = "attachment; filename=my-pitch.html"
+    resp.headers["Content-Disposition"] = f"attachment; filename={fname}"
     return resp
 
 
@@ -670,29 +680,32 @@ def pitch_export_html():
 def pitch_export_pdf():
     """Download the pitch as a PDF (rendered by the local browser engine)."""
     import io
-    html, _ = _render_pitch_export()
+    pk = pitch.normalize_kind(request.args.get("pitch"))
+    html, _ = _render_pitch_export(pk)
     pdf = _render_pdf_with_browser(html)
     if not pdf:
         flash("No local Chrome/Edge found for PDF rendering — export the HTML "
               "instead and print it to PDF from your browser (Cmd/Ctrl+P).",
               "error")
-        return redirect(url_for("main.my_pitch"))
+        return redirect(url_for("main.my_pitch", pitch=pk))
+    fname = ("recruiter-pitch.pdf" if pk == "recruiter" else "my-pitch.pdf")
     return send_file(io.BytesIO(pdf), mimetype="application/pdf",
-                     as_attachment=True, download_name="my-pitch.pdf")
+                     as_attachment=True, download_name=fname)
 
 
 @bp.route("/pitch/revise", methods=["POST"])
 def pitch_revise():
     """AI-rewrite the base pitch per a free-text instruction -> pending draft."""
+    pk = pitch.normalize_kind(request.form.get("pitch") or request.args.get("pitch"))
     instruction = request.form.get("instruction", "").strip()
     try:
-        draft = ai.revise_pitch(base_pitch=pitch.load_base_pitch(),
+        draft = ai.revise_pitch(base_pitch=pitch.load_base_pitch(pk),
                                 instruction=instruction)
-        pitch.save_draft(draft)
-        return redirect(url_for("main.pitch_compare"))
+        pitch.save_draft(draft, kind=pk)
+        return redirect(url_for("main.pitch_compare", pitch=pk))
     except ai.AIError as exc:
         flash(str(exc), "error")
-        return redirect(url_for("main.my_pitch"))
+        return redirect(url_for("main.my_pitch", pitch=pk))
 
 
 def _diff_sides(old: str, new: str) -> tuple[str, str]:
@@ -727,36 +740,39 @@ def _diff_sides(old: str, new: str) -> tuple[str, str]:
 @bp.route("/pitch/compare")
 def pitch_compare():
     """Side-by-side current pitch vs pending AI revision, differences marked."""
-    draft = pitch.load_draft()
+    pk = pitch.normalize_kind(request.args.get("pitch"))
+    draft = pitch.load_draft(pk)
     if not draft.strip():
         flash("No pending AI revision to compare — generate one first.", "error")
-        return redirect(url_for("main.my_pitch"))
-    current = pitch.load_base_pitch()
+        return redirect(url_for("main.my_pitch", pitch=pk))
+    current = pitch.load_base_pitch(pk)
     old_html, new_html = _diff_sides(current, draft)
     return render_template("pitch_compare.html",
+                           pitch_kind=pk,
                            old_html=old_html, new_html=new_html)
 
 
 @bp.route("/pitch/draft/apply", methods=["POST"])
 def pitch_draft_apply():
     """Accept the pending AI revision: it becomes the base pitch."""
-    draft = pitch.load_draft()
+    pk = pitch.normalize_kind(request.form.get("pitch") or request.args.get("pitch"))
+    draft = pitch.load_draft(pk)
     if draft.strip():
-        pitch.save_base_pitch(draft)
-        pitch.clear_draft()
+        pitch.save_base_pitch(draft, kind=pk)
+        pitch.clear_draft(pk)
         flash("AI revision applied — it is now your pitch.", "ok")
     else:
         flash("No pending AI revision to apply.", "error")
-    return redirect(url_for("main.my_pitch"))
+    return redirect(url_for("main.my_pitch", pitch=pk))
 
 
 @bp.route("/pitch/draft/discard", methods=["POST"])
 def pitch_draft_discard():
     """Throw away the pending AI revision; the original pitch stays."""
-    pitch.clear_draft()
+    pk = pitch.normalize_kind(request.form.get("pitch") or request.args.get("pitch"))
+    pitch.clear_draft(pk)
     flash("AI revision discarded — your pitch is unchanged.", "ok")
-    return redirect(url_for("main.my_pitch"))
-
+    return redirect(url_for("main.my_pitch", pitch=pk))
 
 @bp.route("/")
 def dashboard():
@@ -1504,7 +1520,11 @@ def detail(app_id: int):
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
         has_tailored=_tailored_path(app_id).exists(),
         has_resume_draft=_tailored_draft_path(app_id).exists(),
-        base_pitch=pitch.load_base_pitch(),
+        base_pitch=pitch.load_base_pitch("interview"),
+        base_pitch_recruiter=pitch.load_base_pitch("recruiter"),
+        pitch_kind=pitch.normalize_kind(request.args.get("pitch")),
+        pitch_kinds=pitch.PITCH_KINDS,
+        pitch_labels=pitch.KIND_LABELS,
         salary=tracker.get_salary_research(app_id),
         company_brief=tracker.get_company_brief(app_id),
         interview_prep=tracker.get_interview_prep(app_id),
@@ -2173,7 +2193,8 @@ _BATCH_ITEMS = {
     "prep": "interview prep",
     "mock": "mock interview",
     "exercise": "QA exercise",
-    "pitch": "about-me pitch",
+    "pitch": "interview pitch",
+    "pitch_recruiter": "recruiter pitch",
     "company": "company research",
     "salary": "salary research",
     "ats": "ATS keyword check",
@@ -2222,12 +2243,24 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
             title=title, company=company, location=location,
             description=description))
     elif key == "pitch":
-        base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
+        base = (r["pitch"] or "").strip() or pitch.load_base_pitch("interview")
         res = ai.tailor_pitch(
             title=title, company=company, location=location,
-            description=description, base_pitch=base, language="he")
+            description=description, base_pitch=base, language="he",
+            kind="interview")
         notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
-        tracker.set_pitch(app_id, res["script"], notes=notes, prev=base)
+        tracker.set_pitch(app_id, res["script"], notes=notes, prev=base,
+                          kind="interview")
+    elif key == "pitch_recruiter":
+        base = ((r["pitch_recruiter"] or "").strip()
+                or pitch.load_base_pitch("recruiter"))
+        res = ai.tailor_pitch(
+            title=title, company=company, location=location,
+            description=description, base_pitch=base, language="he",
+            kind="recruiter")
+        notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
+        tracker.set_pitch(app_id, res["script"], notes=notes, prev=base,
+                          kind="recruiter")
     elif key == "company":
         tracker.set_company_brief(app_id, ai.company_research(
             company=company, location=location, title=title,
@@ -2383,9 +2416,10 @@ def tts_speak():
 def pitch_save(app_id: int):
     if not tracker.get_application(app_id):
         abort(404)
-    tracker.set_pitch(app_id, request.form.get("text", ""))
-    flash("Pitch saved for this job.", "ok")
-    return redirect(url_for("main.detail", app_id=app_id) + "#pitch")
+    pk = pitch.normalize_kind(request.form.get("pitch"))
+    tracker.set_pitch(app_id, request.form.get("text", ""), kind=pk)
+    flash(f"{pitch.KIND_LABELS[pk]} saved for this job.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id, pitch=pk) + "#pitch")
 
 
 @bp.route("/application/<int:app_id>/pitch/view")
@@ -2393,17 +2427,27 @@ def app_pitch_view(app_id: int):
     """Styled pitch HTML for this job (iframe) — same look as My Pitch tab.
 
     ``?which=before`` serves the pre-tailor text; default is the current pitch.
+    ``?pitch=recruiter`` selects the short recruiter pitch.
     """
     r = tracker.get_application(app_id)
     if not r:
         abort(404)
+    pk = pitch.normalize_kind(request.args.get("pitch"))
     which = (request.args.get("which") or "after").strip().lower()
-    pitch.ensure_html()
-    if which in ("before", "prev", "base"):
-        text = (r["pitch_prev"] or "").strip() or pitch.load_base_pitch()
+    pitch.ensure_html(pk)
+    if pk == "recruiter":
+        cur = (r["pitch_recruiter"] or "").strip()
+        prev = (r["pitch_recruiter_prev"] or "").strip()
+        base = pitch.load_base_pitch("recruiter")
     else:
-        text = (r["pitch"] or "").strip() or pitch.load_base_pitch()
-    html = pitch.html_from_plain(text)
+        cur = (r["pitch"] or "").strip()
+        prev = (r["pitch_prev"] or "").strip()
+        base = pitch.load_base_pitch("interview")
+    if which in ("before", "prev", "base"):
+        text = prev or base
+    else:
+        text = cur or base
+    html = pitch.html_from_plain(text, kind=pk)
     return Response(html, mimetype="text/html; charset=utf-8")
 
 
@@ -2412,18 +2456,25 @@ def pitch_tailor(app_id: int):
     r = tracker.get_application(app_id)
     if not r:
         abort(404)
-    base = (r["pitch"] or "").strip() or pitch.load_base_pitch()
+    pk = pitch.normalize_kind(request.form.get("pitch") or request.args.get("pitch"))
+    if pk == "recruiter":
+        base = ((r["pitch_recruiter"] or "").strip()
+                or pitch.load_base_pitch("recruiter"))
+    else:
+        base = (r["pitch"] or "").strip() or pitch.load_base_pitch("interview")
     try:
         result = ai.tailor_pitch(
             title=r["title"], company=r["company"], location=r["location"] or "",
             description=r["description"] or "", base_pitch=base, language="he",
+            kind=pk,
         )
         notes = "\n".join(f"- {s}" for s in result.get("suggestions", []))
-        tracker.set_pitch(app_id, result["script"], notes=notes, prev=base)
-        flash("Pitch tailored for this job — Before / After HTML below.", "ok")
+        tracker.set_pitch(app_id, result["script"], notes=notes, prev=base,
+                          kind=pk)
+        flash(f"{pitch.KIND_LABELS[pk]} tailored — Before / After below.", "ok")
     except ai.AIError as exc:
         flash(str(exc), "error")
-    return redirect(url_for("main.detail", app_id=app_id) + "#pitch")
+    return redirect(url_for("main.detail", app_id=app_id, pitch=pk) + "#pitch")
 
 
 @bp.route("/application/<int:app_id>/tailor", methods=["POST"])

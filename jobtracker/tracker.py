@@ -703,38 +703,51 @@ def get_qa_exercise(app_id: int) -> dict[str, Any] | None:
 
 
 def set_pitch(app_id: int, script: str, notes: str | None = None,
-              *, prev: str | None = None) -> bool:
-    """Persist the per-job about-me pitch. ``notes`` (AI suggestions) is only
-    updated when provided, so hand-edits to the script keep the last notes.
+              *, prev: str | None = None, kind: str = "interview") -> bool:
+    """Persist the per-job pitch (``interview`` or ``recruiter``).
 
-    When ``prev`` is set (AI tailor), it is stored in ``pitch_prev`` so the UI
-    can show a styled Before / After HTML comparison.
+    ``notes`` (AI suggestions) is only updated when provided, so hand-edits
+    keep the last notes. When ``prev`` is set (AI tailor), it is stored so the
+    UI can show a styled Before / After HTML comparison.
     """
+    from . import pitch as pitch_mod
+    kind = pitch_mod.normalize_kind(kind)
+    if kind == "recruiter":
+        col, col_prev, col_notes, col_at = (
+            "pitch_recruiter", "pitch_recruiter_prev",
+            "pitch_recruiter_notes", "pitch_recruiter_at",
+        )
+    else:
+        col, col_prev, col_notes, col_at = (
+            "pitch", "pitch_prev", "pitch_notes", "pitch_at",
+        )
     with get_connection() as conn:
         ts = now_iso()
         if prev is not None:
             if notes is None:
                 cur = conn.execute(
-                    """UPDATE applications
-                         SET pitch=?, pitch_prev=?, pitch_at=?, updated_at=? WHERE id=?""",
+                    f"""UPDATE applications
+                         SET {col}=?, {col_prev}=?, {col_at}=?, updated_at=?
+                         WHERE id=?""",
                     (script, prev, ts, ts, app_id),
                 )
             else:
                 cur = conn.execute(
-                    """UPDATE applications
-                         SET pitch=?, pitch_prev=?, pitch_notes=?, pitch_at=?,
+                    f"""UPDATE applications
+                         SET {col}=?, {col_prev}=?, {col_notes}=?, {col_at}=?,
                              updated_at=? WHERE id=?""",
                     (script, prev, notes, ts, ts, app_id),
                 )
         elif notes is None:
             cur = conn.execute(
-                "UPDATE applications SET pitch=?, pitch_at=?, updated_at=? WHERE id=?",
+                f"UPDATE applications SET {col}=?, {col_at}=?, updated_at=? WHERE id=?",
                 (script, ts, ts, app_id),
             )
         else:
             cur = conn.execute(
-                """UPDATE applications
-                     SET pitch=?, pitch_notes=?, pitch_at=?, updated_at=? WHERE id=?""",
+                f"""UPDATE applications
+                     SET {col}=?, {col_notes}=?, {col_at}=?, updated_at=?
+                     WHERE id=?""",
                 (script, notes, ts, ts, app_id),
             )
         return cur.rowcount > 0

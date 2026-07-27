@@ -1,20 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Compare Pitch Revision · Job Tracker{% endblock %}
 {% block content %}
+{% set pk = pitch_kind or 'interview' %}
 <h1>🆚 Pitch — compare AI revision</h1>
-<p class="sub">Your current pitch (left) vs the AI revision (right).
+<p class="sub">Your current {{ 'recruiter' if pk == 'recruiter' else 'interview' }} pitch (left)
+  vs the AI revision (right).
   <span class="diff-key"><del>Removed</del></span> text is highlighted on the left,
   <span class="diff-key"><ins>added / changed</ins></span> text on the right.</p>
 
 <div class="actions">
   <form method="post" action="{{ url_for('main.pitch_draft_apply') }}" style="display:inline"
         onsubmit="return confirm('Replace your current pitch with the AI revision?')">
+    <input type="hidden" name="pitch" value="{{ pk }}">
     <button class="btn primary" type="submit">✔ Accept revision</button>
   </form>
   <form method="post" action="{{ url_for('main.pitch_draft_discard') }}" style="display:inline">
+    <input type="hidden" name="pitch" value="{{ pk }}">
     <button class="btn danger" type="submit">✖ Discard revision</button>
   </form>
-  <a class="btn" href="{{ url_for('main.my_pitch') }}">← Back to My Pitch</a>
+  <a class="btn" href="{{ url_for('main.my_pitch', pitch=pk) }}">← Back to My Pitch</a>
 </div>
 
 <h2 class="mt">Styled HTML</h2>
@@ -22,13 +26,13 @@
   <section class="panel diff-pane">
     <h3>Current pitch</h3>
     <div class="frame-wrap pitch-frame-sm">
-      <iframe title="Current pitch" src="{{ url_for('main.pitch_view') }}"></iframe>
+      <iframe title="Current pitch" src="{{ url_for('main.pitch_view', pitch=pk) }}"></iframe>
     </div>
   </section>
   <section class="panel diff-pane">
     <h3>✨ AI revision</h3>
     <div class="frame-wrap pitch-frame-sm">
-      <iframe title="AI revision" src="{{ url_for('main.pitch_view', which='draft') }}"></iframe>
+      <iframe title="AI revision" src="{{ url_for('main.pitch_view', pitch=pk, which='draft') }}"></iframe>
     </div>
   </section>
 </div>

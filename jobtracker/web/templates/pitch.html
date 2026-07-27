@@ -1,23 +1,41 @@
 {% extends "base.html" %}
 {% block title %}My Pitch · Job Tracker{% endblock %}
 {% block content %}
+{% set pk = pitch_kind or 'interview' %}
 <div class="panel-head">
   <h1>🎤 My Pitch</h1>
   <div class="actions">
     {% if has_html and not edit_mode %}
-    <a class="btn sm" href="{{ url_for('main.my_pitch', edit=1) }}">✏️ Edit</a>
-    <a class="btn sm" href="{{ url_for('main.pitch_view') }}" target="_blank" rel="noopener">Open in tab</a>
+    <a class="btn sm" href="{{ url_for('main.my_pitch', pitch=pk, edit=1) }}">✏️ Edit</a>
+    <a class="btn sm" href="{{ url_for('main.pitch_view', pitch=pk) }}" target="_blank" rel="noopener">Open in tab</a>
     {% elif edit_mode %}
-    <a class="btn sm" href="{{ url_for('main.my_pitch') }}">👁 HTML view</a>
+    <a class="btn sm" href="{{ url_for('main.my_pitch', pitch=pk) }}">👁 HTML view</a>
     {% endif %}
   </div>
 </div>
-<p class="sub">Your personal "about me" interview script — styled HTML for reading,
-  simple text when you need to edit. Tailor it per job from each application's page.</p>
+<p class="sub">Two versions of your about-me script — <b>Interview</b> (full 5-stop professional)
+  and <b>Recruiter</b> (short conversational screen, ~45–60s). Tailor either per job from an
+  application’s Pitch tab.</p>
+
+<nav class="pitch-kind-tabs" aria-label="Pitch type">
+  {% for k in pitch_kinds %}
+  <a class="btn sm{{ ' primary' if k == pk }}"
+     href="{{ url_for('main.my_pitch', pitch=k, edit=1 if edit_mode else none) }}">
+    {% if k == 'interview' %}🎙 Interview{% else %}📞 Recruiter{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+<p class="muted sm" style="margin-top:6px">
+  {% if pk == 'recruiter' %}
+  Short &amp; direct for a recruiter / phone screen — skills, roles, 1–2 wins, what you’re looking for.
+  {% else %}
+  Full interview script (5 stops) — same styled document as your long Hebrew תסריט.
+  {% endif %}
+</p>
 
 {% if has_draft %}
-<div class="flash ok">✨ You have a pending AI revision of your pitch —
-  <a href="{{ url_for('main.pitch_compare') }}"><b>compare it side-by-side</b></a>
+<div class="flash ok">✨ You have a pending AI revision of this pitch —
+  <a href="{{ url_for('main.pitch_compare', pitch=pk) }}"><b>compare it side-by-side</b></a>
   and accept or discard it.</div>
 {% endif %}
 
@@ -31,33 +49,31 @@
       <select data-tts="rate"><option value="0.8">0.8×</option><option value="0.9">0.9×</option><option value="1" selected>1×</option><option value="1.1">1.1×</option><option value="1.25">1.25×</option></select>
     </label>
     <span class="muted sm" data-tts="status"></span>
-    <a class="btn sm" href="{{ url_for('main.my_pitch', edit=1) }}" style="margin-inline-start:auto">✏️ Edit</a>
+    <a class="btn sm" href="{{ url_for('main.my_pitch', pitch=pk, edit=1) }}" style="margin-inline-start:auto">✏️ Edit</a>
   </div>
-  {# Hidden plain text for TTS — same content as the HTML body #}
   <pre id="pitch-text-listen" class="sr-only" dir="auto" aria-hidden="true">{{ pitch_text }}</pre>
 
   <div class="review wide mt">
     <div class="preview">
       <div class="frame-wrap" id="pitch-frame-wrap">
-        <iframe id="pitch-frame" title="Interview script"
-                src="{{ url_for('main.pitch_view') }}"></iframe>
+        <iframe id="pitch-frame" title="{{ pitch_labels[pk] }}"
+                src="{{ url_for('main.pitch_view', pitch=pk) }}"></iframe>
       </div>
-      <span class="muted sm frame-tip">Same styled document as
-        <code>סקריפט ראיון - מאוחד.html</code> — drag the corner to resize.</span>
+      <span class="muted sm frame-tip">Drag the corner to resize.</span>
     </div>
   </div>
 
   <div class="actions mt">
-    <a class="btn sm" href="{{ url_for('main.pitch_export_html') }}">⬇ Export HTML</a>
-    <a class="btn sm" href="{{ url_for('main.pitch_export_pdf') }}">⬇ Export PDF</a>
+    <a class="btn sm" href="{{ url_for('main.pitch_export_html', pitch=pk) }}">⬇ Export HTML</a>
+    <a class="btn sm" href="{{ url_for('main.pitch_export_pdf', pitch=pk) }}">⬇ Export PDF</a>
   </div>
 </section>
 {% else %}
 <section class="panel">
   <div class="panel-head">
-    <h2>{% if has_html %}✏️ Edit{% else %}Pitch text{% endif %}</h2>
+    <h2>{% if has_html %}✏️ Edit — {{ pitch_labels[pk] }}{% else %}Pitch text{% endif %}</h2>
     {% if has_html %}
-    <a class="btn sm" href="{{ url_for('main.my_pitch') }}">← Back to HTML view</a>
+    <a class="btn sm" href="{{ url_for('main.my_pitch', pitch=pk) }}">← Back to HTML view</a>
     {% endif %}
   </div>
   <p class="muted sm">Simple text editor — content is taken from the HTML document and
@@ -74,14 +90,15 @@
     <span class="muted sm" data-tts="status"></span>
   </div>
 
-  <form method="post" action="{{ url_for('main.my_pitch') }}" class="stack mt">
+  <form method="post" action="{{ url_for('main.my_pitch', pitch=pk) }}" class="stack mt">
+    <input type="hidden" name="pitch" value="{{ pk }}">
     <input type="hidden" name="kind" value="text">
     <textarea id="pitch-text" name="text" rows="22" class="gen-text" dir="auto">{{ pitch_text }}</textarea>
     <div class="actions">
       <button class="btn primary" type="submit">Save text</button>
       <button class="btn sm" type="button" data-copy="prev">Copy</button>
-      <a class="btn sm" href="{{ url_for('main.pitch_export_html') }}">⬇ Export HTML</a>
-      <a class="btn sm" href="{{ url_for('main.pitch_export_pdf') }}">⬇ Export PDF</a>
+      <a class="btn sm" href="{{ url_for('main.pitch_export_html', pitch=pk) }}">⬇ Export HTML</a>
+      <a class="btn sm" href="{{ url_for('main.pitch_export_pdf', pitch=pk) }}">⬇ Export PDF</a>
     </div>
   </form>
 
@@ -89,7 +106,8 @@
   <details class="mt" id="pitch-html-src"{% if request.args.get('html') == '1' %} open{% endif %}>
     <summary><b>&lt;/&gt; Edit HTML source</b>
       <span class="muted sm">(styled document — saves look + syncs spoken text)</span></summary>
-    <form method="post" action="{{ url_for('main.my_pitch') }}" class="stack mt">
+    <form method="post" action="{{ url_for('main.my_pitch', pitch=pk) }}" class="stack mt">
+      <input type="hidden" name="pitch" value="{{ pk }}">
       <input type="hidden" name="kind" value="html">
       <textarea name="html" class="code gen-text" rows="24" spellcheck="false" dir="ltr"
                 style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px">{{ pitch_html }}</textarea>
@@ -100,9 +118,10 @@
 
   {% if ai_on %}
   <form method="post" action="{{ url_for('main.my_pitch_draft') }}" data-loading="Drafting your pitch from your resume…" class="mt"
-        onsubmit="return confirm('Replace the current pitch text with a fresh AI draft from your resume?')">
+        onsubmit="return confirm('Replace the current {{ pitch_labels[pk]|lower }} with a fresh AI draft from your resume?')">
+    <input type="hidden" name="pitch" value="{{ pk }}">
     <button class="btn" type="submit">✨ Draft from my resume (AI)</button>
-    <span class="muted sm">Generates a new Hebrew pitch from your resume — overwrites the text above.</span>
+    <span class="muted sm">Generates a new Hebrew pitch from your resume — overwrites this version only.</span>
   </form>
   {% endif %}
 </section>
@@ -111,18 +130,18 @@
 {% if ai_on %}
 <section class="panel">
   <h2>🪄 Improve with AI</h2>
-  <p class="muted sm">Tell the AI what to change (e.g. “make station 3 shorter”,
-    “add a sentence about my Playwright experience”, “make the closing more confident”).
+  <p class="muted sm">Tell the AI what to change in the <b>{{ pitch_labels[pk]|lower }}</b>.
     You'll review the result <b>side-by-side with differences highlighted</b> before
-    anything replaces your current pitch.</p>
+    anything replaces it.</p>
   <form method="post" action="{{ url_for('main.pitch_revise') }}" class="stack"
         data-loading="Rewriting your pitch per your instruction…">
+    <input type="hidden" name="pitch" value="{{ pk }}">
     <textarea name="instruction" rows="3" dir="auto"
-              placeholder="What should the AI change in your pitch?" required></textarea>
+              placeholder="What should the AI change in this pitch?" required></textarea>
     <div class="actions">
       <button class="btn primary" type="submit">✨ Regenerate with AI</button>
       {% if has_draft %}
-      <a class="btn sm" href="{{ url_for('main.pitch_compare') }}">🆚 Review pending revision</a>
+      <a class="btn sm" href="{{ url_for('main.pitch_compare', pitch=pk) }}">🆚 Review pending revision</a>
       {% endif %}
     </div>
   </form>

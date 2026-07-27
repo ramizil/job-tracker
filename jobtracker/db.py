@@ -181,10 +181,14 @@ EXTRA_COLUMNS: dict[str, str] = {
     "mock_interview_at": "TEXT",
     "qa_exercise": "TEXT",         # practice QA testing-scenario exercise (Markdown)
     "qa_exercise_at": "TEXT",
-    "pitch": "TEXT",               # per-job tailored about-me pitch (script text)
+    "pitch": "TEXT",               # per-job tailored interview pitch (script text)
     "pitch_notes": "TEXT",         # latest AI tailoring suggestions for the pitch
     "pitch_at": "TEXT",
     "pitch_prev": "TEXT",          # pitch text before last AI tailor (for before/after HTML)
+    "pitch_recruiter": "TEXT",     # per-job short recruiter-screen pitch
+    "pitch_recruiter_notes": "TEXT",
+    "pitch_recruiter_at": "TEXT",
+    "pitch_recruiter_prev": "TEXT",
     "company_brief": "TEXT",       # AI web research about the company (Markdown)
     "company_brief_at": "TEXT",
     "salary_research": "TEXT",     # AI expected-salary research (JSON)

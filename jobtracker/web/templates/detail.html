@@ -305,7 +305,9 @@
             <label class="gen-pick"><input type="checkbox" name="items" value="exercise">
               <span><b>QA exercise</b><br><span class="muted">practice testing-scenario task</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="pitch">
-              <span><b>About-me pitch</b><br><span class="muted">tailor my interview script (תסריט)</span></span></label>
+              <span><b>Interview pitch</b><br><span class="muted">tailor full interview script (תסריט)</span></span></label>
+            <label class="gen-pick"><input type="checkbox" name="items" value="pitch_recruiter">
+              <span><b>Recruiter pitch</b><br><span class="muted">tailor short screen pitch (~60s)</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="company">
               <span><b>Company research</b><br><span class="muted">live web brief on the company</span></span></label>
             <label class="gen-pick"><input type="checkbox" name="items" value="salary">
@@ -730,17 +732,45 @@
     </section>
 
     <section class="panel ai" id="pitch">
+      {% set pk = pitch_kind or 'interview' %}
+      {% if pk == 'recruiter' %}
+        {% set cur_pitch = app.pitch_recruiter or base_pitch_recruiter %}
+        {% set cur_prev = app.pitch_recruiter_prev %}
+        {% set cur_notes = app.pitch_recruiter_notes %}
+        {% set cur_at = app.pitch_recruiter_at %}
+        {% set cur_base = base_pitch_recruiter %}
+      {% else %}
+        {% set cur_pitch = app.pitch or base_pitch %}
+        {% set cur_prev = app.pitch_prev %}
+        {% set cur_notes = app.pitch_notes %}
+        {% set cur_at = app.pitch_at %}
+        {% set cur_base = base_pitch %}
+      {% endif %}
       <div class="panel-head"><h2>🎤 My pitch (תסריט)</h2>
-        {% if app.pitch_at %}<span class="muted sm">saved {{ (app.pitch_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+        {% if cur_at %}<span class="muted sm">saved {{ (cur_at or '')[:16].replace('T',' ') }}</span>{% endif %}
       </div>
-      <p class="muted">Your about-me script for this job — shown as styled HTML (same as
-        <a href="{{ url_for('main.my_pitch') }}">My Pitch</a>). Tailor with AI to get a
-        Before / After view.</p>
+      <p class="muted">Two scripts for this job — same styled HTML as
+        <a href="{{ url_for('main.my_pitch', pitch=pk) }}">My Pitch</a>.
+        Pick a type, then tailor with AI for a Before / After view.</p>
 
-      {% if app.pitch_notes %}
+      <nav class="pitch-kind-tabs" aria-label="Pitch type">
+        <a class="btn sm{{ ' primary' if pk == 'interview' }}"
+           href="{{ url_for('main.detail', app_id=app.id, pitch='interview') }}#pitch">🎙 Interview</a>
+        <a class="btn sm{{ ' primary' if pk == 'recruiter' }}"
+           href="{{ url_for('main.detail', app_id=app.id, pitch='recruiter') }}#pitch">📞 Recruiter</a>
+      </nav>
+      <p class="muted sm" style="margin-top:6px">
+        {% if pk == 'recruiter' %}
+        Short conversational screen (~45–60s) — skills, roles, wins, what you’re looking for.
+        {% else %}
+        Full professional interview script (5 stops).
+        {% endif %}
+      </p>
+
+      {% if cur_notes %}
       <div class="pitch-notes" dir="auto">
         <b>AI suggestions for this job</b>
-        <div class="md">{{ app.pitch_notes | md | safe }}</div>
+        <div class="md">{{ cur_notes | md | safe }}</div>
       </div>
       {% endif %}
 
@@ -753,36 +783,36 @@
         </label>
         <span class="muted sm" data-tts="status"></span>
       </div>
-      {# Hidden plain text for TTS — mirrors the HTML body #}
-      <pre id="pitch-text-{{ app.id }}" class="sr-only" dir="auto" aria-hidden="true">{{ app.pitch or base_pitch }}</pre>
+      <pre id="pitch-text-{{ app.id }}" class="sr-only" dir="auto" aria-hidden="true">{{ cur_pitch }}</pre>
 
-      {% set show_pitch_cmp = app.pitch_prev or (app.pitch and app.pitch.strip() != base_pitch.strip()) %}
+      {% set show_pitch_cmp = cur_prev or (cur_pitch and cur_pitch.strip() != cur_base.strip()) %}
       {% if show_pitch_cmp %}
       <div class="pitch-fs-bar mt">
         <h3>Before / After (styled HTML)</h3>
         <button type="button" class="btn sm" data-pitch-fs title="Open pitch full screen">
           ⛶ Fullscreen</button>
       </div>
-      <p class="muted sm">Left = pitch before AI tailor · Right = tailored for this job
-        (same styled document as My Pitch)</p>
+      <p class="muted sm">Left = before AI tailor · Right = tailored for this job</p>
       <div class="diff-cols pitch-html-cmp" id="pitch-inline">
         <section class="panel diff-pane">
           <h3>Before</h3>
           <div class="frame-wrap pitch-frame-sm">
-            <iframe title="Pitch before AI" src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before') }}"></iframe>
+            <iframe title="Pitch before AI"
+                    src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk) }}"></iframe>
           </div>
         </section>
         <section class="panel diff-pane">
           <h3>✨ After (this job)</h3>
           <div class="frame-wrap pitch-frame-sm">
-            <iframe title="Pitch after AI" src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after') }}"></iframe>
+            <iframe title="Pitch after AI"
+                    src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk) }}"></iframe>
           </div>
         </section>
       </div>
       <div class="pitch-fs-overlay" id="pitch-fs" hidden>
         <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
           <header class="pitch-fs-head">
-            <h2>🎤 Pitch — Before / After</h2>
+            <h2>🎤 {{ pitch_labels[pk] }} — Before / After</h2>
             <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
           </header>
           <div class="diff-cols pitch-fs-body">
@@ -790,14 +820,14 @@
               <h3>Before</h3>
               <div class="frame-wrap pitch-fs-frame">
                 <iframe title="Pitch before AI (fullscreen)"
-                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before') }}"></iframe>
+                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk) }}"></iframe>
               </div>
             </section>
             <section class="diff-pane">
               <h3>✨ After (this job)</h3>
               <div class="frame-wrap pitch-fs-frame">
                 <iframe title="Pitch after AI (fullscreen)"
-                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after') }}"></iframe>
+                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk) }}"></iframe>
               </div>
             </section>
           </div>
@@ -812,21 +842,21 @@
       <div class="review wide mt" id="pitch-inline">
         <div class="preview">
           <div class="frame-wrap" id="app-pitch-frame-wrap">
-            <iframe id="app-pitch-frame" title="Interview script for this job"
-                    src="{{ url_for('main.app_pitch_view', app_id=app.id) }}"></iframe>
+            <iframe id="app-pitch-frame" title="{{ pitch_labels[pk] }} for this job"
+                    src="{{ url_for('main.app_pitch_view', app_id=app.id, pitch=pk) }}"></iframe>
           </div>
         </div>
       </div>
       <div class="pitch-fs-overlay" id="pitch-fs" hidden>
         <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
           <header class="pitch-fs-head">
-            <h2>🎤 My pitch</h2>
+            <h2>🎤 {{ pitch_labels[pk] }}</h2>
             <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
           </header>
           <div class="pitch-fs-body single">
             <div class="frame-wrap pitch-fs-frame">
-              <iframe title="Interview script (fullscreen)"
-                      data-src="{{ url_for('main.app_pitch_view', app_id=app.id) }}"></iframe>
+              <iframe title="Pitch fullscreen"
+                      data-src="{{ url_for('main.app_pitch_view', app_id=app.id, pitch=pk) }}"></iframe>
             </div>
           </div>
         </div>
@@ -837,7 +867,8 @@
         <summary><b>✏️ Edit text</b>
           <span class="muted sm">— plain text; saving updates the HTML view above</span></summary>
         <form method="post" action="{{ url_for('main.pitch_save', app_id=app.id) }}" class="stack mt">
-          <textarea name="text" rows="18" class="gen-text" dir="auto">{{ app.pitch or base_pitch }}</textarea>
+          <input type="hidden" name="pitch" value="{{ pk }}">
+          <textarea name="text" rows="18" class="gen-text" dir="auto">{{ cur_pitch }}</textarea>
           <div class="actions">
             <button class="btn" type="submit">Save for this job</button>
             <button class="btn sm" type="button" data-copy="prev">Copy</button>
@@ -846,9 +877,13 @@
       </details>
 
       {% if ai_on %}
-      <form method="post" action="{{ url_for('main.pitch_tailor', app_id=app.id) }}" data-loading="Tailoring your pitch for this job…" class="mt">
+      <form method="post" action="{{ url_for('main.pitch_tailor', app_id=app.id) }}"
+            data-loading="Tailoring your {{ pitch_labels[pk]|lower }} for this job…" class="mt">
+        <input type="hidden" name="pitch" value="{{ pk }}">
         <button class="btn primary" type="submit">✨ Tailor for this job (AI)</button>
-        <span class="muted sm">Keeps your script, adds a job-specific close — then shows Before / After in HTML.</span>
+        <span class="muted sm">{% if pk == 'recruiter' %}Keeps the short script, adds 1–2 job-specific sentences.
+          {% else %}Keeps your script, adds a job-specific close — then shows Before / After.
+          {% endif %}</span>
       </form>
       {% endif %}
     </section>

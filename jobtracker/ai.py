@@ -1301,15 +1301,58 @@ CANDIDATE RESUME (plain text):
 {resume}
 """
 
+_PITCH_TAILOR_RECRUITER_PROMPT = """You are a career coach. The candidate has a
+SHORT conversational pitch for a recruiter / phone screen (~45-60 seconds).
+They have already memorized it, so:
+
+- KEEP the original pitch VERBATIM — same wording and order.
+  Do NOT rewrite, trim, or paraphrase any existing sentence.
+- ADD one or two short spoken sentences at the end tailored to THIS job
+  (max ~20 seconds total added): connect their strongest matching skills to
+  the role, conversationally. Ground EVERY claim ONLY in the existing pitch
+  and resume — invent nothing. Do NOT add salary, childhood stories, or long
+  technical deep-dives.
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "suggestions": [
+    "short, concrete bullet on what to emphasise for THIS job on the recruiter call"
+  ],
+  "script": "the original pitch verbatim + the short job-tailored closing"
+}}
+
+Write BOTH the suggestions and the script in {lang} (natural, native {lang}).
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description:
+{description}
+
+CANDIDATE'S CURRENT PITCH:
+{base_pitch}
+
+CANDIDATE RESUME (plain text):
+{resume}
+"""
+
 
 def tailor_pitch(*, title: str, company: str, location: str = "",
                  description: str = "", base_pitch: str = "",
-                 resume: str | None = None, language: str = "he") -> dict[str, Any]:
+                 resume: str | None = None, language: str = "he",
+                 kind: str = "interview") -> dict[str, Any]:
     """Tailor the about-me pitch for a specific job.
+
+    ``kind`` is ``interview`` (full script + closing station) or ``recruiter``
+    (short screen pitch + 1–2 closing sentences).
 
     Returns {"suggestions": [...], "script": "...", "language": "..."}.
     """
-    prompt = _PITCH_TAILOR_PROMPT.format(
+    kind = (kind or "interview").strip().lower()
+    tmpl = (_PITCH_TAILOR_RECRUITER_PROMPT if kind == "recruiter"
+            else _PITCH_TAILOR_PROMPT)
+    prompt = tmpl.format(
         lang=_lang_name(language),
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:7000],
@@ -1328,7 +1371,7 @@ def tailor_pitch(*, title: str, company: str, location: str = "",
     if not script:
         raise AIError("Gemini didn't return a tailored pitch. Please try again.")
     return {"suggestions": suggestions, "script": script,
-            "language": (language or "he").lower()}
+            "language": (language or "he").lower(), "kind": kind}
 
 
 # --------------------------------------------------------------------------- #

@@ -914,6 +914,7 @@ html[data-theme="slate"] .mail-icon.unread{filter:none}
 .pitch-html-cmp .diff-pane h3{margin:0 0 8px;font-size:14px}
 .pitch-fs-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pitch-fs-bar h3{margin:0}
+.pitch-kind-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .pitch-fs-overlay{position:fixed;inset:0;z-index:9000;display:flex;align-items:stretch;justify-content:center;
   padding:12px;background:rgba(4,7,14,.82);backdrop-filter:blur(6px)}
 .pitch-fs-overlay[hidden]{display:none}
