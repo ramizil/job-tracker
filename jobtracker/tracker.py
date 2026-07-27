@@ -246,10 +246,17 @@ def get_application(app_id: int) -> sqlite3.Row | None:
 
 
 def list_applications(status: str | None = None,
+                      statuses: list[str] | None = None,
                       order_by: str = "updated_at DESC") -> list[sqlite3.Row]:
     sql = "SELECT * FROM applications"
     params: tuple[Any, ...] = ()
-    if status:
+    if statuses:
+        clean = [normalize_status(s) for s in statuses if s]
+        if clean:
+            placeholders = ",".join("?" * len(clean))
+            sql += f" WHERE status IN ({placeholders})"
+            params = tuple(clean)
+    elif status:
         sql += " WHERE status=?"
         params = (normalize_status(status),)
     sql += f" ORDER BY {order_by}"

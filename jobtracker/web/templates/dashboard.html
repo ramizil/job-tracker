@@ -57,13 +57,22 @@
 {% endif %}
 
 <section class="cards">
-  <div class="metric"><span class="num">{{ totals.total }}</span><span class="lbl">Tracked</span></div>
-  <div class="metric" title="Applications actually submitted (excludes saved-only and withdrawn jobs)"><span class="num">{{ totals.applied_or_beyond }}</span><span class="lbl">Applied+</span></div>
-  <div class="metric"><span class="num">{{ totals.active }}</span><span class="lbl">Active</span></div>
-  <div class="metric"><span class="num">{{ totals.interviews_reached }}</span><span class="lbl">Interviews</span></div>
+  <a class="metric" href="{{ url_for('main.applications') }}" title="All tracked applications">
+    <span class="num">{{ totals.total }}</span><span class="lbl">Tracked</span></a>
+  <a class="metric" href="{{ url_for('main.applications', scope='applied_plus') }}"
+     title="Applications actually submitted (excludes saved-only and withdrawn)">
+    <span class="num">{{ totals.applied_or_beyond }}</span><span class="lbl">Applied+</span></a>
+  <a class="metric" href="{{ url_for('main.applications', scope='active') }}"
+     title="Still in play: saved → offer">
+    <span class="num">{{ totals.active }}</span><span class="lbl">Active</span></a>
+  <a class="metric" href="{{ url_for('main.applications', scope='interviews') }}"
+     title="Interview, offer, or accepted">
+    <span class="num">{{ totals.interviews_reached }}</span><span class="lbl">Interviews</span></a>
   <div class="metric"><span class="num">{{ totals.response_rate_pct }}%</span><span class="lbl">Response rate</span></div>
   <div class="metric"><span class="num">{{ totals.interview_rate_pct }}%</span><span class="lbl">Interview rate</span></div>
-  <div class="metric" title="Rejected / applied applications"><span class="num">{{ totals.rejection_rate_pct }}%</span><span class="lbl">Rejection rate</span></div>
+  <a class="metric" href="{{ url_for('main.applications', status='rejected') }}"
+     title="Rejected / applied applications — open rejected list">
+    <span class="num">{{ totals.rejection_rate_pct }}%</span><span class="lbl">Rejection rate</span></a>
 </section>
 
 <section class="panel">
@@ -73,11 +82,12 @@
   </div>
   {% set maxv = (funnel.values() | list | max) or 1 %}
   {% for st, n in funnel.items() %}
-    <div class="funnel-row">
+    <a class="funnel-row" href="{{ url_for('main.applications', status=st) }}"
+       title="Open Apps filtered to {{ st }}">
       <span class="funnel-label status-{{ st }}">{{ st }}</span>
       <div class="funnel-bar"><div class="funnel-fill status-{{ st }}" style="width: {{ (n / maxv * 100) | round(0, 'floor') }}%"></div></div>
       <span class="funnel-num">{{ n }}</span>
-    </div>
+    </a>
   {% endfor %}
 </section>
 

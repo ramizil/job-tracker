@@ -1084,16 +1084,41 @@ def rejections_export():
 @bp.route("/applications")
 def applications():
     status = request.args.get("status") or None
+    scope = (request.args.get("scope") or "").strip().lower() or None
+    # Scope presets from Dashboard metric cards (multi-status filters).
+    scope_statuses: list[str] | None = None
+    scope_label = None
+    if scope == "applied_plus":
+        # Everything past "saved", except withdrawn (matches dashboard Applied+).
+        scope_statuses = [s for s in STATUSES if s not in ("saved", "withdrawn")]
+        scope_label = "Applied+"
+    elif scope == "active":
+        from ..models import ACTIVE_STATUSES
+        scope_statuses = [s for s in STATUSES if s in ACTIVE_STATUSES]
+        scope_label = "Active"
+    elif scope == "interviews":
+        scope_statuses = ["interview", "offer", "accepted"]
+        scope_label = "Interviews"
+    else:
+        scope = None
+
     # Default order = row number descending (newest application on top),
     # matching the '#' column; click a column header to re-sort client-side.
-    rows = tracker.list_applications(status=status, order_by="id DESC")
+    if scope_statuses:
+        rows = tracker.list_applications(
+            statuses=scope_statuses, order_by="id DESC")
+        status = None  # scope takes precedence over single status
+    else:
+        rows = tracker.list_applications(status=status, order_by="id DESC")
     # Gap-free display numbers in creation order (oldest = 1), stable across
     # deletes, filters and sorting — computed over ALL applications so a job
     # keeps the same number on filtered views too.
     all_ids = sorted(r["id"] for r in tracker.list_applications())
     seq = {app_id: n for n, app_id in enumerate(all_ids, start=1)}
-    return render_template("applications.html", rows=rows, statuses=STATUSES,
-                           active=status, seq=seq)
+    return render_template(
+        "applications.html", rows=rows, statuses=STATUSES,
+        active=status, scope=scope, scope_label=scope_label, seq=seq,
+    )
 
 
 @bp.route("/alerts")
