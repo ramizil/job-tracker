@@ -124,6 +124,233 @@ def is_html(row: sqlite3.Row | dict[str, Any]) -> bool:
     return Path(name).suffix in (".html", ".htm")
 
 
+def is_pdf(row: sqlite3.Row | dict[str, Any]) -> bool:
+    name = (row["original_name"] or row["filename"] or "").lower()
+    return Path(name).suffix == ".pdf"
+
+
+def _stem_key(row: sqlite3.Row | dict[str, Any]) -> str:
+    name = row["original_name"] or row["filename"] or ""
+    stem = Path(name).stem.lower()
+    # Strip common version suffixes like " (v·abcdef12)" from labels used as names
+    stem = re.sub(r"\s*\(v[·\.]?[0-9a-f]{6,}\)\s*$", "", stem, flags=re.I)
+    return re.sub(r"[_\s\-]+", "", stem)
+
+
+def _norm_text(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "")).strip().lower()[:8000]
+
+
+def extracted_text(row: sqlite3.Row | dict[str, Any]) -> str:
+    """Plain text of a library resume (for twin matching)."""
+    from . import resume as resume_mod
+    path = path_for(row)
+    if not path.is_file():
+        # Fall back to original source path if library file missing
+        src = (row["source_path"] or "").strip()
+        if src and Path(src).is_file():
+            path = Path(src)
+        else:
+            return ""
+    try:
+        return resume_mod.extract_text(path)
+    except Exception:
+        return ""
+
+
+def _text_ratio(a: str, b: str) -> float:
+    import difflib
+    na, nb = _norm_text(a), _norm_text(b)
+    if not na or not nb:
+        return 0.0
+    return difflib.SequenceMatcher(a=na, b=nb, autojunk=False).ratio()
+
+
+def _disk_twin_path(row: sqlite3.Row | dict[str, Any], *, want: str) -> Path | None:
+    """Find a sibling HTML/PDF on disk next to source_path or library file."""
+    want = want.lower()
+    candidates: list[Path] = []
+    for base in (row["source_path"], str(path_for(row))):
+        if not base:
+            continue
+        p = Path(base)
+        if p.suffix.lower() in (".html", ".htm", ".pdf"):
+            candidates.append(p)
+        if p.parent.is_dir():
+            stem = p.stem
+            if want == "html":
+                for ext in (".html", ".htm"):
+                    cand = p.parent / f"{stem}{ext}"
+                    if cand.is_file():
+                        return cand
+            elif want == "pdf":
+                cand = p.parent / f"{stem}.pdf"
+                if cand.is_file():
+                    return cand
+    return None
+
+
+def list_resume_groups() -> list[dict[str, Any]]:
+    """Group HTML+PDF twins (same content) into one library card.
+
+    Pairing is content-based so different CV versions stay separate even when
+    they share a filename stem:
+      • HTML + PDF with text similarity ≥ 0.88 → one group (viewer opens HTML)
+      • Near-duplicate files with the same filename stem (similarity ≥ 0.95)
+        join the same group
+    Primary prefers HTML. Cards list both HTML and PDF paths when known.
+    """
+    rows = list_resumes()
+    if not rows:
+        return []
+
+    by_id = {int(r["id"]): r for r in rows}
+    texts: dict[int, str] = {i: extracted_text(r) for i, r in by_id.items()}
+    unused = set(by_id)
+    clusters: list[list[int]] = []
+
+    def _ratio(a: int, b: int) -> float:
+        return _text_ratio(texts.get(a, ""), texts.get(b, ""))
+
+    htmls = sorted(
+        (i for i in unused if is_html(by_id[i])),
+        key=lambda i: (0 if by_id[i]["is_default"] else 1, -i),
+    )
+    for hid in htmls:
+        if hid not in unused:
+            continue
+        members = [hid]
+        unused.remove(hid)
+        # Best PDF twin by text (same stem is a soft boost for ties).
+        best_pid, best_score = None, 0.0
+        for pid in list(unused):
+            if not is_pdf(by_id[pid]):
+                continue
+            score = _ratio(hid, pid)
+            if _stem_key(by_id[hid]) and _stem_key(by_id[hid]) == _stem_key(by_id[pid]):
+                score = min(1.0, score + 0.02)
+            if score > best_score:
+                best_score, best_pid = score, pid
+        if best_pid is not None and best_score >= 0.88:
+            members.append(best_pid)
+            unused.remove(best_pid)
+        # Absorb near-duplicates that share the same filename stem
+        changed = True
+        while changed:
+            changed = False
+            for other in list(unused):
+                o_stem = _stem_key(by_id[other])
+                if not o_stem:
+                    continue
+                for m in members:
+                    if _stem_key(by_id[m]) != o_stem:
+                        continue
+                    if _ratio(other, m) >= 0.95:
+                        members.append(other)
+                        unused.remove(other)
+                        changed = True
+                        break
+        clusters.append(members)
+
+    # Remaining rows: cluster near-duplicates with the same stem, else singleton
+    while unused:
+        seed = max(
+            unused,
+            key=lambda i: (1 if by_id[i]["is_default"] else 0, i),
+        )
+        members = [seed]
+        unused.remove(seed)
+        seed_stem = _stem_key(by_id[seed])
+        if seed_stem:
+            for other in list(unused):
+                if _stem_key(by_id[other]) != seed_stem:
+                    continue
+                if max(_ratio(other, m) for m in members) >= 0.95:
+                    members.append(other)
+                    unused.remove(other)
+        clusters.append(members)
+
+    groups: list[dict[str, Any]] = []
+    for members in clusters:
+        member_rows = [by_id[i] for i in members]
+        html_row = next((r for r in member_rows if is_html(r)), None)
+        pdf_candidates = [r for r in member_rows if is_pdf(r)]
+        pdf_row = None
+        if pdf_candidates:
+            pdf_row = next((r for r in pdf_candidates if r["is_default"]), None)
+            if pdf_row is None:
+                pdf_row = max(pdf_candidates, key=lambda r: int(r["id"]))
+        primary = html_row or next(
+            (r for r in member_rows if r["is_default"]), member_rows[0]
+        )
+
+        html_path = ""
+        pdf_path = ""
+        if html_row:
+            html_path = html_row["source_path"] or str(path_for(html_row))
+        else:
+            twin = _disk_twin_path(primary, want="html")
+            if twin:
+                html_path = str(twin)
+        if pdf_row:
+            pdf_path = pdf_row["source_path"] or str(path_for(pdf_row))
+        else:
+            twin = _disk_twin_path(primary, want="pdf")
+            if twin:
+                pdf_path = str(twin)
+
+        label = (primary["label"] or "").strip()
+        if html_row and label.lower().startswith("default —"):
+            label = (html_row["label"] or label).strip()
+        if label.lower().startswith("default —"):
+            for r in member_rows:
+                cand = (r["label"] or "").strip()
+                if cand and not cand.lower().startswith("default —"):
+                    label = cand
+                    break
+
+        groups.append({
+            "primary": primary,
+            "primary_id": int(primary["id"]),
+            "members": member_rows,
+            "member_ids": [int(r["id"]) for r in member_rows],
+            "html": html_row,
+            "pdf": pdf_row,
+            "html_path": html_path,
+            "pdf_path": pdf_path,
+            "html_name": Path(html_path).name if html_path else "",
+            "pdf_name": Path(pdf_path).name if pdf_path else "",
+            "label": label,
+            "color": primary["color"] or "blue",
+            "is_default": any(bool(r["is_default"]) for r in member_rows),
+            "created_at": primary["created_at"],
+            "content_hash": (html_row or primary)["content_hash"],
+        })
+
+    groups.sort(key=lambda g: (
+        0 if g["is_default"] else 1,
+        -(g["primary_id"]),
+    ))
+    return groups
+
+
+def group_for(resume_id: int) -> dict[str, Any] | None:
+    for g in list_resume_groups():
+        if resume_id in g["member_ids"]:
+            return g
+    return None
+
+
+def viewer_row(resume_id: int) -> sqlite3.Row | None:
+    """Row to open in the viewer — prefer HTML twin in the same content group."""
+    g = group_for(resume_id)
+    if not g:
+        return get(resume_id)
+    if g["html"]:
+        return g["html"]
+    return g["primary"]
+
+
 def find_by_hash(content_hash: str) -> sqlite3.Row | None:
     with get_connection() as conn:
         return conn.execute(

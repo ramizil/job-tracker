@@ -86,10 +86,16 @@
       <span>From library</span>
       <select name="resume_id">
         <option value="">— none / decide later —</option>
+        {% for g in (resume_groups or []) %}
+        <option value="{{ g.primary_id }}" {{ 'selected' if form.get('resume_id')|string == g.primary_id|string }}>
+          {{ g.label }}{% if g.html and g.pdf %} · HTML+PDF{% elif g.pdf_name %} · {{ g.pdf_name }}{% elif g.html_name %} · {{ g.html_name }}{% endif %}
+        </option>
+        {% else %}
         {% for r in resume_lib %}
         <option value="{{ r.id }}" {{ 'selected' if form.get('resume_id')|string == r.id|string }}>
-          {{ r.label }}{% if r.original_name %} · {{ r.original_name }}{% endif %}{% if r.created_at %} · {{ r.created_at[:10] }}{% endif %}{% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
+          {{ r.label }}{% if r.original_name %} · {{ r.original_name }}{% endif %}
         </option>
+        {% endfor %}
         {% endfor %}
       </select>
     </label>

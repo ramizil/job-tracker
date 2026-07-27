@@ -1512,6 +1512,7 @@ def detail(app_id: int):
         except (TypeError, ValueError):
             mock = None
     resume_lib = resumes.ensure_defaults()
+    resume_groups = resumes.list_resume_groups()
     sent_resume = resumes.for_application(app_id)
     resume_history = resumes.history_for(app_id)
     return render_template(
@@ -1530,7 +1531,8 @@ def detail(app_id: int):
         interview_prep=tracker.get_interview_prep(app_id),
         qa_exercise=tracker.get_qa_exercise(app_id),
         ats=tracker.get_ats_check(app_id),
-        resume_lib=resume_lib, sent_resume=sent_resume,
+        resume_lib=resume_lib, resume_groups=resume_groups,
+        sent_resume=sent_resume,
         resume_history=resume_history,
     )
 
@@ -1590,6 +1592,7 @@ def paste_job():
     """
     rd = _readiness()
     resume_lib = resumes.ensure_defaults()
+    resume_groups = resumes.list_resume_groups()
     if request.method == "GET":
         # Query params (from a Job Alerts "Capture" link) prefill the form.
         prefill = {k: request.args.get(k, "")
@@ -1597,7 +1600,8 @@ def paste_job():
         return render_template("paste.html", statuses=STATUSES,
                                ai_on=ai.is_configured(), ready=rd,
                                form=prefill, duplicates=None,
-                               resume_lib=resume_lib)
+                               resume_lib=resume_lib,
+                               resume_groups=resume_groups)
 
     if not rd["ready"]:
         for msg in rd["issues"]:
@@ -1685,6 +1689,7 @@ def paste_job():
             "paste.html", statuses=STATUSES, ai_on=ai.is_configured(),
             ready=rd, duplicates=None, form=_form_ctx(),
             resume_lib=resumes.list_resumes(),
+            resume_groups=resumes.list_resume_groups(),
         )
 
     # Mark an existing duplicate as reapplied (same row; archive previous CV).
@@ -1756,6 +1761,7 @@ def paste_job():
                 ready=rd, duplicates=_enrich_dups(duplicates),
                 form=_form_ctx(resume_id=resume_id or ""),
                 resume_lib=resumes.list_resumes(),
+                resume_groups=resumes.list_resume_groups(),
             )
 
     # Prefer a source auto-detected from the URL (e.g. linkedin, alljobs,
@@ -2788,9 +2794,11 @@ def my_resumes():
             flash(str(exc), "error")
         return redirect(url_for("main.my_resumes"))
     rows = resumes.list_resumes()
+    groups = resumes.list_resume_groups()
     return render_template(
         "resumes.html",
         resumes=rows,
+        resume_groups=groups,
         usage=resumes.usage_counts(),
         colors=resumes.RESUME_COLORS,
         mode="manage",
@@ -2801,9 +2809,13 @@ def my_resumes():
 
 @bp.route("/resume/<int:resume_id>")
 def resume_lib_edit(resume_id: int):
-    row = resumes.get(resume_id)
-    if not row:
+    # Prefer the HTML twin when this id is a PDF of the same content.
+    view = resumes.viewer_row(resume_id)
+    if not view:
         abort(404)
+    if int(view["id"]) != resume_id:
+        return redirect(url_for("main.resume_lib_edit", resume_id=int(view["id"])))
+    row = view
     html = ""
     is_html = resumes.is_html(row)
     if is_html:
@@ -2812,6 +2824,7 @@ def resume_lib_edit(resume_id: int):
         except OSError:
             html = ""
     usage = resumes.usage_counts().get(resume_id, 0)
+    group = resumes.group_for(resume_id)
     return render_template(
         "resume_lib_edit.html",
         resume=row,
@@ -2819,8 +2832,9 @@ def resume_lib_edit(resume_id: int):
         is_html=is_html,
         colors=resumes.RESUME_COLORS,
         usage=usage,
-        has_draft=resumes.has_draft(resume_id),
+        has_draft=resumes.has_draft(int(row["id"])),
         ai_on=ai.is_configured(),
+        group=group,
     )
 
 
@@ -2852,15 +2866,18 @@ def resume_lib_default(resume_id: int):
 
 @bp.route("/resume/<int:resume_id>/view")
 def resume_lib_view(resume_id: int):
-    row = resumes.get(resume_id)
-    if not row:
-        abort(404)
     which = (request.args.get("which") or "").strip().lower()
     if which == "draft":
+        if not resumes.get(resume_id):
+            abort(404)
         draft = resumes.load_draft(resume_id)
         if not draft.strip():
             abort(404)
         return Response(draft, mimetype="text/html; charset=utf-8")
+    # Prefer HTML twin when this id is a PDF of the same content.
+    row = resumes.viewer_row(resume_id)
+    if not row:
+        abort(404)
     path = resumes.path_for(row)
     if not path.is_file():
         abort(404)

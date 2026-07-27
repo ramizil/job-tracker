@@ -7,13 +7,15 @@
 </div>
 {% include "_resume_tabs.html" %}
 <p class="sub">Your resume library — the same list used in <b>Resume sent</b> on each job.
-  Pick colours and clear labels so versions are easy to tell apart. Mark one as
-  <b>Default</b> for AI analysis / Settings.</p>
+  HTML and PDF of the <b>same content</b> appear as one card (viewer opens HTML;
+  both paths are listed). Pick colours and clear labels so versions are easy to
+  tell apart. Mark one as <b>Default</b> for AI analysis / Settings.</p>
 
 <section class="panel">
   <div class="panel-head">
     <h2>Library</h2>
-    <span class="muted sm">{{ resumes|length }} resume{{ 's' if resumes|length != 1 }}</span>
+    <span class="muted sm">{{ resume_groups|length }} resume{{ 's' if resume_groups|length != 1 }}
+      <span title="HTML + PDF of the same content are shown as one card">(HTML+PDF twins merged)</span></span>
   </div>
   {% include "_resume_cards.html" %}
 </section>

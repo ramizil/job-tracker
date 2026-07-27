@@ -1,54 +1,74 @@
-{# Resume library cards.
-   Expects: resumes (rows), usage (dict id→count), colors (RESUME_COLORS)
+{# Resume library cards — one card per content group (HTML+PDF twins merged).
+   Expects: resume_groups (from resumes.list_resume_groups), usage (dict id→count)
    Optional: mode = 'manage' | 'pick'
-            selected_id, form_name (for pick), show_actions (bool)
+            selected_id, form_name, show_actions
 #}
 {% set mode = mode or 'manage' %}
 {% set show_actions = show_actions if show_actions is defined else (mode == 'manage') %}
+{% set groups = resume_groups if resume_groups is defined else [] %}
 <div class="resume-cards">
-  {% for r in resumes %}
-  {% set color = r['color'] or 'blue' %}
-  <article class="resume-card rc-{{ color }}{{ ' is-default' if r['is_default'] }}{{ ' is-selected' if selected_id and selected_id == r.id }}">
+  {% for g in groups %}
+  {% set color = g.color or 'blue' %}
+  {% set pid = g.primary_id %}
+  {% set ns = namespace(total=0) %}
+  {% if usage %}
+    {% for mid in g.member_ids %}
+      {% set ns.total = ns.total + (usage.get(mid, 0) or 0) %}
+    {% endfor %}
+  {% endif %}
+  {% set is_sel = selected_id is not none and selected_id in g.member_ids %}
+  <article class="resume-card rc-{{ color }}{{ ' is-default' if g.is_default }}{{ ' is-selected' if is_sel }}">
     {% if mode == 'pick' %}
     <label class="rc-pick">
-      <input type="radio" name="{{ form_name or 'resume_id' }}" value="{{ r.id }}"
-             {{ 'checked' if selected_id and selected_id == r.id }}>
+      <input type="radio" name="{{ form_name or 'resume_id' }}" value="{{ pid }}"
+             {{ 'checked' if is_sel }}>
       <span class="rc-body">
         <span class="rc-swatch" aria-hidden="true"></span>
         <span class="rc-main">
-          <span class="rc-label">{{ r.label }}</span>
-          {% if r.is_default %}<span class="rc-badge">Default</span>{% endif %}
+          <span class="rc-label">{{ g.label }}</span>
+          {% if g.is_default %}<span class="rc-badge">Default</span>{% endif %}
+          {% if g.html and g.pdf %}<span class="rc-badge rc-badge-pair">HTML + PDF</span>{% endif %}
           <span class="rc-meta muted sm">
-            {% if r.original_name %}{{ r.original_name }} · {% endif %}
-            {{ (r.created_at or '')[:10] }}
-            {% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
-            {% if usage and usage.get(r.id) %} · used {{ usage[r.id] }}×{% endif %}
+            {% if g.html_name %}<span title="{{ g.html_path }}">HTML: {{ g.html_name }}</span>{% endif %}
+            {% if g.html_name and g.pdf_name %} · {% endif %}
+            {% if g.pdf_name %}<span title="{{ g.pdf_path }}">PDF: {{ g.pdf_name }}</span>{% endif %}
+            {% if not g.html_name and not g.pdf_name and g.primary.original_name %}{{ g.primary.original_name }}{% endif %}
+            · {{ (g.created_at or '')[:10] }}
+            {% if ns.total %} · used {{ ns.total }}×{% endif %}
           </span>
         </span>
       </span>
     </label>
     {% else %}
-    <a class="rc-body" href="{{ url_for('main.resume_lib_edit', resume_id=r.id) }}">
+    <a class="rc-body" href="{{ url_for('main.resume_lib_edit', resume_id=pid) }}">
       <span class="rc-swatch" aria-hidden="true"></span>
       <span class="rc-main">
-        <span class="rc-label">{{ r.label }}</span>
-        {% if r.is_default %}<span class="rc-badge">Default</span>{% endif %}
+        <span class="rc-label">{{ g.label }}</span>
+        {% if g.is_default %}<span class="rc-badge">Default</span>{% endif %}
+        {% if g.html and g.pdf %}<span class="rc-badge rc-badge-pair">HTML + PDF</span>{% endif %}
         <span class="rc-meta muted sm">
-          {% if r.original_name %}{{ r.original_name }} · {% endif %}
-          {{ (r.created_at or '')[:10] }}
-          {% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
-          {% if usage and usage.get(r.id) %} · used {{ usage[r.id] }}×{% endif %}
+          {% if g.html_path %}
+          <span class="rc-path" title="{{ g.html_path }}">HTML: {{ g.html_path }}</span><br>
+          {% endif %}
+          {% if g.pdf_path %}
+          <span class="rc-path" title="{{ g.pdf_path }}">PDF: {{ g.pdf_path }}</span><br>
+          {% endif %}
+          {% if not g.html_path and not g.pdf_path and g.primary.original_name %}
+          {{ g.primary.original_name }} ·
+          {% endif %}
+          {{ (g.created_at or '')[:10] }}
+          {% if ns.total %} · used {{ ns.total }}×{% endif %}
         </span>
       </span>
     </a>
     {% if show_actions %}
     <div class="rc-actions">
-      {% if not r.is_default %}
-      <form method="post" action="{{ url_for('main.resume_lib_default', resume_id=r.id) }}">
+      {% if not g.is_default %}
+      <form method="post" action="{{ url_for('main.resume_lib_default', resume_id=pid) }}">
         <button class="btn sm" type="submit" title="Use as default for AI / Settings">★ Default</button>
       </form>
       {% endif %}
-      <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=r.id) }}">Open</a>
+      <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=pid) }}">Open</a>
     </div>
     {% endif %}
     {% endif %}

@@ -140,7 +140,6 @@
       {% endif %}
       <form method="post" action="{{ url_for('main.set_sent_resume', app_id=app.id) }}"
             enctype="multipart/form-data" class="stack mt">
-        {% set resumes = resume_lib %}
         {% set mode = 'pick' %}
         {% set selected_id = sent_resume.id if sent_resume else none %}
         {% set form_name = 'resume_id' %}

@@ -43,8 +43,14 @@
       {% endif %}
     </div>
   </form>
-  <p class="muted sm mt">File: {{ resume.original_name or resume.filename }}
-    · {{ (resume.created_at or '')[:10] }}
+  <p class="muted sm mt">
+    {% if group and (group.html_path or group.pdf_path) %}
+      {% if group.html_path %}<span class="rc-path" title="{{ group.html_path }}">HTML: {{ group.html_path }}</span><br>{% endif %}
+      {% if group.pdf_path %}<span class="rc-path" title="{{ group.pdf_path }}">PDF: {{ group.pdf_path }}</span><br>{% endif %}
+    {% else %}
+      File: {{ resume.original_name or resume.filename }} ·
+    {% endif %}
+    {{ (resume.created_at or '')[:10] }}
     {% if resume.content_hash %}· {{ resume.content_hash[:8] }}{% endif %}
     {% if usage %}· used on {{ usage }} application(s){% endif %}
   </p>
