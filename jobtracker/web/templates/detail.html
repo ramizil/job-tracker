@@ -786,82 +786,70 @@
       <pre id="pitch-text-{{ app.id }}" class="sr-only" dir="auto" aria-hidden="true">{{ cur_pitch }}</pre>
 
       {% set show_pitch_cmp = cur_prev or (cur_pitch and cur_pitch.strip() != cur_base.strip()) %}
+      {% set pitch_before_url = url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk) %}
+      {% set pitch_after_url = url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk) %}
+      {% set pitch_single_url = url_for('main.app_pitch_view', app_id=app.id, pitch=pk) %}
       {% if show_pitch_cmp %}
-      <div class="pitch-fs-bar mt">
-        <h3>Before / After (styled HTML)</h3>
-        <button type="button" class="btn sm" data-pitch-fs title="Open pitch full screen">
-          ⛶ Fullscreen</button>
-      </div>
-      <p class="muted sm">Left = before AI tailor · Right = tailored for this job</p>
+      <h3 class="mt">Before / After (styled HTML)</h3>
+      <p class="muted sm">Left = before AI tailor · Right = tailored for this job.
+        Use Fullscreen on either pane to read one at a time.</p>
       <div class="diff-cols pitch-html-cmp" id="pitch-inline">
         <section class="panel diff-pane">
-          <h3>Before</h3>
+          <div class="pitch-pane-head">
+            <h3>Before</h3>
+            <button type="button" class="btn sm" data-pitch-fs
+                    data-pitch-fs-src="{{ pitch_before_url }}"
+                    data-pitch-fs-title="Before — {{ pitch_labels[pk] }}"
+                    title="Open Before full screen">⛶ Fullscreen</button>
+          </div>
           <div class="frame-wrap pitch-frame-sm">
-            <iframe title="Pitch before AI"
-                    src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk) }}"></iframe>
+            <iframe title="Pitch before AI" src="{{ pitch_before_url }}"></iframe>
           </div>
         </section>
         <section class="panel diff-pane">
-          <h3>✨ After (this job)</h3>
+          <div class="pitch-pane-head">
+            <h3>✨ After (this job)</h3>
+            <button type="button" class="btn sm" data-pitch-fs
+                    data-pitch-fs-src="{{ pitch_after_url }}"
+                    data-pitch-fs-title="After — {{ pitch_labels[pk] }}"
+                    title="Open After full screen">⛶ Fullscreen</button>
+          </div>
           <div class="frame-wrap pitch-frame-sm">
-            <iframe title="Pitch after AI"
-                    src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk) }}"></iframe>
+            <iframe title="Pitch after AI" src="{{ pitch_after_url }}"></iframe>
           </div>
         </section>
-      </div>
-      <div class="pitch-fs-overlay" id="pitch-fs" hidden>
-        <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
-          <header class="pitch-fs-head">
-            <h2>🎤 {{ pitch_labels[pk] }} — Before / After</h2>
-            <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
-          </header>
-          <div class="diff-cols pitch-fs-body">
-            <section class="diff-pane">
-              <h3>Before</h3>
-              <div class="frame-wrap pitch-fs-frame">
-                <iframe title="Pitch before AI (fullscreen)"
-                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk) }}"></iframe>
-              </div>
-            </section>
-            <section class="diff-pane">
-              <h3>✨ After (this job)</h3>
-              <div class="frame-wrap pitch-fs-frame">
-                <iframe title="Pitch after AI (fullscreen)"
-                        data-src="{{ url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk) }}"></iframe>
-              </div>
-            </section>
-          </div>
-        </div>
       </div>
       {% else %}
       <div class="pitch-fs-bar mt">
         <span class="muted sm">Styled like My Pitch — drag the corner to resize.</span>
-        <button type="button" class="btn sm" data-pitch-fs title="Open pitch full screen">
-          ⛶ Fullscreen</button>
+        <button type="button" class="btn sm" data-pitch-fs
+                data-pitch-fs-src="{{ pitch_single_url }}"
+                data-pitch-fs-title="{{ pitch_labels[pk] }}"
+                title="Open pitch full screen">⛶ Fullscreen</button>
       </div>
       <div class="review wide mt" id="pitch-inline">
         <div class="preview">
           <div class="frame-wrap" id="app-pitch-frame-wrap">
             <iframe id="app-pitch-frame" title="{{ pitch_labels[pk] }} for this job"
-                    src="{{ url_for('main.app_pitch_view', app_id=app.id, pitch=pk) }}"></iframe>
-          </div>
-        </div>
-      </div>
-      <div class="pitch-fs-overlay" id="pitch-fs" hidden>
-        <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
-          <header class="pitch-fs-head">
-            <h2>🎤 {{ pitch_labels[pk] }}</h2>
-            <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
-          </header>
-          <div class="pitch-fs-body single">
-            <div class="frame-wrap pitch-fs-frame">
-              <iframe title="Pitch fullscreen"
-                      data-src="{{ url_for('main.app_pitch_view', app_id=app.id, pitch=pk) }}"></iframe>
-            </div>
+                    src="{{ pitch_single_url }}"></iframe>
           </div>
         </div>
       </div>
       {% endif %}
+
+      <div class="pitch-fs-overlay" id="pitch-fs" hidden>
+        <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
+          <header class="pitch-fs-head">
+            <h2 id="pitch-fs-title">🎤 Pitch</h2>
+            <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
+          </header>
+          <div class="pitch-fs-body single">
+            <div class="frame-wrap pitch-fs-frame">
+              <iframe id="pitch-fs-frame" title="Pitch fullscreen"></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <details class="mt" id="pitch-edit">
         <summary><b>✏️ Edit text</b>
@@ -896,20 +884,23 @@
 
 {% block scripts %}
 <script>
-// Pitch fullscreen overlay (Before/After or single view).
+// Pitch fullscreen — one pane at a time (Before or After, or single view).
 (function () {
   var overlay = document.getElementById('pitch-fs');
   if (!overlay) return;
-  var openBtn = document.querySelector('[data-pitch-fs]');
+  var titleEl = document.getElementById('pitch-fs-title');
+  var frame = document.getElementById('pitch-fs-frame');
   var closeBtn = overlay.querySelector('[data-pitch-fs-close]');
+  var lastBtn = null;
 
-  function loadFrames() {
-    Array.prototype.forEach.call(overlay.querySelectorAll('iframe[data-src]'), function (f) {
-      if (!f.getAttribute('src')) f.setAttribute('src', f.getAttribute('data-src'));
-    });
-  }
-  function openFs() {
-    loadFrames();
+  function openFs(btn) {
+    lastBtn = btn;
+    var src = btn.getAttribute('data-pitch-fs-src');
+    var title = btn.getAttribute('data-pitch-fs-title') || 'Pitch';
+    if (titleEl) titleEl.textContent = '🎤 ' + title;
+    if (frame && src && frame.getAttribute('src') !== src) {
+      frame.setAttribute('src', src);
+    }
     overlay.hidden = false;
     document.body.classList.add('pitch-fs-open');
     if (closeBtn) closeBtn.focus();
@@ -917,9 +908,11 @@
   function closeFs() {
     overlay.hidden = true;
     document.body.classList.remove('pitch-fs-open');
-    if (openBtn) openBtn.focus();
+    if (lastBtn) lastBtn.focus();
   }
-  if (openBtn) openBtn.addEventListener('click', openFs);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pitch-fs]'), function (btn) {
+    btn.addEventListener('click', function () { openFs(btn); });
+  });
   if (closeBtn) closeBtn.addEventListener('click', closeFs);
   overlay.addEventListener('click', function (e) {
     if (e.target === overlay) closeFs();

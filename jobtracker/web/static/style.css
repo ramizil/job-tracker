@@ -912,8 +912,11 @@ html[data-theme="slate"] .mail-icon.unread{filter:none}
   height:min(62vh,520px);min-height:280px;resize:both;
 }
 .pitch-html-cmp .diff-pane h3{margin:0 0 8px;font-size:14px}
+.pitch-html-cmp .pitch-pane-head h3{margin:0}
 .pitch-fs-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .pitch-fs-bar h3{margin:0}
+.pitch-pane-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.pitch-pane-head h3{margin:0;font-size:14px}
 .pitch-kind-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .pitch-fs-overlay{position:fixed;inset:0;z-index:9000;display:flex;align-items:stretch;justify-content:center;
   padding:12px;background:rgba(4,7,14,.82);backdrop-filter:blur(6px)}
