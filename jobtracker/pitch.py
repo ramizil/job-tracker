@@ -554,3 +554,109 @@ def clear_draft(kind: str = "interview") -> None:
 
 def has_draft(kind: str = "interview") -> bool:
     return bool(load_draft(kind).strip())
+
+
+# --------------------------------------------------------------------------- #
+# Word-level highlight inside styled pitch HTML (Before / After compare)
+
+_HL_CSS = """
+.pitch-hl-del{background:rgba(251,113,133,.28);color:#9f1239;text-decoration:line-through;
+  text-decoration-color:rgba(190,18,60,.7);border-radius:3px;padding:0 1px}
+.pitch-hl-ins{background:rgba(52,211,153,.28);color:#065f46;text-decoration:none;
+  border-radius:3px;padding:0 1px}
+""".strip()
+
+
+def _word_flags(old: str, new: str) -> tuple[list[bool], list[bool]]:
+    """Per non-whitespace-word flags: deleted in old, inserted in new."""
+    import difflib
+    a = re.findall(r"\S+", old or "")
+    b = re.findall(r"\S+", new or "")
+    del_flags = [False] * len(a)
+    ins_flags = [False] * len(b)
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    for op, i1, i2, j1, j2 in sm.get_opcodes():
+        if op in ("delete", "replace"):
+            for i in range(i1, i2):
+                del_flags[i] = True
+        if op in ("insert", "replace"):
+            for j in range(j1, j2):
+                ins_flags[j] = True
+    return del_flags, ins_flags
+
+
+def highlight_html_diff(html: str, *, old: str, new: str,
+                        side: str = "after") -> str:
+    """Wrap changed words in styled pitch HTML.
+
+    ``side="before"`` → red strikethrough on words removed vs ``new``.
+    ``side="after"``  → green highlight on words added vs ``old``.
+    """
+    try:
+        from bs4 import BeautifulSoup, NavigableString
+    except ImportError:
+        return html
+
+    side = (side or "after").strip().lower()
+    del_flags, ins_flags = _word_flags(old, new)
+    flags = del_flags if side == "before" else ins_flags
+    soup = BeautifulSoup(html or "", "html.parser")
+    if not any(flags):
+        _inject_hl_css(soup)
+        return str(soup)
+
+    root = soup.find(class_="wrap") or soup.body or soup
+    tag_name = "del" if side == "before" else "ins"
+    css_class = "pitch-hl-del" if side == "before" else "pitch-hl-ins"
+
+    word_i = 0
+    text_nodes = [
+        n for n in root.descendants
+        if isinstance(n, NavigableString)
+        and n.parent
+        and getattr(n.parent, "name", None) not in ("script", "style")
+        and str(n).strip()
+    ]
+
+    for node in text_nodes:
+        text = str(node)
+        parts: list = []
+        last = 0
+        for m in re.finditer(r"\S+", text):
+            if word_i >= len(flags):
+                break
+            if m.start() > last:
+                parts.append(text[last:m.start()])
+            word = m.group(0)
+            if flags[word_i]:
+                wrap = soup.new_tag(tag_name)
+                wrap["class"] = [css_class]
+                wrap.string = word
+                parts.append(wrap)
+            else:
+                parts.append(word)
+            word_i += 1
+            last = m.end()
+        if last < len(text):
+            parts.append(text[last:])
+        if not parts:
+            continue
+        for part in parts:
+            node.insert_before(part)
+        node.extract()
+
+    _inject_hl_css(soup)
+    return str(soup)
+
+
+def _inject_hl_css(soup) -> None:
+    style = soup.find("style")
+    if style is None:
+        head = soup.head
+        if head is None:
+            return
+        style = soup.new_tag("style")
+        head.append(style)
+    existing = style.string or ""
+    if "pitch-hl-del" not in existing:
+        style.string = existing.rstrip() + "\n" + _HL_CSS + "\n"

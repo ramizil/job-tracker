@@ -918,6 +918,14 @@ html[data-theme="slate"] .mail-icon.unread{filter:none}
 .pitch-pane-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .pitch-pane-head h3{margin:0;font-size:14px}
 .pitch-kind-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pitch-cmp-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pitch-legend-del{background:rgba(251,113,133,.28);color:#ffb3bd;border-radius:3px;padding:0 4px;
+  text-decoration:line-through}
+.pitch-legend-ins{background:rgba(52,211,153,.28);color:#9af3c4;border-radius:3px;padding:0 4px}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .pitch-legend-del{
+  color:#9f1239}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .pitch-legend-ins{
+  color:#065f46}
 .pitch-fs-overlay{position:fixed;inset:0;z-index:9000;display:flex;align-items:stretch;justify-content:center;
   padding:12px;background:rgba(4,7,14,.82);backdrop-filter:blur(6px)}
 .pitch-fs-overlay[hidden]{display:none}

@@ -1309,9 +1309,11 @@ They have already memorized it, so:
   Do NOT rewrite, trim, or paraphrase any existing sentence.
 - ADD one or two short spoken sentences at the end tailored to THIS job
   (max ~20 seconds total added): connect their strongest matching skills to
-  the role, conversationally. Ground EVERY claim ONLY in the existing pitch
-  and resume — invent nothing. Do NOT add salary, childhood stories, or long
-  technical deep-dives.
+  the role, conversationally. Ground EVERY claim ONLY in the existing pitch,
+  resume, and the fit-analysis hints below — invent nothing. Do NOT add
+  salary, childhood stories, or long technical deep-dives.
+- Prefer emphasising points the fit analysis marked as strengths / must-hit
+  for this role when choosing what to add in the closing.
 
 Return ONLY valid JSON with EXACTLY this shape:
 {{
@@ -1330,6 +1332,9 @@ Location: {location}
 Description:
 {description}
 
+FIT ANALYSIS HINTS (use to steer the short closing — do not invent beyond these + resume):
+{analysis_hints}
+
 CANDIDATE'S CURRENT PITCH:
 {base_pitch}
 
@@ -1341,7 +1346,8 @@ CANDIDATE RESUME (plain text):
 def tailor_pitch(*, title: str, company: str, location: str = "",
                  description: str = "", base_pitch: str = "",
                  resume: str | None = None, language: str = "he",
-                 kind: str = "interview") -> dict[str, Any]:
+                 kind: str = "interview",
+                 analysis_hints: str = "") -> dict[str, Any]:
     """Tailor the about-me pitch for a specific job.
 
     ``kind`` is ``interview`` (full script + closing station) or ``recruiter``
@@ -1352,13 +1358,16 @@ def tailor_pitch(*, title: str, company: str, location: str = "",
     kind = (kind or "interview").strip().lower()
     tmpl = (_PITCH_TAILOR_RECRUITER_PROMPT if kind == "recruiter"
             else _PITCH_TAILOR_PROMPT)
-    prompt = tmpl.format(
+    kwargs = dict(
         lang=_lang_name(language),
         title=title or "", company=company or "", location=location or "",
         description=(description or "")[:7000],
         base_pitch=(base_pitch or "")[:6000],
         resume=(resume or resume_text())[:7000],
     )
+    if kind == "recruiter":
+        kwargs["analysis_hints"] = (analysis_hints or "").strip() or "(none)"
+    prompt = tmpl.format(**kwargs)
     raw = _generate(prompt, as_json=True)
     data = _parse_json(raw)
     if not isinstance(data, dict):

@@ -1732,7 +1732,10 @@ def paste_job():
                     time.sleep(_AUTOGEN_GAP_S)
                 try:
                     _generate_one(app_id, key, r, language=lang)
-                    done.append(_BATCH_ITEMS[key])
+                    label = _BATCH_ITEMS[key]
+                    if key == "analyze":
+                        label = "fit analysis + ATS + recruiter pitch"
+                    done.append(label)
                 except Exception as exc:
                     failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
             if done:
@@ -1795,7 +1798,10 @@ def paste_job():
                 time.sleep(_AUTOGEN_GAP_S)  # ease off the per-minute rate limit
             try:
                 _generate_one(app_id, key, r, language=lang)
-                done.append(_BATCH_ITEMS[key])
+                label = _BATCH_ITEMS[key]
+                if key == "analyze":
+                    label = "fit analysis + ATS + recruiter pitch"
+                done.append(label)
             except Exception as exc:  # keep going; never lose what already ran
                 failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
         if done:
@@ -2221,6 +2227,15 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
         # Always refresh the ATS keyword section with the same analysis pass.
         time.sleep(_AUTOGEN_GAP_S)
         _run_ats_check(app_id, r)
+        # Auto-tailor the short recruiter pitch from this job's fit analysis.
+        time.sleep(_AUTOGEN_GAP_S)
+        try:
+            # Reload row so analysis is visible to hint builder.
+            r2 = tracker.get_application(app_id) or r
+            _auto_tailor_recruiter_pitch(app_id, r2)
+        except Exception:
+            # Fit analysis already saved — recruiter tailor is best-effort.
+            pass
     elif key == "cover":
         tracker.set_cover_letter(app_id, ai.cover_letter(
             title=title, company=company, location=location,
@@ -2252,12 +2267,14 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
         tracker.set_pitch(app_id, res["script"], notes=notes, prev=base,
                           kind="interview")
     elif key == "pitch_recruiter":
-        base = ((r["pitch_recruiter"] or "").strip()
-                or pitch.load_base_pitch("recruiter"))
+        base = pitch.load_base_pitch("recruiter").strip() or (
+            (r["pitch_recruiter"] or "").strip())
         res = ai.tailor_pitch(
             title=title, company=company, location=location,
             description=description, base_pitch=base, language="he",
-            kind="recruiter")
+            kind="recruiter",
+            analysis_hints=_fit_analysis_hints(app_id),
+        )
         notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
         tracker.set_pitch(app_id, res["script"], notes=notes, prev=base,
                           kind="recruiter")
@@ -2315,9 +2332,11 @@ def generate_batch(app_id: int):
     failed: list[str] = []
 
     selected = [k for k in _BATCH_ITEMS if k in items]
-    # Fit analysis already runs ATS — don't pay for it twice in the same batch.
+    # Fit analysis already runs ATS + recruiter pitch — don't pay twice.
     if "analyze" in selected and "ats" in selected:
         selected = [k for k in selected if k != "ats"]
+    if "analyze" in selected and "pitch_recruiter" in selected:
+        selected = [k for k in selected if k != "pitch_recruiter"]
     for idx, key in enumerate(selected):
         if idx:
             time.sleep(_AUTOGEN_GAP_S)  # ease off the per-minute rate limit
@@ -2325,7 +2344,7 @@ def generate_batch(app_id: int):
             _generate_one(app_id, key, r, language=language, instructions=instructions)
             label = _BATCH_ITEMS[key]
             if key == "analyze":
-                label = "fit analysis + ATS check"
+                label = "fit analysis + ATS check + recruiter pitch"
             done.append(label)
         except Exception as exc:  # keep going so one failure doesn't lose the rest
             failed.append(f"{_BATCH_ITEMS[key]} ({exc})")
@@ -2428,12 +2447,14 @@ def app_pitch_view(app_id: int):
 
     ``?which=before`` serves the pre-tailor text; default is the current pitch.
     ``?pitch=recruiter`` selects the short recruiter pitch.
+    ``?hl=1`` highlights removed (before) or added (after) words vs the other side.
     """
     r = tracker.get_application(app_id)
     if not r:
         abort(404)
     pk = pitch.normalize_kind(request.args.get("pitch"))
     which = (request.args.get("which") or "after").strip().lower()
+    hl = (request.args.get("hl") or "").strip().lower() in ("1", "true", "yes", "on")
     pitch.ensure_html(pk)
     if pk == "recruiter":
         cur = (r["pitch_recruiter"] or "").strip()
@@ -2443,12 +2464,71 @@ def app_pitch_view(app_id: int):
         cur = (r["pitch"] or "").strip()
         prev = (r["pitch_prev"] or "").strip()
         base = pitch.load_base_pitch("interview")
-    if which in ("before", "prev", "base"):
-        text = prev or base
-    else:
-        text = cur or base
+    before_text = prev or base
+    after_text = cur or base
+    side = "before" if which in ("before", "prev", "base") else "after"
+    text = before_text if side == "before" else after_text
     html = pitch.html_from_plain(text, kind=pk)
+    if hl and before_text.strip() and after_text.strip() and before_text != after_text:
+        plain_before = pitch.html_to_plain_text(
+            pitch.html_from_plain(before_text, kind=pk))
+        plain_after = pitch.html_to_plain_text(
+            pitch.html_from_plain(after_text, kind=pk))
+        html = pitch.html_from_plain(text, kind=pk)
+        html = pitch.highlight_html_diff(
+            html, old=plain_before, new=plain_after, side=side)
     return Response(html, mimetype="text/html; charset=utf-8")
+
+
+def _fit_analysis_hints(app_id: int) -> str:
+    """Compact bullets from the stored fit analysis for recruiter-pitch steering."""
+    analysis = tracker.get_ai_analysis(app_id) or {}
+    lines: list[str] = []
+    for key in ("strengths", "strengths_en", "gaps", "gaps_en", "risks"):
+        val = analysis.get(key)
+        if isinstance(val, list):
+            for item in val[:6]:
+                s = str(item).strip()
+                if s:
+                    lines.append(f"- {s}")
+        elif isinstance(val, str) and val.strip():
+            lines.append(f"- {val.strip()}")
+    for s in analysis.get("suggestions") or []:
+        if isinstance(s, dict):
+            action = (s.get("action") or "").strip()
+            target = (s.get("target") or "").strip()
+            if action:
+                lines.append(f"- [{target or 'general'}] {action}")
+        elif str(s).strip():
+            lines.append(f"- {str(s).strip()}")
+    verdict = analysis.get("verdict") or analysis.get("summary") or ""
+    if isinstance(verdict, str) and verdict.strip():
+        lines.insert(0, f"- Verdict/summary: {verdict.strip()[:400]}")
+    seen: set[str] = set()
+    out: list[str] = []
+    for ln in lines:
+        if ln not in seen:
+            seen.add(ln)
+            out.append(ln)
+    return "\n".join(out[:20])
+
+
+def _auto_tailor_recruiter_pitch(app_id: int, r) -> None:
+    """Tailor the short recruiter pitch using the job + fit-analysis hints."""
+    base = pitch.load_base_pitch("recruiter")
+    existing = (r["pitch_recruiter"] or "").strip()
+    use_base = base.strip() or existing
+    hints = _fit_analysis_hints(app_id)
+    res = ai.tailor_pitch(
+        title=r["title"], company=r["company"], location=r["location"] or "",
+        description=r["description"] or "", base_pitch=use_base, language="he",
+        kind="recruiter", analysis_hints=hints,
+    )
+    notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
+    if hints:
+        notes = (notes + "\n\n(From fit analysis)\n" + hints).strip()
+    tracker.set_pitch(app_id, res["script"], notes=notes, prev=use_base,
+                      kind="recruiter")
 
 
 @bp.route("/application/<int:app_id>/pitch/tailor", methods=["POST"])
@@ -2457,17 +2537,25 @@ def pitch_tailor(app_id: int):
     if not r:
         abort(404)
     pk = pitch.normalize_kind(request.form.get("pitch") or request.args.get("pitch"))
-    if pk == "recruiter":
-        base = ((r["pitch_recruiter"] or "").strip()
-                or pitch.load_base_pitch("recruiter"))
-    else:
-        base = (r["pitch"] or "").strip() or pitch.load_base_pitch("interview")
     try:
-        result = ai.tailor_pitch(
-            title=r["title"], company=r["company"], location=r["location"] or "",
-            description=r["description"] or "", base_pitch=base, language="he",
-            kind=pk,
-        )
+        if pk == "recruiter":
+            base = pitch.load_base_pitch("recruiter").strip() or (
+                (r["pitch_recruiter"] or "").strip())
+            result = ai.tailor_pitch(
+                title=r["title"], company=r["company"],
+                location=r["location"] or "",
+                description=r["description"] or "", base_pitch=base,
+                language="he", kind=pk,
+                analysis_hints=_fit_analysis_hints(app_id),
+            )
+        else:
+            base = (r["pitch"] or "").strip() or pitch.load_base_pitch("interview")
+            result = ai.tailor_pitch(
+                title=r["title"], company=r["company"],
+                location=r["location"] or "",
+                description=r["description"] or "", base_pitch=base,
+                language="he", kind=pk,
+            )
         notes = "\n".join(f"- {s}" for s in result.get("suggestions", []))
         tracker.set_pitch(app_id, result["script"], notes=notes, prev=base,
                           kind=pk)

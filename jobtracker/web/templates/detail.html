@@ -788,36 +788,90 @@
       {% set show_pitch_cmp = cur_prev or (cur_pitch and cur_pitch.strip() != cur_base.strip()) %}
       {% set pitch_before_url = url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk) %}
       {% set pitch_after_url = url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk) %}
+      {% set pitch_before_hl_url = url_for('main.app_pitch_view', app_id=app.id, which='before', pitch=pk, hl=1) %}
+      {% set pitch_after_hl_url = url_for('main.app_pitch_view', app_id=app.id, which='after', pitch=pk, hl=1) %}
       {% set pitch_single_url = url_for('main.app_pitch_view', app_id=app.id, pitch=pk) %}
       {% if show_pitch_cmp %}
       <h3 class="mt">Before / After (styled HTML)</h3>
-      <p class="muted sm">Left = before AI tailor · Right = tailored for this job.
-        Use Fullscreen on either pane to read one at a time.</p>
-      <div class="diff-cols pitch-html-cmp" id="pitch-inline">
-        <section class="panel diff-pane">
-          <div class="pitch-pane-head">
-            <h3>Before</h3>
-            <button type="button" class="btn sm" data-pitch-fs
-                    data-pitch-fs-src="{{ pitch_before_url }}"
-                    data-pitch-fs-title="Before — {{ pitch_labels[pk] }}"
-                    title="Open Before full screen">⛶ Fullscreen</button>
+      <p class="muted sm">Compare the base script with the job-tailored version.
+        <b>After</b> highlights added words in green; <b>Before</b> shows removed words in red.</p>
+
+      <nav class="pitch-cmp-tabs" role="tablist" aria-label="Pitch compare view">
+        <button type="button" class="btn sm" role="tab" data-pitch-cmp="side"
+                aria-selected="false">Side by side</button>
+        <button type="button" class="btn sm" role="tab" data-pitch-cmp="before"
+                aria-selected="false">Before
+          <span class="muted sm">(removed)</span></button>
+        <button type="button" class="btn sm primary" role="tab" data-pitch-cmp="after"
+                aria-selected="true">After
+          <span class="muted sm">(added)</span></button>
+      </nav>
+
+      <div class="pitch-cmp-panel" data-pitch-cmp-panel="side" hidden>
+        <div class="diff-cols pitch-html-cmp mt" id="pitch-inline-side">
+          <section class="panel diff-pane">
+            <div class="pitch-pane-head">
+              <h3>Before</h3>
+              <button type="button" class="btn sm" data-pitch-fs
+                      data-pitch-fs-src="{{ pitch_before_url }}"
+                      data-pitch-fs-title="Before — {{ pitch_labels[pk] }}"
+                      title="Open Before full screen">⛶ Fullscreen</button>
+            </div>
+            <div class="frame-wrap pitch-frame-sm">
+              <iframe title="Pitch before AI" data-src="{{ pitch_before_url }}"></iframe>
+            </div>
+          </section>
+          <section class="panel diff-pane">
+            <div class="pitch-pane-head">
+              <h3>✨ After (this job)</h3>
+              <button type="button" class="btn sm" data-pitch-fs
+                      data-pitch-fs-src="{{ pitch_after_url }}"
+                      data-pitch-fs-title="After — {{ pitch_labels[pk] }}"
+                      title="Open After full screen">⛶ Fullscreen</button>
+            </div>
+            <div class="frame-wrap pitch-frame-sm">
+              <iframe title="Pitch after AI" data-src="{{ pitch_after_url }}"></iframe>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="pitch-cmp-panel" data-pitch-cmp-panel="before" hidden>
+        <div class="pitch-fs-bar mt">
+          <span class="muted sm">Words removed in the tailored version are marked in
+            <span class="pitch-legend-del">red</span>.</span>
+          <button type="button" class="btn sm" data-pitch-fs
+                  data-pitch-fs-src="{{ pitch_before_hl_url }}"
+                  data-pitch-fs-title="Before — {{ pitch_labels[pk] }}"
+                  title="Open Before full screen">⛶ Fullscreen</button>
+        </div>
+        <div class="review wide mt">
+          <div class="preview">
+            <div class="frame-wrap">
+              <iframe title="Pitch before with removals highlighted"
+                      data-src="{{ pitch_before_hl_url }}"></iframe>
+            </div>
           </div>
-          <div class="frame-wrap pitch-frame-sm">
-            <iframe title="Pitch before AI" src="{{ pitch_before_url }}"></iframe>
+        </div>
+      </div>
+
+      <div class="pitch-cmp-panel" data-pitch-cmp-panel="after">
+        <div class="pitch-fs-bar mt">
+          <span class="muted sm">Words added for this job are marked in
+            <span class="pitch-legend-ins">green</span>.</span>
+          <button type="button" class="btn sm" data-pitch-fs
+                  data-pitch-fs-src="{{ pitch_after_hl_url }}"
+                  data-pitch-fs-title="After — {{ pitch_labels[pk] }}"
+                  title="Open After full screen">⛶ Fullscreen</button>
+        </div>
+        <div class="review wide mt">
+          <div class="preview">
+            <div class="frame-wrap">
+              <iframe title="Pitch after with additions highlighted"
+                      src="{{ pitch_after_hl_url }}"></iframe>
+            </div>
           </div>
-        </section>
-        <section class="panel diff-pane">
-          <div class="pitch-pane-head">
-            <h3>✨ After (this job)</h3>
-            <button type="button" class="btn sm" data-pitch-fs
-                    data-pitch-fs-src="{{ pitch_after_url }}"
-                    data-pitch-fs-title="After — {{ pitch_labels[pk] }}"
-                    title="Open After full screen">⛶ Fullscreen</button>
-          </div>
-          <div class="frame-wrap pitch-frame-sm">
-            <iframe title="Pitch after AI" src="{{ pitch_after_url }}"></iframe>
-          </div>
-        </section>
+        </div>
       </div>
       {% else %}
       <div class="pitch-fs-bar mt">
@@ -883,6 +937,37 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// Pitch compare tabs (Side by side | Before | After) — default After.
+(function () {
+  var tabs = document.querySelectorAll('[data-pitch-cmp]');
+  if (!tabs.length) return;
+  var panels = document.querySelectorAll('[data-pitch-cmp-panel]');
+
+  function activate(name) {
+    Array.prototype.forEach.call(tabs, function (t) {
+      var on = t.getAttribute('data-pitch-cmp') === name;
+      t.classList.toggle('primary', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    Array.prototype.forEach.call(panels, function (p) {
+      var on = p.getAttribute('data-pitch-cmp-panel') === name;
+      p.hidden = !on;
+      if (on) {
+        // Lazy-load iframes when a tab is first shown.
+        Array.prototype.forEach.call(p.querySelectorAll('iframe[data-src]'), function (f) {
+          if (!f.getAttribute('src')) f.setAttribute('src', f.getAttribute('data-src'));
+        });
+      }
+    });
+  }
+  Array.prototype.forEach.call(tabs, function (t) {
+    t.addEventListener('click', function () {
+      activate(t.getAttribute('data-pitch-cmp'));
+    });
+  });
+})();
+</script>
 <script>
 // Pitch fullscreen — one pane at a time (Before or After, or single view).
 (function () {
