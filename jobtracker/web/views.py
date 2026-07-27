@@ -1548,6 +1548,7 @@ def set_sent_resume(app_id: int):
             upload=request.files.get("resume_file"),
             upload_label=(f.get("resume_label") or "").strip(),
             path_text=(f.get("resume_path") or "").strip(),
+            color=(f.get("resume_color") or "blue"),
         )
         resumes.attach_to_application(app_id, rid)
     except (ValueError, FileNotFoundError, OSError) as exc:
@@ -2751,6 +2752,227 @@ def resume_pdf(app_id: int):
 
 
 # --------------------------------------------------------------------------- #
+# Resume library hub (My resumes + Build from scratch tabs)
+
+@bp.route("/resume", methods=["GET", "POST"])
+def my_resumes():
+    """Library of CVs — view/edit labels, colours, default, upload."""
+    from jobtracker.db import init_db
+    init_db()
+    resumes.ensure_defaults()
+    if request.method == "POST":
+        action = (request.form.get("action") or "upload").strip()
+        label = (request.form.get("label") or "").strip()
+        color = request.form.get("color") or "blue"
+        make_default = bool(request.form.get("make_default"))
+        try:
+            if action == "import_path":
+                rid, created = resumes.ensure_from_path(
+                    request.form.get("path", ""), label=label, color=color,
+                    make_default=make_default)
+            else:
+                f = request.files.get("resume_file")
+                if not f or not f.filename:
+                    flash("Choose a resume file to upload.", "error")
+                    return redirect(url_for("main.my_resumes"))
+                rid, created = resumes.ensure_from_bytes(
+                    f.read(), original_name=f.filename, label=label,
+                    color=color, make_default=make_default)
+            row = resumes.get(rid)
+            flash(
+                ("Added" if created else "Already in library")
+                + f": {row['label'] if row else rid}.",
+                "ok",
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            flash(str(exc), "error")
+        return redirect(url_for("main.my_resumes"))
+    rows = resumes.list_resumes()
+    return render_template(
+        "resumes.html",
+        resumes=rows,
+        usage=resumes.usage_counts(),
+        colors=resumes.RESUME_COLORS,
+        mode="manage",
+        show_actions=True,
+        ai_on=ai.is_configured(),
+    )
+
+
+@bp.route("/resume/<int:resume_id>")
+def resume_lib_edit(resume_id: int):
+    row = resumes.get(resume_id)
+    if not row:
+        abort(404)
+    html = ""
+    is_html = resumes.is_html(row)
+    if is_html:
+        try:
+            html = resumes.path_for(row).read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            html = ""
+    usage = resumes.usage_counts().get(resume_id, 0)
+    return render_template(
+        "resume_lib_edit.html",
+        resume=row,
+        html=html,
+        is_html=is_html,
+        colors=resumes.RESUME_COLORS,
+        usage=usage,
+        has_draft=resumes.has_draft(resume_id),
+        ai_on=ai.is_configured(),
+    )
+
+
+@bp.route("/resume/<int:resume_id>/meta", methods=["POST"])
+def resume_lib_meta(resume_id: int):
+    if not resumes.get(resume_id):
+        abort(404)
+    resumes.update_meta(
+        resume_id,
+        label=request.form.get("label"),
+        color=request.form.get("color"),
+    )
+    flash("Label / colour saved.", "ok")
+    return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+
+
+@bp.route("/resume/<int:resume_id>/default", methods=["POST"])
+def resume_lib_default(resume_id: int):
+    try:
+        resumes.set_default(resume_id)
+        flash("Default resume updated (Settings path pointed at this file).", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    nxt = request.referrer or url_for("main.my_resumes")
+    if f"/resume/{resume_id}" in (nxt or ""):
+        return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+    return redirect(url_for("main.my_resumes"))
+
+
+@bp.route("/resume/<int:resume_id>/view")
+def resume_lib_view(resume_id: int):
+    row = resumes.get(resume_id)
+    if not row:
+        abort(404)
+    which = (request.args.get("which") or "").strip().lower()
+    if which == "draft":
+        draft = resumes.load_draft(resume_id)
+        if not draft.strip():
+            abort(404)
+        return Response(draft, mimetype="text/html; charset=utf-8")
+    path = resumes.path_for(row)
+    if not path.is_file():
+        abort(404)
+    if resumes.is_html(row):
+        return Response(path.read_text(encoding="utf-8", errors="ignore"),
+                        mimetype="text/html; charset=utf-8")
+    # Non-HTML: serve file download-style inline when possible
+    return send_file(path, as_attachment=False,
+                     download_name=row["original_name"] or path.name)
+
+
+@bp.route("/resume/<int:resume_id>/download")
+def resume_lib_download(resume_id: int):
+    row = resumes.get(resume_id)
+    if not row:
+        abort(404)
+    path = resumes.path_for(row)
+    if not path.is_file():
+        abort(404)
+    return send_file(path, as_attachment=True,
+                     download_name=row["original_name"] or path.name)
+
+
+@bp.route("/resume/<int:resume_id>/save", methods=["POST"])
+def resume_lib_save(resume_id: int):
+    if not resumes.get(resume_id):
+        abort(404)
+    try:
+        resumes.save_html(resume_id, request.form.get("html", ""))
+        flash("Resume HTML saved.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+
+
+@bp.route("/resume/<int:resume_id>/revise", methods=["POST"])
+def resume_lib_revise(resume_id: int):
+    row = resumes.get(resume_id)
+    if not row:
+        abort(404)
+    if not resumes.is_html(row):
+        flash("AI improve needs an HTML resume.", "error")
+        return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+    instruction = request.form.get("instruction", "").strip()
+    try:
+        current = resumes.path_for(row).read_text(encoding="utf-8", errors="ignore")
+        draft = ai.revise_resume(instructions=instruction, original_html=current)
+        resumes.save_draft(resume_id, draft)
+        return redirect(url_for("main.resume_lib_compare", resume_id=resume_id))
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+
+
+@bp.route("/resume/<int:resume_id>/compare")
+def resume_lib_compare(resume_id: int):
+    row = resumes.get(resume_id)
+    if not row:
+        abort(404)
+    if not resumes.has_draft(resume_id):
+        flash("No pending AI revision.", "error")
+        return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+    return render_template("resume_lib_compare.html", resume=row)
+
+
+@bp.route("/resume/<int:resume_id>/draft/apply", methods=["POST"])
+def resume_lib_draft_apply(resume_id: int):
+    try:
+        resumes.apply_draft(resume_id)
+        flash("AI revision applied.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+
+
+@bp.route("/resume/<int:resume_id>/draft/discard", methods=["POST"])
+def resume_lib_draft_discard(resume_id: int):
+    resumes.clear_draft(resume_id)
+    flash("AI revision discarded.", "ok")
+    return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+
+
+@bp.route("/resume-builder/promote", methods=["POST"])
+def resume_builder_promote():
+    """Add the built-from-scratch resume into the library with a clear label."""
+    if not config.BUILT_RESUME_PATH.exists():
+        flash("Build a resume first.", "error")
+        return redirect(url_for("main.resume_builder"))
+    label = (request.form.get("label") or "").strip()
+    if not label:
+        flash("Give the resume a clear label so you can tell versions apart.", "error")
+        return redirect(url_for("main.resume_builder_review"))
+    color = request.form.get("color") or "violet"
+    make_default = bool(request.form.get("make_default"))
+    html = config.BUILT_RESUME_PATH.read_text(encoding="utf-8")
+    try:
+        rid, created = resumes.ensure_from_html(
+            html, label=label, color=color, make_default=make_default,
+            original_name="built_resume.html",
+        )
+        flash(
+            ("Added to library" if created else "Already in library (same content)")
+            + f" as “{label}”.",
+            "ok",
+        )
+        return redirect(url_for("main.resume_lib_edit", resume_id=rid))
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.resume_builder_review"))
+
+
+# --------------------------------------------------------------------------- #
 # Resume Builder: a spoken Hebrew interview that produces an English resume.
 @bp.route("/resume-builder")
 def resume_builder():
@@ -2763,6 +2985,7 @@ def resume_builder():
         is_gemini=ai.active_provider() == "gemini",
         first_question=ai.RESUME_BUILDER_FIRST_QUESTION,
         has_built=config.BUILT_RESUME_PATH.exists(),
+        resume_tab="builder",
     )
 
 

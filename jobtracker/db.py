@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS resumes (
     original_name TEXT,
     source_path   TEXT,
     bytes         INTEGER,
+    color         TEXT DEFAULT 'blue',
+    is_default    INTEGER DEFAULT 0,
     created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_resumes_hash ON resumes(content_hash);
@@ -224,6 +226,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
                 "ALTER TABLE job_alerts ADD COLUMN ignored INTEGER DEFAULT 0")
         if "comment" not in alert_cols:
             conn.execute("ALTER TABLE job_alerts ADD COLUMN comment TEXT")
+
+    # Resume library extras (label colour + default flag).
+    resume_cols = {r["name"] for r in conn.execute("PRAGMA table_info(resumes)")}
+    if resume_cols:
+        if "color" not in resume_cols:
+            conn.execute("ALTER TABLE resumes ADD COLUMN color TEXT DEFAULT 'blue'")
+        if "is_default" not in resume_cols:
+            conn.execute(
+                "ALTER TABLE resumes ADD COLUMN is_default INTEGER DEFAULT 0")
 
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(applications)")}
     added = []

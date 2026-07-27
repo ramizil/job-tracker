@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Resume Builder · Job Tracker{% endblock %}
 {% block content %}
-<h1>🗣️ Resume Builder</h1>
+{% set resume_tab = 'builder' %}
+<div class="panel-head">
+  <h1>🗣️ Build from scratch</h1>
+</div>
+{% include "_resume_tabs.html" %}
 <p class="sub">Have a short conversation <b>in Hebrew</b> — answer by voice or by typing — and
-  the AI writes a polished <b>English</b> resume in your CV's style. ראיון קצר בעברית → קורות חיים באנגלית.</p>
+  the AI writes a polished <b>English</b> resume in your CV's style. When done, add it to
+  <b>My resumes</b> with a clear label. ראיון קצר בעברית → קורות חיים באנגלית.</p>
 
 {% include "_setup_banner.html" %}
 
@@ -22,7 +27,8 @@
 {% if has_built %}
 <p class="muted">You already have a built resume.
   <a href="{{ url_for('main.resume_builder_review') }}">Open it →</a>
-  (or start a new interview below to replace it).</p>
+  (or start a new interview below to replace it).
+  Then <b>Add to My resumes</b> with a clear label.</p>
 {% endif %}
 
 <div class="rb" id="rb" {% if not ready.ready %}hidden{% endif %}

@@ -140,20 +140,33 @@
       {% endif %}
       <form method="post" action="{{ url_for('main.set_sent_resume', app_id=app.id) }}"
             enctype="multipart/form-data" class="stack mt">
-        <select name="resume_id">
-          <option value="">— none —</option>
-          {% for r in resume_lib %}
-          <option value="{{ r.id }}" {{ 'selected' if sent_resume and sent_resume.id == r.id }}>
-            {{ r.label }}{% if r.original_name %} · {{ r.original_name }}{% endif %}{% if r.created_at %} · {{ r.created_at[:10] }}{% endif %}{% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
-          </option>
-          {% endfor %}
-        </select>
-        <div class="row">
+        {% set resumes = resume_lib %}
+        {% set mode = 'pick' %}
+        {% set selected_id = sent_resume.id if sent_resume else none %}
+        {% set form_name = 'resume_id' %}
+        {% set show_actions = false %}
+        {% set usage = none %}
+        {% include "_resume_cards.html" %}
+        <label class="muted sm" style="margin-top:8px"><input type="radio" name="resume_id" value=""
+          {{ 'checked' if not sent_resume }}> — none —</label>
+        <div class="row mt">
           <input type="file" name="resume_file" accept=".pdf,.html,.htm,.docx,.txt,.md">
-          <input name="resume_label" placeholder="Label for new file (optional)">
+          <input name="resume_label" placeholder="Label for new file (required if uploading)">
         </div>
+        <select name="resume_color" title="Colour for new upload">
+          <option value="blue">Blue</option>
+          <option value="teal">Teal</option>
+          <option value="violet">Violet</option>
+          <option value="amber">Amber</option>
+          <option value="rose">Rose</option>
+          <option value="green">Green</option>
+          <option value="orange">Orange</option>
+          <option value="slate">Slate</option>
+        </select>
         <input name="resume_path" type="text" placeholder="Or path on this machine…">
         <button class="btn" type="submit">Save resume link</button>
+        <p class="muted sm">Manage labels &amp; defaults in
+          <a href="{{ url_for('main.my_resumes') }}">My resumes</a>.</p>
       </form>
     </section>
 

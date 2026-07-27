@@ -1,0 +1,8 @@
+{# Shared tab bar for Resume hub #}
+{% set tab = resume_tab or 'library' %}
+<nav class="pitch-kind-tabs" aria-label="Resume sections">
+  <a class="btn sm{{ ' primary' if tab == 'library' }}"
+     href="{{ url_for('main.my_resumes') }}">📄 My resumes</a>
+  <a class="btn sm{{ ' primary' if tab == 'builder' }}"
+     href="{{ url_for('main.resume_builder') }}">🗣️ Build from scratch</a>
+</nav>

@@ -14,11 +14,31 @@ from typing import Any
 from . import config
 from .db import get_connection, now_iso
 from .resume import SUPPORTED_RESUME_EXTS
+
 _HASH_PREFIX = 12  # short hash in stored filenames
+
+# Visual colour chips for the library cards (key → CSS-friendly name).
+RESUME_COLORS: list[tuple[str, str]] = [
+    ("blue", "Blue"),
+    ("teal", "Teal"),
+    ("violet", "Violet"),
+    ("amber", "Amber"),
+    ("rose", "Rose"),
+    ("slate", "Slate"),
+    ("green", "Green"),
+    ("orange", "Orange"),
+]
+_COLOR_KEYS = {c for c, _ in RESUME_COLORS}
 
 
 def _dir() -> Path:
     d = config.PROFILE_DIR / "resumes"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _draft_dir() -> Path:
+    d = _dir() / "drafts"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -38,11 +58,16 @@ def _label_from_name(name: str) -> str:
     return stem[:80] or "Resume"
 
 
+def _normalize_color(color: str | None) -> str:
+    c = (color or "blue").strip().lower()
+    return c if c in _COLOR_KEYS else "blue"
+
+
 def _distinct_label(desired: str, original_name: str, content_hash: str) -> str:
     """Keep human label; if another resume already uses it, append a version hint.
 
-    Identity is always ``content_hash`` — this only makes the dropdown readable
-    when two different files share the same display name.
+    Identity is always ``content_hash`` — this only makes the UI readable when
+    two different files share the same display name.
     """
     base = (desired or _label_from_name(original_name)).strip()[:80] or "Resume"
     short = content_hash[:8]
@@ -59,16 +84,15 @@ def _distinct_label(desired: str, original_name: str, content_hash: str) -> str:
         ).fetchone() if original_name else None
     if not clash and not name_clash:
         return base
-    # e.g. "Senior QA Engineer (v·a1b2c3d4)" — stable, unique, not an overwrite
     suffix = f" (v·{short})"
-    out = (base[: max(1, 80 - len(suffix))] + suffix)
-    return out
+    return base[: max(1, 80 - len(suffix))] + suffix
 
 
 def list_resumes() -> list[sqlite3.Row]:
     with get_connection() as conn:
         return list(conn.execute(
-            "SELECT * FROM resumes ORDER BY created_at DESC, id DESC"
+            """SELECT * FROM resumes
+                ORDER BY is_default DESC, created_at DESC, id DESC"""
         ).fetchall())
 
 
@@ -79,8 +103,25 @@ def get(resume_id: int) -> sqlite3.Row | None:
         ).fetchone()
 
 
+def get_default() -> sqlite3.Row | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM resumes WHERE is_default=1 ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row:
+            return row
+        return conn.execute(
+            "SELECT * FROM resumes ORDER BY created_at DESC, id DESC LIMIT 1"
+        ).fetchone()
+
+
 def path_for(row: sqlite3.Row | dict[str, Any]) -> Path:
     return _dir() / row["filename"]
+
+
+def is_html(row: sqlite3.Row | dict[str, Any]) -> bool:
+    name = (row["original_name"] or row["filename"] or "").lower()
+    return Path(name).suffix in (".html", ".htm")
 
 
 def find_by_hash(content_hash: str) -> sqlite3.Row | None:
@@ -91,16 +132,17 @@ def find_by_hash(content_hash: str) -> sqlite3.Row | None:
 
 
 def _insert(*, label: str, content_hash: str, filename: str,
-            original_name: str, source_path: str, size: int) -> int:
+            original_name: str, source_path: str, size: int,
+            color: str = "blue", is_default: int = 0) -> int:
     ts = now_iso()
     with get_connection() as conn:
         cur = conn.execute(
             """INSERT INTO resumes
                  (label, content_hash, filename, original_name, source_path,
-                  bytes, created_at)
-               VALUES (?,?,?,?,?,?,?)""",
+                  bytes, color, is_default, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
             (label, content_hash, filename, original_name, source_path,
-             size, ts),
+             size, _normalize_color(color), int(is_default), ts),
         )
         return int(cur.lastrowid)
 
@@ -111,12 +153,12 @@ def ensure_from_bytes(
     original_name: str,
     label: str = "",
     source_path: str = "",
+    color: str = "blue",
+    make_default: bool = False,
 ) -> tuple[int, bool]:
     """Store bytes if new; return ``(resume_id, created)``.
 
-    Dedupes by **file content** (SHA-256), not by filename/label. Uploading
-    ``CV.pdf`` twice with different bytes keeps both rows; identical bytes
-    reuse the existing row and never overwrite it.
+    Dedupes by **file content** (SHA-256), not by filename/label.
     """
     if not data:
         raise ValueError("Empty resume file")
@@ -129,13 +171,14 @@ def ensure_from_bytes(
     content_hash = _sha256(data)
     existing = find_by_hash(content_hash)
     if existing:
-        return int(existing["id"]), False
+        rid = int(existing["id"])
+        if make_default:
+            set_default(rid)
+        return rid, False
 
     safe = _safe_name(original_name)
     if not Path(safe).suffix and ext:
         safe = f"{safe}{ext}"
-    # Hash prefix in the stored filename → same original name never clobbers
-    # an older version on disk.
     stored = f"{content_hash[:_HASH_PREFIX]}_{safe}"
     dest = _dir() / stored
     dest.write_bytes(data)
@@ -147,11 +190,17 @@ def ensure_from_bytes(
         original_name=Path(original_name).name,
         source_path=(source_path or "")[:500],
         size=len(data),
+        color=color,
+        is_default=0,
     )
+    if make_default:
+        set_default(rid)
     return rid, True
 
 
-def ensure_from_path(path: Path | str, *, label: str = "") -> tuple[int, bool]:
+def ensure_from_path(path: Path | str, *, label: str = "",
+                     color: str = "blue",
+                     make_default: bool = False) -> tuple[int, bool]:
     """Import a filesystem resume; dedupe by content hash."""
     p = Path(path).expanduser()
     if not p.is_file():
@@ -162,6 +211,22 @@ def ensure_from_path(path: Path | str, *, label: str = "") -> tuple[int, bool]:
         original_name=p.name,
         label=label or _label_from_name(p.name),
         source_path=str(p.resolve()),
+        color=color,
+        make_default=make_default,
+    )
+
+
+def ensure_from_html(html: str, *, label: str, color: str = "violet",
+                     original_name: str = "built_resume.html",
+                     make_default: bool = False) -> tuple[int, bool]:
+    """Add an HTML document (e.g. Resume Builder output) to the library."""
+    data = (html or "").encode("utf-8")
+    return ensure_from_bytes(
+        data,
+        original_name=original_name,
+        label=label,
+        color=color,
+        make_default=make_default,
     )
 
 
@@ -179,6 +244,18 @@ def ensure_defaults() -> list[sqlite3.Row]:
             ensure_from_path(path, label=label)
         except OSError:
             pass
+    with get_connection() as conn:
+        has_def = conn.execute(
+            "SELECT 1 FROM resumes WHERE is_default=1 LIMIT 1"
+        ).fetchone()
+    if not has_def:
+        rows = list_resumes()
+        if rows:
+            pick = next(
+                (r for r in rows if (r["label"] or "").startswith("Default")),
+                rows[0],
+            )
+            set_default(int(pick["id"]), update_settings_path=False)
     return list_resumes()
 
 
@@ -190,18 +267,107 @@ def set_label(resume_id: int, label: str) -> None:
         conn.execute("UPDATE resumes SET label=? WHERE id=?", (label, resume_id))
 
 
+def set_color(resume_id: int, color: str) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE resumes SET color=? WHERE id=?",
+            (_normalize_color(color), resume_id),
+        )
+
+
+def set_default(resume_id: int, *, update_settings_path: bool = True) -> None:
+    """Mark one library resume as default (clears others).
+
+    Optionally points Settings ``RESUME_PATH`` at its stored file so AI features
+    use it.
+    """
+    row = get(resume_id)
+    if not row:
+        raise ValueError(f"Unknown resume id {resume_id}")
+    with get_connection() as conn:
+        conn.execute("UPDATE resumes SET is_default=0")
+        conn.execute(
+            "UPDATE resumes SET is_default=1 WHERE id=?", (resume_id,))
+    if update_settings_path:
+        path = path_for(row)
+        if path.is_file():
+            try:
+                config.update_env_file({"RESUME_PATH": str(path.resolve())})
+                config.reload()
+            except OSError:
+                pass
+
+
+def update_meta(resume_id: int, *, label: str | None = None,
+                color: str | None = None) -> None:
+    if label is not None:
+        set_label(resume_id, label)
+    if color is not None:
+        set_color(resume_id, color)
+
+
+def save_html(resume_id: int, html: str) -> None:
+    """Overwrite an HTML resume's bytes (updates content hash in place)."""
+    row = get(resume_id)
+    if not row:
+        raise ValueError(f"Unknown resume id {resume_id}")
+    if not is_html(row):
+        raise ValueError("Only HTML resumes can be saved as HTML")
+    data = (html or "").encode("utf-8")
+    content_hash = _sha256(data)
+    other = find_by_hash(content_hash)
+    if other and int(other["id"]) != resume_id:
+        raise ValueError(
+            "That content already exists as another library resume "
+            f"(#{other['id']}: {other['label']}).")
+    path = path_for(row)
+    path.write_bytes(data)
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE resumes SET content_hash=?, bytes=? WHERE id=?",
+            (content_hash, len(data), resume_id),
+        )
+
+
+def draft_path(resume_id: int) -> Path:
+    return _draft_dir() / f"{resume_id}.html"
+
+
+def save_draft(resume_id: int, html: str) -> None:
+    draft_path(resume_id).write_text(html or "", encoding="utf-8")
+
+
+def load_draft(resume_id: int) -> str:
+    p = draft_path(resume_id)
+    try:
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def clear_draft(resume_id: int) -> None:
+    draft_path(resume_id).unlink(missing_ok=True)
+
+
+def has_draft(resume_id: int) -> bool:
+    return bool(load_draft(resume_id).strip())
+
+
+def apply_draft(resume_id: int) -> None:
+    draft = load_draft(resume_id)
+    if not draft.strip():
+        raise ValueError("No pending AI revision")
+    save_html(resume_id, draft)
+    clear_draft(resume_id)
+
+
 def attach_to_application(
     app_id: int,
     resume_id: int | None,
     *,
     note: str = "",
 ) -> None:
-    """Link (or clear) which resume was sent for this application.
-
-    When replacing an existing resume with a different one, the previous link
-    is archived in ``application_resume_history`` so older CVs stay available
-    for insights (e.g. after a reapply).
-    """
+    """Link (or clear) which resume was sent for this application."""
     with get_connection() as conn:
         prev = conn.execute(
             "SELECT resume_id FROM applications WHERE id=?", (app_id,)
@@ -218,7 +384,6 @@ def attach_to_application(
                 raise ValueError(f"Unknown resume id {resume_id}")
             label = row["label"] or ""
         ts = now_iso()
-        # Archive previous resume before overwriting the current link.
         if old_id and old_id != resume_id:
             conn.execute(
                 """INSERT INTO application_resume_history
@@ -240,7 +405,8 @@ def history_for(app_id: int) -> list[sqlite3.Row]:
     with get_connection() as conn:
         return list(conn.execute(
             """SELECT h.id, h.note, h.attached_at, h.resume_id,
-                      r.label, r.original_name, r.content_hash, r.created_at
+                      r.label, r.original_name, r.content_hash, r.created_at,
+                      r.color
                  FROM application_resume_history h
                  JOIN resumes r ON r.id = h.resume_id
                 WHERE h.application_id=?
@@ -279,6 +445,7 @@ def resolve_selection(
     upload=None,
     upload_label: str = "",
     path_text: str = "",
+    color: str = "blue",
 ) -> int | None:
     """Resolve paste/detail form fields to a resume id (or None).
 
@@ -291,11 +458,12 @@ def resolve_selection(
                 raw,
                 original_name=upload.filename,
                 label=upload_label,
+                color=color,
             )
             return rid
     path_text = (path_text or "").strip()
     if path_text:
-        rid, _ = ensure_from_path(path_text, label=upload_label)
+        rid, _ = ensure_from_path(path_text, label=upload_label, color=color)
         return rid
     if resume_id in (None, "", "0", 0):
         return None

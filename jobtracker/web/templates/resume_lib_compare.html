@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Compare resume revision · Job Tracker{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.resume_lib_edit', resume_id=resume.id) }}">&larr; Back to {{ resume.label }}</a>
+<h1>🆚 Resume — compare AI revision</h1>
+<p class="sub">Current (left) vs AI revision (right). Accept only if the changes look right —
+  the AI must not invent experience.</p>
+
+<div class="actions">
+  <form method="post" action="{{ url_for('main.resume_lib_draft_apply', resume_id=resume.id) }}" style="display:inline"
+        onsubmit="return confirm('Replace this resume with the AI revision?')">
+    <button class="btn primary" type="submit">✔ Accept revision</button>
+  </form>
+  <form method="post" action="{{ url_for('main.resume_lib_draft_discard', resume_id=resume.id) }}" style="display:inline">
+    <button class="btn danger" type="submit">✖ Discard</button>
+  </form>
+</div>
+
+<div class="diff-cols pitch-html-cmp mt">
+  <section class="panel diff-pane">
+    <h3>Current</h3>
+    <div class="frame-wrap pitch-frame-sm">
+      <iframe title="Current resume"
+              src="{{ url_for('main.resume_lib_view', resume_id=resume.id) }}"></iframe>
+    </div>
+  </section>
+  <section class="panel diff-pane">
+    <h3>✨ AI revision</h3>
+    <div class="frame-wrap pitch-frame-sm">
+      <iframe title="AI revision"
+              src="{{ url_for('main.resume_lib_view', resume_id=resume.id, which='draft') }}"></iframe>
+    </div>
+  </section>
+</div>
+{% endblock %}

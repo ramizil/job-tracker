@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ resume.label }} · Resume · Job Tracker{% endblock %}
+{% block content %}
+{% set resume_tab = 'library' %}
+<a class="back" href="{{ url_for('main.my_resumes') }}">&larr; My resumes</a>
+{% include "_resume_tabs.html" %}
+
+<div class="panel-head">
+  <h1>📄 {{ resume.label }}</h1>
+  <div class="actions">
+    {% if is_html %}
+    <a class="btn sm" href="{{ url_for('main.resume_lib_view', resume_id=resume.id) }}" target="_blank" rel="noopener">Open in tab</a>
+    {% endif %}
+    <a class="btn sm" href="{{ url_for('main.resume_lib_download', resume_id=resume.id) }}">⬇ Download</a>
+  </div>
+</div>
+
+{% if has_draft %}
+<div class="flash ok">✨ Pending AI revision —
+  <a href="{{ url_for('main.resume_lib_compare', resume_id=resume.id) }}"><b>compare side-by-side</b></a>
+  and accept or discard.</div>
+{% endif %}
+
+<section class="panel">
+  <h2>Label &amp; colour</h2>
+  <form method="post" action="{{ url_for('main.resume_lib_meta', resume_id=resume.id) }}" class="stack">
+    <div class="row">
+      <input name="label" value="{{ resume.label }}" required style="flex:1"
+             placeholder="Clear label (e.g. Senior QA — LinkedIn)">
+      <select name="color" title="Card colour">
+        {% for key, name in colors %}
+        <option value="{{ key }}" {{ 'selected' if (resume.color or 'blue') == key }}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn" type="submit">Save label / colour</button>
+      {% if not resume.is_default %}
+      <button class="btn" type="submit" formaction="{{ url_for('main.resume_lib_default', resume_id=resume.id) }}"
+              formmethod="post">★ Make default</button>
+      {% else %}
+      <span class="pill fit-yes">Default</span>
+      {% endif %}
+    </div>
+  </form>
+  <p class="muted sm mt">File: {{ resume.original_name or resume.filename }}
+    · {{ (resume.created_at or '')[:10] }}
+    {% if resume.content_hash %}· {{ resume.content_hash[:8] }}{% endif %}
+    {% if usage %}· used on {{ usage }} application(s){% endif %}
+  </p>
+</section>
+
+{% if is_html %}
+<section class="panel">
+  <h2>Preview / edit</h2>
+  <p class="muted sm">Click into the resume to edit text, then Save. Or use HTML source below.</p>
+  <div class="review wide">
+    <div class="preview">
+      <div class="rtoolbar">
+        <span class="muted sm" id="edit-hint">✏️ Loading editable preview…</span>
+        <span>
+          <button class="btn sm" type="button" id="reset-frame">Discard</button>
+          <button class="btn sm primary" type="button" id="save-wysiwyg">💾 Save changes</button>
+        </span>
+      </div>
+      <div class="frame-wrap">
+        <iframe id="rframe" title="Resume preview"
+                src="{{ url_for('main.resume_lib_view', resume_id=resume.id) }}"></iframe>
+      </div>
+    </div>
+  </div>
+  <details class="mt">
+    <summary><b>&lt;/&gt; Edit HTML source</b></summary>
+    <form method="post" action="{{ url_for('main.resume_lib_save', resume_id=resume.id) }}" class="stack mt">
+      <textarea name="html" class="code gen-text" rows="18" spellcheck="false" dir="ltr"
+                style="font-family:ui-monospace,Consolas,monospace;font-size:12.5px">{{ html }}</textarea>
+      <button class="btn primary" type="submit">Save HTML</button>
+    </form>
+  </details>
+  <form id="wysiwyg-form" method="post" action="{{ url_for('main.resume_lib_save', resume_id=resume.id) }}" hidden>
+    <textarea name="html" id="wysiwyg-html"></textarea>
+  </form>
+</section>
+
+{% if ai_on %}
+<section class="panel">
+  <h2>🪄 Improve with AI</h2>
+  <p class="muted sm">General rewrite (not tied to a job). You'll review Before / After before
+    anything replaces this resume. Job-specific tailoring stays on each application.</p>
+  <form method="post" action="{{ url_for('main.resume_lib_revise', resume_id=resume.id) }}" class="stack"
+        data-loading="Rewriting your resume per your instruction…">
+    <textarea name="instruction" rows="4" dir="auto" required
+              placeholder="e.g. Shorten the summary; emphasise Playwright and CI/CD; keep all facts true"></textarea>
+    <div class="actions">
+      <button class="btn primary" type="submit">✨ Regenerate with AI</button>
+      {% if has_draft %}
+      <a class="btn sm" href="{{ url_for('main.resume_lib_compare', resume_id=resume.id) }}">🆚 Review pending</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+{% endif %}
+{% else %}
+<section class="panel">
+  <h2>Preview</h2>
+  <p class="muted">This file is <b>{{ resume.original_name or 'not HTML' }}</b> —
+    download it to open locally. AI improve works best on HTML resumes (upload an
+    .html twin, or use Build from scratch).</p>
+  <a class="btn primary" href="{{ url_for('main.resume_lib_download', resume_id=resume.id) }}">⬇ Download file</a>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if is_html %}
+<script>
+(function () {
+  var frame = document.getElementById('rframe');
+  if (!frame) return;
+  var hint = document.getElementById('edit-hint');
+  var saveBtn = document.getElementById('save-wysiwyg');
+  var dirty = false;
+  function makeEditable() {
+    try {
+      var doc = frame.contentDocument;
+      if (!doc || !doc.body) return;
+      doc.body.contentEditable = 'true';
+      doc.body.style.outline = 'none';
+      doc.body.addEventListener('input', function () {
+        dirty = true;
+        hint.textContent = '● Unsaved edits — click Save changes';
+        hint.style.color = '#fbbf24';
+      });
+      hint.textContent = '✏️ Click anywhere in the resume to edit text.';
+    } catch (e) {
+      hint.textContent = 'Preview not editable — use Edit HTML source below.';
+    }
+  }
+  frame.addEventListener('load', makeEditable);
+  saveBtn.addEventListener('click', function () {
+    try {
+      var doc = frame.contentDocument;
+      doc.body.removeAttribute('contenteditable');
+      document.getElementById('wysiwyg-html').value =
+        '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+      document.getElementById('wysiwyg-form').submit();
+    } catch (e) {
+      alert('Could not read the edited resume: ' + e.message);
+    }
+  });
+  document.getElementById('reset-frame').addEventListener('click', function () {
+    if (dirty && !confirm('Discard unsaved edits?')) return;
+    frame.contentWindow.location.reload();
+    dirty = false;
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

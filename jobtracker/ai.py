@@ -1424,6 +1424,40 @@ def tailor_resume(*, title: str, company: str, description: str,
     return html
 
 
+_RESUME_REVISE_PROMPT = """You are an expert resume editor. Revise the candidate's
+HTML resume according to the INSTRUCTIONS below. Hard rules:
+- Output a COMPLETE, valid HTML document.
+- KEEP the existing <style> / CSS and overall visual layout intact.
+- Do NOT invent experience, employers, dates, skills, or achievements.
+  Only rephrase, re-order, emphasise, shorten, or clarify what is already true.
+- Apply the instructions faithfully; leave unrelated sections unchanged.
+- Return ONLY the HTML, no markdown fences, no commentary.
+
+INSTRUCTIONS:
+{instructions}
+
+CURRENT RESUME HTML:
+{resume_html}
+"""
+
+
+def revise_resume(*, instructions: str, original_html: str | None = None) -> str:
+    """General (non-job) HTML resume revision from free-text instructions."""
+    instr = (instructions or "").strip()
+    if not instr:
+        raise AIError("Write an instruction first (what should change in the resume?).")
+    prompt = _RESUME_REVISE_PROMPT.format(
+        instructions=instr[:4000],
+        resume_html=(original_html or resume_html())[:30000],
+    )
+    html = _generate(prompt, as_json=False).strip()
+    html = re.sub(r"^```(?:html)?\s*", "", html)
+    html = re.sub(r"\s*```$", "", html)
+    if not html.strip():
+        raise AIError("AI returned an empty resume. Please try again.")
+    return html
+
+
 # --------------------------------------------------------------------------- #
 # Resume Builder: a spoken Hebrew interview that produces an English resume.
 

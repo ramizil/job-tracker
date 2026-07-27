@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}My Resumes · Job Tracker{% endblock %}
+{% block content %}
+{% set resume_tab = 'library' %}
+<div class="panel-head">
+  <h1>📄 My resumes</h1>
+</div>
+{% include "_resume_tabs.html" %}
+<p class="sub">Your resume library — the same list used in <b>Resume sent</b> on each job.
+  Pick colours and clear labels so versions are easy to tell apart. Mark one as
+  <b>Default</b> for AI analysis / Settings.</p>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Library</h2>
+    <span class="muted sm">{{ resumes|length }} resume{{ 's' if resumes|length != 1 }}</span>
+  </div>
+  {% include "_resume_cards.html" %}
+</section>
+
+<section class="panel">
+  <h2>⬆ Upload / import</h2>
+  <p class="muted sm">New files are added by content (duplicates of identical bytes reuse the existing row).</p>
+  <form method="post" action="{{ url_for('main.my_resumes') }}" enctype="multipart/form-data" class="stack">
+    <input type="hidden" name="action" value="upload">
+    <div class="row">
+      <input type="file" name="resume_file" accept=".pdf,.html,.htm,.docx,.txt,.md" required>
+      <input name="label" placeholder="Label (e.g. Senior Automation — 2026)" required>
+    </div>
+    <label class="muted sm">Colour
+      <select name="color">
+        {% for key, name in colors %}
+        <option value="{{ key }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="muted sm"><input type="checkbox" name="make_default" value="1"> Set as default</label>
+    <button class="btn primary" type="submit">Add to library</button>
+  </form>
+  <details class="mt">
+    <summary class="muted sm">Or import from a path on this machine</summary>
+    <form method="post" action="{{ url_for('main.my_resumes') }}" class="stack mt">
+      <input type="hidden" name="action" value="import_path">
+      <input name="path" type="text" placeholder="/path/to/resume.pdf" required>
+      <input name="label" placeholder="Label" required>
+      <select name="color">
+        {% for key, name in colors %}
+        <option value="{{ key }}">{{ name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn" type="submit">Import path</button>
+    </form>
+  </details>
+</section>
+{% endblock %}

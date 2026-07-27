@@ -1,0 +1,59 @@
+{# Resume library cards.
+   Expects: resumes (rows), usage (dict id→count), colors (RESUME_COLORS)
+   Optional: mode = 'manage' | 'pick'
+            selected_id, form_name (for pick), show_actions (bool)
+#}
+{% set mode = mode or 'manage' %}
+{% set show_actions = show_actions if show_actions is defined else (mode == 'manage') %}
+<div class="resume-cards">
+  {% for r in resumes %}
+  {% set color = r['color'] or 'blue' %}
+  <article class="resume-card rc-{{ color }}{{ ' is-default' if r['is_default'] }}{{ ' is-selected' if selected_id and selected_id == r.id }}">
+    {% if mode == 'pick' %}
+    <label class="rc-pick">
+      <input type="radio" name="{{ form_name or 'resume_id' }}" value="{{ r.id }}"
+             {{ 'checked' if selected_id and selected_id == r.id }}>
+      <span class="rc-body">
+        <span class="rc-swatch" aria-hidden="true"></span>
+        <span class="rc-main">
+          <span class="rc-label">{{ r.label }}</span>
+          {% if r.is_default %}<span class="rc-badge">Default</span>{% endif %}
+          <span class="rc-meta muted sm">
+            {% if r.original_name %}{{ r.original_name }} · {% endif %}
+            {{ (r.created_at or '')[:10] }}
+            {% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
+            {% if usage and usage.get(r.id) %} · used {{ usage[r.id] }}×{% endif %}
+          </span>
+        </span>
+      </span>
+    </label>
+    {% else %}
+    <a class="rc-body" href="{{ url_for('main.resume_lib_edit', resume_id=r.id) }}">
+      <span class="rc-swatch" aria-hidden="true"></span>
+      <span class="rc-main">
+        <span class="rc-label">{{ r.label }}</span>
+        {% if r.is_default %}<span class="rc-badge">Default</span>{% endif %}
+        <span class="rc-meta muted sm">
+          {% if r.original_name %}{{ r.original_name }} · {% endif %}
+          {{ (r.created_at or '')[:10] }}
+          {% if r.content_hash %} · {{ r.content_hash[:8] }}{% endif %}
+          {% if usage and usage.get(r.id) %} · used {{ usage[r.id] }}×{% endif %}
+        </span>
+      </span>
+    </a>
+    {% if show_actions %}
+    <div class="rc-actions">
+      {% if not r.is_default %}
+      <form method="post" action="{{ url_for('main.resume_lib_default', resume_id=r.id) }}">
+        <button class="btn sm" type="submit" title="Use as default for AI / Settings">★ Default</button>
+      </form>
+      {% endif %}
+      <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=r.id) }}">Open</a>
+    </div>
+    {% endif %}
+    {% endif %}
+  </article>
+  {% else %}
+  <p class="muted">No resumes in the library yet — upload one below.</p>
+  {% endfor %}
+</div>

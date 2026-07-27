@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Your resume · Job Tracker{% endblock %}
 {% block content %}
-<a class="back" href="{{ url_for('main.resume_builder') }}">&larr; Back to Resume Builder</a>
+{% set resume_tab = 'builder' %}
+<a class="back" href="{{ url_for('main.resume_builder') }}">&larr; Back to Build from scratch</a>
+{% include "_resume_tabs.html" %}
 <div class="panel-head">
   <h1>📄 Your resume</h1>
   <div class="actions">
@@ -11,7 +13,31 @@
   </div>
 </div>
 <p class="muted">Click straight into the resume to edit the text, then <b>Save changes</b>.
-  Print gives the highest-fidelity PDF.</p>
+  When it looks right, add it to <b>My resumes</b> with a clear label.</p>
+
+<section class="panel">
+  <h2>➕ Add to My resumes</h2>
+  <p class="muted sm">Labels matter — e.g. “Senior Automation — built Jul 2026” so you can
+    tell versions apart in Resume sent.</p>
+  <form method="post" action="{{ url_for('main.resume_builder_promote') }}" class="stack">
+    <div class="row">
+      <input name="label" required placeholder="e.g. Senior Automation — built 2026-07"
+             style="flex:1">
+      <select name="color">
+        <option value="violet" selected>Violet</option>
+        <option value="blue">Blue</option>
+        <option value="teal">Teal</option>
+        <option value="amber">Amber</option>
+        <option value="rose">Rose</option>
+        <option value="green">Green</option>
+        <option value="orange">Orange</option>
+        <option value="slate">Slate</option>
+      </select>
+    </div>
+    <label class="muted sm"><input type="checkbox" name="make_default" value="1"> Set as default</label>
+    <button class="btn primary" type="submit">Add to library</button>
+  </form>
+</section>
 
 <div class="review wide">
   <div class="preview">
