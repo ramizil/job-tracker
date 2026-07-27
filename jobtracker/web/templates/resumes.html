@@ -22,7 +22,43 @@
 
 <section class="panel">
   <h2>⬆ Upload / import</h2>
-  <p class="muted sm">New files are added by content (duplicates of identical bytes reuse the existing row).</p>
+  <p class="muted sm">Before adding, we check for the <b>same file content</b> (and near-identical
+    HTML/PDF twins). Duplicates reuse the existing library entry.</p>
+
+  {% if dup_match %}
+  <div class="flash ok" style="margin-bottom:14px">
+    <p style="margin:0 0 8px"><b>Already looks like a resume you have</b> —
+      “{{ dup_match.label }}”
+      {% if dup_match.kind == 'similar' %}
+      ({{ (dup_match.score * 100)|round|int }}% similar to
+      <code>{{ dup_match.original_name }}</code>)
+      {% else %}
+      (identical file content)
+      {% endif %}
+    </p>
+    <div class="actions" style="flex-wrap:wrap;gap:8px">
+      <form method="post" action="{{ url_for('main.my_resumes') }}" style="display:inline">
+        <input type="hidden" name="action" value="use_existing">
+        <input type="hidden" name="resume_id" value="{{ dup_match.use_id }}">
+        <input type="hidden" name="pending_token" value="{{ dup_match.pending_token }}">
+        {% if dup_match.make_default %}
+        <input type="hidden" name="make_default" value="1">
+        {% endif %}
+        <button class="btn primary" type="submit">Use existing</button>
+      </form>
+      <a class="btn" href="{{ dup_match.edit_url }}">Open existing</a>
+      {% if dup_match.pending_token %}
+      <form method="post" action="{{ url_for('main.my_resumes') }}" style="display:inline">
+        <input type="hidden" name="action" value="add_pending">
+        <input type="hidden" name="pending_token" value="{{ dup_match.pending_token }}">
+        <button class="btn" type="submit" title="Add as a separate library row anyway">
+          Add as new version anyway</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <form method="post" action="{{ url_for('main.my_resumes') }}" enctype="multipart/form-data" class="stack">
     <input type="hidden" name="action" value="upload">
     <div class="row">

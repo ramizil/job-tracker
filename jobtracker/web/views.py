@@ -1545,12 +1545,14 @@ def set_sent_resume(app_id: int):
     f = request.form
     rid = None
     try:
-        rid = resumes.resolve_selection(
+        force_new = bool(f.get("force_new_resume"))
+        rid, info = resumes.resolve_selection(
             resume_id=f.get("resume_id"),
             upload=request.files.get("resume_file"),
             upload_label=(f.get("resume_label") or "").strip(),
             path_text=(f.get("resume_path") or "").strip(),
             color=(f.get("resume_color") or "blue"),
+            prefer_existing=not force_new,
         )
         resumes.attach_to_application(app_id, rid)
     except (ValueError, FileNotFoundError, OSError) as exc:
@@ -1558,7 +1560,10 @@ def set_sent_resume(app_id: int):
         return redirect(url_for("main.detail", app_id=app_id))
     if rid:
         row = resumes.get(rid)
-        flash(f"Resume recorded: {row['label']}.", "ok")
+        if info and info.get("reused") and info.get("match_kind"):
+            flash(info.get("message") or f"Using existing resume: {row['label']}.", "ok")
+        else:
+            flash(f"Resume recorded: {row['label']}.", "ok")
     else:
         flash("Cleared sent-resume link.", "ok")
     return redirect(url_for("main.detail", app_id=app_id))
@@ -1674,15 +1679,18 @@ def paste_job():
             out.append(item)
         return out
 
-    # Resolve which resume was sent (optional). Same file content → same library row.
+    # Resolve which resume was sent (optional). Same / similar content → existing row.
     resume_id = None
+    resume_info = None
     try:
-        resume_id = resumes.resolve_selection(
+        resume_id, resume_info = resumes.resolve_selection(
             resume_id=f.get("resume_id"),
             upload=request.files.get("resume_file"),
             upload_label=(f.get("resume_label") or "").strip(),
             path_text=(f.get("resume_path") or "").strip(),
         )
+        if resume_info and resume_info.get("reused") and resume_info.get("match_kind"):
+            flash(resume_info["message"], "ok")
     except (ValueError, FileNotFoundError, OSError) as exc:
         flash(f"Resume not saved: {exc}", "error")
         return render_template(
@@ -2764,35 +2772,143 @@ def resume_pdf(app_id: int):
 def my_resumes():
     """Library of CVs — view/edit labels, colours, default, upload."""
     from jobtracker.db import init_db
+    from markupsafe import Markup, escape
     init_db()
     resumes.ensure_defaults()
+    dup_match = None
+    pending_token = None
     if request.method == "POST":
         action = (request.form.get("action") or "upload").strip()
         label = (request.form.get("label") or "").strip()
         color = request.form.get("color") or "blue"
         make_default = bool(request.form.get("make_default"))
+        force_add = bool(request.form.get("force_add"))
         try:
+            if action == "use_existing":
+                rid = int(request.form.get("resume_id") or 0)
+                token = (request.form.get("pending_token") or "").strip()
+                if token:
+                    resumes.clear_pending_upload(token)
+                row = resumes.get(rid)
+                if not row:
+                    flash("That library resume no longer exists.", "error")
+                else:
+                    use_id = resumes.preferred_match_id({
+                        "resume_id": rid,
+                        "group": resumes.group_for(rid),
+                    })
+                    if make_default:
+                        resumes.set_default(use_id)
+                    edit_url = url_for("main.resume_lib_edit", resume_id=use_id)
+                    flash(Markup(
+                        f"Using existing resume "
+                        f"<a href=\"{edit_url}\"><b>{escape(row['label'])}</b></a>"
+                        f"{' (set as default)' if make_default else ''}."
+                    ), "ok")
+                    return redirect(edit_url)
+                return redirect(url_for("main.my_resumes"))
+
+            if action == "add_pending":
+                token = (request.form.get("pending_token") or "").strip()
+                loaded = resumes.load_pending_upload(token)
+                if not loaded:
+                    flash("Pending upload expired — please choose the file again.", "error")
+                    return redirect(url_for("main.my_resumes"))
+                data, meta = loaded
+                rid, created = resumes.ensure_from_bytes(
+                    data,
+                    original_name=meta.get("original_name") or "resume.bin",
+                    label=meta.get("label") or label,
+                    color=meta.get("color") or color,
+                    source_path=meta.get("source_path") or "",
+                    make_default=bool(meta.get("make_default") or make_default),
+                )
+                resumes.clear_pending_upload(token)
+                row = resumes.get(rid)
+                flash(
+                    ("Added" if created else "Already in library")
+                    + f": {row['label'] if row else rid}.",
+                    "ok",
+                )
+                return redirect(url_for("main.resume_lib_edit", resume_id=rid))
+
+            data = b""
+            original_name = ""
+            source_path = ""
             if action == "import_path":
-                rid, created = resumes.ensure_from_path(
-                    request.form.get("path", ""), label=label, color=color,
-                    make_default=make_default)
+                path_text = (request.form.get("path") or "").strip()
+                p = Path(path_text).expanduser()
+                if not p.is_file():
+                    raise FileNotFoundError(f"Resume not found: {p}")
+                data = p.read_bytes()
+                original_name = p.name
+                source_path = str(p.resolve())
             else:
                 f = request.files.get("resume_file")
                 if not f or not f.filename:
                     flash("Choose a resume file to upload.", "error")
                     return redirect(url_for("main.my_resumes"))
-                rid, created = resumes.ensure_from_bytes(
-                    f.read(), original_name=f.filename, label=label,
-                    color=color, make_default=make_default)
-            row = resumes.get(rid)
-            flash(
-                ("Added" if created else "Already in library")
-                + f": {row['label'] if row else rid}.",
-                "ok",
-            )
+                data = f.read()
+                original_name = f.filename
+
+            match = resumes.match_existing(data, original_name=original_name)
+            if match and not force_add:
+                use_id = resumes.preferred_match_id(match)
+                edit_url = url_for("main.resume_lib_edit", resume_id=use_id)
+                if match["kind"] == "exact":
+                    if make_default:
+                        resumes.set_default(use_id)
+                    flash(Markup(
+                        f"Same file content already in library as "
+                        f"<a href=\"{edit_url}\"><b>{escape(match['label'])}</b></a> "
+                        f"— using that one"
+                        f"{' (set as default)' if make_default else ''}. "
+                        f"<a href=\"{edit_url}\">Open it</a>."
+                    ), "ok")
+                    return redirect(edit_url)
+
+                # Similar (e.g. PDF of an HTML already in the library)
+                pending_token = resumes.save_pending_upload(
+                    data,
+                    original_name=original_name,
+                    label=label,
+                    color=color,
+                    make_default=make_default,
+                    source_path=source_path,
+                )
+                dup_match = {
+                    **{k: match[k] for k in ("kind", "score", "label", "resume_id")},
+                    "use_id": use_id,
+                    "edit_url": edit_url,
+                    "pending_token": pending_token,
+                    "original_name": original_name,
+                    "make_default": make_default,
+                }
+            else:
+                if action == "import_path":
+                    rid, created = resumes.ensure_from_path(
+                        source_path or original_name, label=label, color=color,
+                        make_default=make_default)
+                else:
+                    rid, created = resumes.ensure_from_bytes(
+                        data, original_name=original_name, label=label,
+                        color=color, make_default=make_default,
+                        source_path=source_path)
+                row = resumes.get(rid)
+                if created:
+                    flash(f"Added: {row['label'] if row else rid}.", "ok")
+                else:
+                    edit_url = url_for("main.resume_lib_edit", resume_id=rid)
+                    flash(Markup(
+                        f"Already in library as "
+                        f"<a href=\"{edit_url}\"><b>{escape(row['label'] if row else str(rid))}</b></a>."
+                    ), "ok")
+                    return redirect(edit_url)
+                return redirect(url_for("main.my_resumes"))
         except (ValueError, FileNotFoundError, OSError) as exc:
             flash(str(exc), "error")
-        return redirect(url_for("main.my_resumes"))
+            return redirect(url_for("main.my_resumes"))
+
     rows = resumes.list_resumes()
     groups = resumes.list_resume_groups()
     return render_template(
@@ -2804,6 +2920,7 @@ def my_resumes():
         mode="manage",
         show_actions=True,
         ai_on=ai.is_configured(),
+        dup_match=dup_match,
     )
 
 
@@ -2994,6 +3111,22 @@ def resume_builder_promote():
     make_default = bool(request.form.get("make_default"))
     html = config.BUILT_RESUME_PATH.read_text(encoding="utf-8")
     try:
+        from markupsafe import Markup, escape
+        data = html.encode("utf-8")
+        match = resumes.match_existing(data, original_name="built_resume.html")
+        if match and match["kind"] in ("exact", "similar"):
+            use_id = resumes.preferred_match_id(match)
+            if make_default:
+                resumes.set_default(use_id)
+            edit_url = url_for("main.resume_lib_edit", resume_id=use_id)
+            pct = int(round(match["score"] * 100))
+            flash(Markup(
+                f"{'Same content' if match['kind'] == 'exact' else f'Similar content ({pct}%)'} "
+                f"already in library as "
+                f"<a href=\"{edit_url}\"><b>{escape(match['label'])}</b></a> — using that one. "
+                f"<a href=\"{edit_url}\">Open it</a>."
+            ), "ok")
+            return redirect(edit_url)
         rid, created = resumes.ensure_from_html(
             html, label=label, color=color, make_default=make_default,
             original_name="built_resume.html",

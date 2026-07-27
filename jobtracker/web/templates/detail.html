@@ -163,6 +163,8 @@
           <option value="slate">Slate</option>
         </select>
         <input name="resume_path" type="text" placeholder="Or path on this machine…">
+        <p class="muted sm">If the file matches something already in the library (same bytes or
+          nearly the same text), that existing resume is linked instead of adding a duplicate.</p>
         <button class="btn" type="submit">Save resume link</button>
         <p class="muted sm">Manage labels &amp; defaults in
           <a href="{{ url_for('main.my_resumes') }}">My resumes</a>.</p>

@@ -358,6 +358,155 @@ def find_by_hash(content_hash: str) -> sqlite3.Row | None:
         ).fetchone()
 
 
+def text_from_bytes(data: bytes, original_name: str = "") -> str:
+    """Extract plain text from in-memory resume bytes (temp file)."""
+    import tempfile
+    from . import resume as resume_mod
+    ext = Path(original_name or "resume.bin").suffix.lower() or ".bin"
+    if ext not in SUPPORTED_RESUME_EXTS:
+        return ""
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(data)
+        path = Path(tmp.name)
+    try:
+        return resume_mod.extract_text(path)
+    except Exception:
+        return ""
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def match_existing(
+    data: bytes,
+    *,
+    original_name: str = "",
+    similar_threshold: float = 0.88,
+) -> dict[str, Any] | None:
+    """Find a library resume with the same bytes or nearly the same text.
+
+    Returns ``{kind, row, resume_id, score, group, label}`` or ``None``.
+    ``kind`` is ``\"exact\"`` (SHA-256) or ``\"similar\"`` (text ratio).
+    """
+    if not data:
+        return None
+    content_hash = _sha256(data)
+    exact = find_by_hash(content_hash)
+    if exact:
+        rid = int(exact["id"])
+        g = group_for(rid)
+        return {
+            "kind": "exact",
+            "row": exact,
+            "resume_id": rid,
+            "score": 1.0,
+            "group": g,
+            "label": (g["label"] if g else None)
+                     or exact["label"] or exact["original_name"] or f"#{rid}",
+        }
+
+    incoming = text_from_bytes(data, original_name)
+    if len(_norm_text(incoming)) < 80:
+        return None
+
+    incoming_stem = re.sub(
+        r"[_\s\-]+", "", Path(original_name or "").stem.lower())
+    incoming_is_html = Path(original_name or "").suffix.lower() in (".html", ".htm")
+    incoming_is_pdf = Path(original_name or "").suffix.lower() == ".pdf"
+
+    best: sqlite3.Row | None = None
+    best_score = 0.0
+    for row in list_resumes():
+        score = _text_ratio(incoming, extracted_text(row))
+        stem = _stem_key(row)
+        if incoming_stem and stem and incoming_stem == stem:
+            # Same basename stem (html↔pdf) — soft boost for twin detection.
+            if (incoming_is_html and is_pdf(row)) or (incoming_is_pdf and is_html(row)):
+                score = min(1.0, score + 0.02)
+        if score > best_score:
+            best_score, best = score, row
+
+    if best is None or best_score < similar_threshold:
+        return None
+    rid = int(best["id"])
+    g = group_for(rid)
+    return {
+        "kind": "similar",
+        "row": best,
+        "resume_id": rid,
+        "score": best_score,
+        "group": g,
+        "label": (g["label"] if g else None)
+                 or best["label"] or best["original_name"] or f"#{rid}",
+    }
+
+
+def preferred_match_id(match: dict[str, Any]) -> int:
+    """Id to open / attach when reusing a match (HTML twin preferred)."""
+    g = match.get("group")
+    if g and g.get("html"):
+        return int(g["html"]["id"])
+    if g and g.get("primary_id"):
+        return int(g["primary_id"])
+    return int(match["resume_id"])
+
+
+def _pending_dir() -> Path:
+    d = _dir() / "pending"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_pending_upload(
+    data: bytes,
+    *,
+    original_name: str,
+    label: str = "",
+    color: str = "blue",
+    make_default: bool = False,
+    source_path: str = "",
+) -> str:
+    """Stash an upload while the user confirms duplicate handling."""
+    import json
+    import secrets
+    token = secrets.token_hex(8)
+    (_pending_dir() / f"{token}.bin").write_bytes(data)
+    (_pending_dir() / f"{token}.json").write_text(
+        json.dumps({
+            "original_name": original_name,
+            "label": label,
+            "color": color,
+            "make_default": bool(make_default),
+            "source_path": source_path,
+        }),
+        encoding="utf-8",
+    )
+    return token
+
+
+def load_pending_upload(token: str) -> tuple[bytes, dict[str, Any]] | None:
+    import json
+    token = re.sub(r"[^0-9a-f]", "", (token or "").lower())
+    if len(token) < 8:
+        return None
+    bin_path = _pending_dir() / f"{token}.bin"
+    meta_path = _pending_dir() / f"{token}.json"
+    if not bin_path.is_file() or not meta_path.is_file():
+        return None
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    return bin_path.read_bytes(), meta
+
+
+def clear_pending_upload(token: str) -> None:
+    token = re.sub(r"[^0-9a-f]", "", (token or "").lower())
+    if not token:
+        return
+    (_pending_dir() / f"{token}.bin").unlink(missing_ok=True)
+    (_pending_dir() / f"{token}.json").unlink(missing_ok=True)
+
+
 def _insert(*, label: str, content_hash: str, filename: str,
             original_name: str, source_path: str, size: int,
             color: str = "blue", is_default: int = 0) -> int:
@@ -755,28 +904,130 @@ def resolve_selection(
     upload_label: str = "",
     path_text: str = "",
     color: str = "blue",
-) -> int | None:
+    prefer_existing: bool = True,
+) -> tuple[int | None, dict[str, Any] | None]:
     """Resolve paste/detail form fields to a resume id (or None).
 
     Priority: new upload → new path → existing id.
+
+    Returns ``(resume_id, info)`` where ``info`` may include::
+      created, reused, match_kind, label, message
+    When ``prefer_existing`` is True (default), an upload/path that matches
+    existing library content (exact or similar) reuses that row instead of
+    adding a near-duplicate.
     """
+    info: dict[str, Any] | None = None
+
     if upload is not None and getattr(upload, "filename", None):
         raw = upload.read()
         if raw:
-            rid, _ = ensure_from_bytes(
+            match = match_existing(raw, original_name=upload.filename or "")
+            if match and prefer_existing:
+                rid = preferred_match_id(match)
+                if match["kind"] == "exact":
+                    msg = (
+                        f"Same file content already in library as "
+                        f"“{match['label']}” — using that one."
+                    )
+                else:
+                    pct = int(round(match["score"] * 100))
+                    msg = (
+                        f"Very similar to “{match['label']}” ({pct}% match) — "
+                        f"using the existing library resume instead of adding another copy."
+                    )
+                info = {
+                    "created": False,
+                    "reused": True,
+                    "match_kind": match["kind"],
+                    "label": match["label"],
+                    "message": msg,
+                    "resume_id": rid,
+                }
+                return rid, info
+            rid, created = ensure_from_bytes(
                 raw,
                 original_name=upload.filename,
                 label=upload_label,
                 color=color,
             )
-            return rid
+            row = get(rid)
+            info = {
+                "created": created,
+                "reused": not created,
+                "match_kind": "exact" if not created else None,
+                "label": (row["label"] if row else "") or "",
+                "message": (
+                    f"Added “{row['label']}”." if created and row
+                    else f"Already in library as “{row['label']}” — using that one."
+                    if row else ""
+                ),
+                "resume_id": rid,
+            }
+            return rid, info
+
     path_text = (path_text or "").strip()
     if path_text:
-        rid, _ = ensure_from_path(path_text, label=upload_label, color=color)
-        return rid
+        p = Path(path_text).expanduser()
+        if not p.is_file():
+            raise FileNotFoundError(f"Resume not found: {p}")
+        raw = p.read_bytes()
+        match = match_existing(raw, original_name=p.name)
+        if match and prefer_existing:
+            rid = preferred_match_id(match)
+            if match["kind"] == "exact":
+                msg = (
+                    f"Same file content already in library as "
+                    f"“{match['label']}” — using that one."
+                )
+            else:
+                pct = int(round(match["score"] * 100))
+                msg = (
+                    f"Very similar to “{match['label']}” ({pct}% match) — "
+                    f"using the existing library resume."
+                )
+            info = {
+                "created": False,
+                "reused": True,
+                "match_kind": match["kind"],
+                "label": match["label"],
+                "message": msg,
+                "resume_id": rid,
+            }
+            return rid, info
+        rid, created = ensure_from_path(
+            path_text, label=upload_label, color=color)
+        row = get(rid)
+        info = {
+            "created": created,
+            "reused": not created,
+            "match_kind": "exact" if not created else None,
+            "label": (row["label"] if row else "") or "",
+            "message": (
+                f"Added “{row['label']}”." if created and row
+                else f"Already in library as “{row['label']}” — using that one."
+                if row else ""
+            ),
+            "resume_id": rid,
+        }
+        return rid, info
+
     if resume_id in (None, "", "0", 0):
-        return None
+        return None, None
     rid = int(resume_id)
-    if not get(rid):
+    row = get(rid)
+    if not row:
         raise ValueError(f"Unknown resume id {rid}")
-    return rid
+    # If a PDF twin was selected, prefer attaching the HTML primary.
+    view = viewer_row(rid)
+    if view and int(view["id"]) != rid:
+        rid = int(view["id"])
+        row = view
+    info = {
+        "created": False,
+        "reused": True,
+        "match_kind": None,
+        "label": row["label"] or "",
+        "message": f"Linked “{row['label']}”.",
+        "resume_id": rid,
+    }
+    return rid, info
