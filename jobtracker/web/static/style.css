@@ -964,6 +964,16 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .rc-badge-pair{
   background:#dbeafe;color:#1d4ed8}
 
+.resume-used-list{margin:8px 0 0;padding-left:18px;line-height:1.55}
+.resume-used-list li{margin:4px 0}
+.resume-vs-frame iframe{width:100%;min-height:70vh;border:0;background:#fff}
+.resume-vs-plain{max-height:70vh;overflow:auto;padding:12px 14px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--panel,rgba(15,23,42,.4));font-size:13.5px;line-height:1.65}
+.resume-vs-plain .pitch-hl-del,.resume-plain-diff .pitch-hl-del{
+  background:rgba(251,113,133,.28);color:#fda4af;text-decoration:line-through;border-radius:3px}
+.resume-vs-plain .pitch-hl-ins,.resume-plain-diff .pitch-hl-ins{
+  background:rgba(52,211,153,.28);color:#6ee7b7;border-radius:3px}
+
 .pitch-fs-overlay{position:fixed;inset:0;z-index:9000;display:flex;align-items:stretch;justify-content:center;
   padding:12px;background:rgba(4,7,14,.82);backdrop-filter:blur(6px)}
 .pitch-fs-overlay[hidden]{display:none}
@@ -1110,3 +1120,13 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
   background:#d1fae5;color:#047857}
 html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .rc-badge-pair{
   background:#dbeafe;color:#1d4ed8}
+
+.resume-used-list{margin:8px 0 0;padding-left:18px;line-height:1.55}
+.resume-used-list li{margin:4px 0}
+.resume-vs-frame iframe{width:100%;min-height:70vh;border:0;background:#fff}
+.resume-vs-plain{max-height:70vh;overflow:auto;padding:12px 14px;border:1px solid var(--rule);
+  border-radius:10px;background:var(--panel,rgba(15,23,42,.4));font-size:13.5px;line-height:1.65}
+.resume-vs-plain .pitch-hl-del,.resume-plain-diff .pitch-hl-del{
+  background:rgba(251,113,133,.28);color:#fda4af;text-decoration:line-through;border-radius:3px}
+.resume-vs-plain .pitch-hl-ins,.resume-plain-diff .pitch-hl-ins{
+  background:rgba(52,211,153,.28);color:#6ee7b7;border-radius:3px}

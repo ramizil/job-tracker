@@ -999,6 +999,159 @@ def usage_counts() -> dict[int, int]:
     return {int(r["resume_id"]): int(r["n"]) for r in rows}
 
 
+def applications_using(resume_ids: list[int] | int) -> list[dict[str, Any]]:
+    """Applications that currently use or previously used these resume ids.
+
+    Returns newest-first dicts with keys: app_id, company, title, status,
+    link_kind ('current'|'history'), attached_at, note.
+    """
+    if isinstance(resume_ids, int):
+        ids = [resume_ids]
+    else:
+        ids = [int(i) for i in resume_ids if i is not None]
+    if not ids:
+        return []
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        current = list(conn.execute(
+            f"""SELECT a.id AS app_id, a.company, a.title, a.status,
+                       a.updated_at AS attached_at, a.resume_id,
+                       'current' AS link_kind, '' AS note
+                  FROM applications a
+                 WHERE a.resume_id IN ({placeholders})
+                 ORDER BY a.updated_at DESC, a.id DESC""",
+            ids,
+        ).fetchall())
+        history = list(conn.execute(
+            f"""SELECT a.id AS app_id, a.company, a.title, a.status,
+                       h.attached_at, h.resume_id,
+                       'history' AS link_kind, COALESCE(h.note, '') AS note
+                  FROM application_resume_history h
+                  JOIN applications a ON a.id = h.application_id
+                 WHERE h.resume_id IN ({placeholders})
+                 ORDER BY h.attached_at DESC, h.id DESC""",
+            ids,
+        ).fetchall())
+    current_apps = {int(r["app_id"]) for r in current}
+    out: list[dict[str, Any]] = []
+    for r in current:
+        out.append({
+            "app_id": int(r["app_id"]),
+            "company": r["company"] or "",
+            "title": r["title"] or "",
+            "status": r["status"] or "",
+            "attached_at": (r["attached_at"] or "")[:19],
+            "link_kind": "current",
+            "note": "",
+            "resume_id": int(r["resume_id"]),
+        })
+    for r in history:
+        if int(r["app_id"]) in current_apps:
+            continue
+        out.append({
+            "app_id": int(r["app_id"]),
+            "company": r["company"] or "",
+            "title": r["title"] or "",
+            "status": r["status"] or "",
+            "attached_at": (r["attached_at"] or "")[:19],
+            "link_kind": "history",
+            "note": (r["note"] or "")[:120],
+            "resume_id": int(r["resume_id"]),
+        })
+    return out
+
+
+def delete_resume(resume_id: int, *, also_twins: bool = False) -> list[int]:
+    """Remove a resume from the library (and optionally its HTML/PDF twins).
+
+    Unlinks applications that pointed at it, drops history rows, deletes the
+    stored file(s). Returns the deleted ids.
+    """
+    row = get(resume_id)
+    if not row:
+        raise ValueError(f"Unknown resume id {resume_id}")
+
+    ids = [resume_id]
+    if also_twins:
+        g = group_for(resume_id)
+        if g:
+            ids = list(dict.fromkeys(g["member_ids"]))
+
+    deleted: list[int] = []
+    for rid in ids:
+        r = get(rid)
+        if not r:
+            continue
+        path = path_for(r)
+        with get_connection() as conn:
+            conn.execute(
+                "UPDATE applications SET resume_id=NULL, resume_version='' "
+                "WHERE resume_id=?",
+                (rid,),
+            )
+            conn.execute(
+                "DELETE FROM application_resume_history WHERE resume_id=?",
+                (rid,),
+            )
+            conn.execute("DELETE FROM resumes WHERE id=?", (rid,))
+        clear_draft(rid)
+        try:
+            if path.is_file():
+                path.unlink()
+        except OSError:
+            pass
+        _invalidate_text_cache(r["content_hash"])
+        deleted.append(rid)
+    invalidate_groups_cache()
+    return deleted
+
+
+def load_html_or_text(resume_id: int) -> tuple[str, str, bool]:
+    """Return ``(html_or_empty, plain_text, is_html)`` for compare views."""
+    row = get(resume_id)
+    if not row:
+        raise ValueError(f"Unknown resume id {resume_id}")
+    plain = extracted_text(row)
+    if is_html(row):
+        path = path_for(row)
+        try:
+            html = path.read_text(encoding="utf-8", errors="ignore") if path.is_file() else ""
+        except OSError:
+            html = ""
+        return html, plain, True
+    return "", plain, False
+
+
+def highlight_plain_diff(text: str, *, old: str, new: str, side: str = "after") -> str:
+    """Word-level highlight for plain-text resume panes (PDF/etc.)."""
+    from html import escape
+    from .pitch import _word_flags
+
+    side = (side or "after").strip().lower()
+    del_flags, ins_flags = _word_flags(old, new)
+    flags = del_flags if side == "before" else ins_flags
+    css = "pitch-hl-del" if side == "before" else "pitch-hl-ins"
+    tag = "del" if side == "before" else "ins"
+    words = re.findall(r"\S+|\s+", text or "")
+    word_i = 0
+    parts: list[str] = [
+        "<div class='diff-text resume-plain-diff' dir='auto'>"
+    ]
+    for chunk in words:
+        if chunk.isspace():
+            parts.append(escape(chunk))
+            continue
+        if word_i < len(flags) and flags[word_i]:
+            parts.append(
+                f"<{tag} class=\"{css}\">{escape(chunk)}</{tag}>"
+            )
+        else:
+            parts.append(escape(chunk))
+        word_i += 1
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def resolve_selection(
     *,
     resume_id: str | int | None = None,

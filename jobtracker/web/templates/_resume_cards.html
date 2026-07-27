@@ -69,6 +69,13 @@
       </form>
       {% endif %}
       <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=pid) }}">Open</a>
+      <form method="post" action="{{ url_for('main.resume_lib_delete', resume_id=pid) }}"
+            onsubmit="return confirm('Remove this resume from the library?');">
+        {% if g.member_ids|length > 1 %}
+        <input type="hidden" name="also_twins" value="1">
+        {% endif %}
+        <button class="btn sm danger" type="submit" title="Remove from library">🗑</button>
+      </form>
     </div>
     {% endif %}
     {% endif %}

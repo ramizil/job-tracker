@@ -2940,20 +2940,109 @@ def resume_lib_edit(resume_id: int):
             html = resumes.path_for(row).read_text(encoding="utf-8", errors="ignore")
         except OSError:
             html = ""
-    usage = resumes.usage_counts().get(int(row["id"]), 0)
-    # Reuse groups cache from viewer_row (already warmed).
     group = resumes.group_for(int(row["id"]))
+    member_ids = group["member_ids"] if group else [int(row["id"])]
+    used_on = resumes.applications_using(member_ids)
+    others = [
+        r for r in resumes.list_resumes()
+        if int(r["id"]) not in set(member_ids)
+    ]
     return render_template(
         "resume_lib_edit.html",
         resume=row,
         html=html,
         is_html=is_html,
         colors=resumes.RESUME_COLORS,
-        usage=usage,
+        usage=len(used_on),
+        used_on=used_on,
+        compare_others=others,
         has_draft=resumes.has_draft(int(row["id"])),
         ai_on=ai.is_configured(),
         group=group,
     )
+
+
+@bp.route("/resume/<int:resume_id>/delete", methods=["POST"])
+def resume_lib_delete(resume_id: int):
+    if not resumes.get(resume_id):
+        abort(404)
+    also_twins = bool(request.form.get("also_twins"))
+    try:
+        deleted = resumes.delete_resume(resume_id, also_twins=also_twins)
+        n = len(deleted)
+        flash(
+            f"Removed {n} resume{'s' if n != 1 else ''} from the library.",
+            "ok",
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.resume_lib_edit", resume_id=resume_id))
+    return redirect(url_for("main.my_resumes"))
+
+
+@bp.route("/resume/compare-lib")
+def resume_lib_vs():
+    """Compare two library resumes side-by-side with highlighted differences."""
+    try:
+        a_id = int(request.args.get("a") or 0)
+        b_id = int(request.args.get("b") or 0)
+    except ValueError:
+        a_id = b_id = 0
+    a = resumes.get(a_id)
+    b = resumes.get(b_id)
+    if not a or not b:
+        flash("Pick two resumes to compare.", "error")
+        return redirect(url_for("main.my_resumes"))
+    if a_id == b_id:
+        flash("Choose two different resumes.", "error")
+        return redirect(url_for("main.resume_lib_edit", resume_id=a_id))
+
+    _, a_text, a_is_html = resumes.load_html_or_text(a_id)
+    _, b_text, b_is_html = resumes.load_html_or_text(b_id)
+    a_path = resumes.path_for(a)
+    b_path = resumes.path_for(b)
+    use_html = (
+        a_is_html and b_is_html
+        and a_path.is_file() and b_path.is_file()
+    )
+
+    left_plain = right_plain = ""
+    if not use_html:
+        left_plain = resumes.highlight_plain_diff(
+            a_text, old=a_text, new=b_text, side="before")
+        right_plain = resumes.highlight_plain_diff(
+            b_text, old=a_text, new=b_text, side="after")
+
+    return render_template(
+        "resume_lib_vs.html",
+        left=a, right=b,
+        use_html=use_html,
+        left_plain=left_plain, right_plain=right_plain,
+    )
+
+
+@bp.route("/resume/<int:resume_id>/view-diff")
+def resume_lib_view_diff(resume_id: int):
+    """HTML resume with word-level highlights vs another library resume."""
+    against_raw = request.args.get("against") or ""
+    side = (request.args.get("side") or "after").strip().lower()
+    try:
+        against_id = int(against_raw)
+    except ValueError:
+        abort(404)
+    row = resumes.get(resume_id)
+    other = resumes.get(against_id)
+    if not row or not other or not resumes.is_html(row):
+        abort(404)
+    html, text, _ = resumes.load_html_or_text(resume_id)
+    _, other_text, _ = resumes.load_html_or_text(against_id)
+    if side == "before":
+        out = pitch.highlight_html_diff(
+            html, old=text, new=other_text, side="before")
+    else:
+        out = pitch.highlight_html_diff(
+            html, old=other_text, new=text, side="after")
+    return Response(out, mimetype="text/html; charset=utf-8")
 
 
 @bp.route("/resume/<int:resume_id>/meta", methods=["POST"])

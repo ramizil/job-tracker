@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Compare resumes · Job Tracker{% endblock %}
+{% block content %}
+{% set resume_tab = 'library' %}
+<a class="back" href="{{ url_for('main.resume_lib_edit', resume_id=left.id) }}">&larr; Back to {{ left.label }}</a>
+{% include "_resume_tabs.html" %}
+
+<div class="panel-head">
+  <h1>🆚 Compare resumes</h1>
+  <div class="actions">
+    <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=left.id) }}">Open left</a>
+    <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=right.id) }}">Open right</a>
+  </div>
+</div>
+<p class="sub">
+  <span class="pill" style="background:rgba(251,113,133,.2);color:#fda4af">Red</span> = only in left / removed on the right ·
+  <span class="pill" style="background:rgba(52,211,153,.2);color:#6ee7b7">Green</span> = only in right / added on the right.
+</p>
+
+<div class="diff-cols pitch-html-cmp mt">
+  <section class="panel diff-pane">
+    <h3>{{ left.label }}
+      <span class="muted sm">{% if left.original_name %}· {{ left.original_name }}{% endif %}</span></h3>
+    {% if use_html %}
+    <div class="frame-wrap pitch-frame-sm resume-vs-frame">
+      <iframe title="{{ left.label }}"
+              src="{{ url_for('main.resume_lib_view_diff', resume_id=left.id, against=right.id, side='before') }}"></iframe>
+    </div>
+    {% else %}
+    <div class="resume-vs-plain">{{ left_plain | safe }}</div>
+    {% endif %}
+  </section>
+  <section class="panel diff-pane">
+    <h3>{{ right.label }}
+      <span class="muted sm">{% if right.original_name %}· {{ right.original_name }}{% endif %}</span></h3>
+    {% if use_html %}
+    <div class="frame-wrap pitch-frame-sm resume-vs-frame">
+      <iframe title="{{ right.label }}"
+              src="{{ url_for('main.resume_lib_view_diff', resume_id=right.id, against=left.id, side='after') }}"></iframe>
+    </div>
+    {% else %}
+    <div class="resume-vs-plain">{{ right_plain | safe }}</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

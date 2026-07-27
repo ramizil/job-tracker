@@ -80,6 +80,72 @@
   </p>
 </section>
 
+<section class="panel">
+  <h2>Used on applications</h2>
+  {% if used_on %}
+  <ul class="resume-used-list">
+    {% for u in used_on %}
+    <li>
+      <a href="{{ url_for('main.detail', app_id=u.app_id) }}">
+        <b>{{ u.company }}</b> — {{ u.title }}
+      </a>
+      <span class="muted sm">
+        · {{ u.status }}
+        {% if u.link_kind == 'current' %}
+        · <span class="pill fit-yes" style="font-size:10px">current</span>
+        {% else %}
+        · previously
+        {% endif %}
+        {% if u.attached_at %}· {{ u.attached_at[:10] }}{% endif %}
+        {% if u.note %}· {{ u.note }}{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted sm">Not linked to any application yet. Attach it from a job’s
+    <b>Resume sent</b> section.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Compare with another resume</h2>
+  {% if compare_others %}
+  <form method="get" action="{{ url_for('main.resume_lib_vs') }}" class="row" style="align-items:end;gap:10px;flex-wrap:wrap">
+    <input type="hidden" name="a" value="{{ resume.id }}">
+    <label class="fld" style="flex:1;min-width:200px">
+      <span>Other resume</span>
+      <select name="b" required>
+        <option value="">— pick one —</option>
+        {% for o in compare_others %}
+        <option value="{{ o.id }}">{{ o.label }}{% if o.original_name %} · {{ o.original_name }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn primary" type="submit">🆚 Compare side by side</button>
+  </form>
+  <p class="muted sm" style="margin:8px 0 0">Red = removed in the other / only here.
+    Green = added in the other.</p>
+  {% else %}
+  <p class="muted sm">Add another resume to the library to compare versions.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Remove from library</h2>
+  <p class="muted sm">Unlinks this resume from applications (does not delete the applications).
+    Stored library file is removed.</p>
+  <form method="post" action="{{ url_for('main.resume_lib_delete', resume_id=resume.id) }}"
+        class="actions" style="flex-wrap:wrap;gap:8px"
+        onsubmit="return confirm('Remove this resume from the library? Applications keep their other data.');">
+    {% if group and group.member_ids|length > 1 %}
+    <label class="muted sm"><input type="checkbox" name="also_twins" value="1" checked>
+      Also remove HTML/PDF twin(s) in this card</label>
+    {% endif %}
+    <button class="btn danger" type="submit">🗑 Remove from library</button>
+  </form>
+</section>
+
 {% if is_html %}
 <section class="panel">
   <h2>Preview / edit</h2>
