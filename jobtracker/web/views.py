@@ -2940,8 +2940,9 @@ def resume_lib_edit(resume_id: int):
             html = resumes.path_for(row).read_text(encoding="utf-8", errors="ignore")
         except OSError:
             html = ""
-    usage = resumes.usage_counts().get(resume_id, 0)
-    group = resumes.group_for(resume_id)
+    usage = resumes.usage_counts().get(int(row["id"]), 0)
+    # Reuse groups cache from viewer_row (already warmed).
+    group = resumes.group_for(int(row["id"]))
     return render_template(
         "resume_lib_edit.html",
         resume=row,

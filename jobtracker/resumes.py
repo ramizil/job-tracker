@@ -137,33 +137,85 @@ def _stem_key(row: sqlite3.Row | dict[str, Any]) -> str:
     return re.sub(r"[_\s\-]+", "", stem)
 
 
-def _norm_text(text: str) -> str:
-    return re.sub(r"\s+", " ", (text or "")).strip().lower()[:8000]
+def _norm_text(text: str, limit: int = 3000) -> str:
+    return re.sub(r"\s+", " ", (text or "")).strip().lower()[:limit]
 
 
 def extracted_text(row: sqlite3.Row | dict[str, Any]) -> str:
-    """Plain text of a library resume (for twin matching)."""
+    """Plain text of a library resume (for twin matching). Cached by content hash."""
     from . import resume as resume_mod
+    content_hash = (row["content_hash"] or "").strip()
+    if content_hash:
+        cached = _text_cache_path(content_hash)
+        if cached.is_file():
+            try:
+                return cached.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                pass
+
     path = path_for(row)
     if not path.is_file():
-        # Fall back to original source path if library file missing
         src = (row["source_path"] or "").strip()
         if src and Path(src).is_file():
             path = Path(src)
         else:
             return ""
     try:
-        return resume_mod.extract_text(path)
+        text = resume_mod.extract_text(path)
     except Exception:
         return ""
+    if content_hash and text:
+        try:
+            _text_cache_path(content_hash).write_text(text, encoding="utf-8")
+        except OSError:
+            pass
+    return text
+
+
+def _text_cache_path(content_hash: str) -> Path:
+    d = _dir() / "textcache"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{content_hash[:40]}.txt"
 
 
 def _text_ratio(a: str, b: str) -> float:
-    import difflib
+    """Fast word-overlap similarity (good enough for twin / near-dup detection).
+
+    Avoids ``difflib.SequenceMatcher``, which is O(n²) and made the Resume tab
+    take many seconds per page load.
+    """
     na, nb = _norm_text(a), _norm_text(b)
     if not na or not nb:
         return 0.0
-    return difflib.SequenceMatcher(a=na, b=nb, autojunk=False).ratio()
+    wa, wb = set(na.split()), set(nb.split())
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / len(wa | wb)
+
+
+# In-process cache for list_resume_groups() — invalidated on library writes.
+_GROUPS_CACHE: dict[str, Any] = {"key": None, "groups": None}
+
+
+def _groups_cache_key(rows: list[sqlite3.Row]) -> str:
+    parts = [
+        f"{r['id']}:{r['content_hash']}:{r['label']}:{r['color']}:"
+        f"{r['is_default']}:{r['original_name']}:{r['filename']}:"
+        f"{r['source_path']}"
+        for r in rows
+    ]
+    return _sha256("|".join(parts).encode("utf-8"))
+
+
+def invalidate_groups_cache() -> None:
+    _GROUPS_CACHE["key"] = None
+    _GROUPS_CACHE["groups"] = None
+
+
+def _invalidate_text_cache(content_hash: str | None) -> None:
+    if not content_hash:
+        return
+    _text_cache_path(content_hash).unlink(missing_ok=True)
 
 
 def _disk_twin_path(row: sqlite3.Row | dict[str, Any], *, want: str) -> Path | None:
@@ -199,10 +251,16 @@ def list_resume_groups() -> list[dict[str, Any]]:
       • Near-duplicate files with the same filename stem (similarity ≥ 0.95)
         join the same group
     Primary prefers HTML. Cards list both HTML and PDF paths when known.
+
+    Results are cached in-process until the library changes.
     """
     rows = list_resumes()
     if not rows:
         return []
+
+    cache_key = _groups_cache_key(rows)
+    if _GROUPS_CACHE["key"] == cache_key and _GROUPS_CACHE["groups"] is not None:
+        return _GROUPS_CACHE["groups"]
 
     by_id = {int(r["id"]): r for r in rows}
     texts: dict[int, str] = {i: extracted_text(r) for i, r in by_id.items()}
@@ -331,6 +389,8 @@ def list_resume_groups() -> list[dict[str, Any]]:
         0 if g["is_default"] else 1,
         -(g["primary_id"]),
     ))
+    _GROUPS_CACHE["key"] = cache_key
+    _GROUPS_CACHE["groups"] = groups
     return groups
 
 
@@ -343,9 +403,22 @@ def group_for(resume_id: int) -> dict[str, Any] | None:
 
 def viewer_row(resume_id: int) -> sqlite3.Row | None:
     """Row to open in the viewer — prefer HTML twin in the same content group."""
+    row = get(resume_id)
+    if not row:
+        return None
+    if is_html(row):
+        return row
+    # Fast path: same-stem HTML in the library (no full regroup).
+    stem = _stem_key(row)
+    if stem and is_pdf(row):
+        for other in list_resumes():
+            if is_html(other) and _stem_key(other) == stem:
+                # Confirm content is a twin when text is cheap to check.
+                if _text_ratio(extracted_text(row), extracted_text(other)) >= 0.88:
+                    return other
     g = group_for(resume_id)
     if not g:
-        return get(resume_id)
+        return row
     if g["html"]:
         return g["html"]
     return g["primary"]
@@ -520,7 +593,9 @@ def _insert(*, label: str, content_hash: str, filename: str,
             (label, content_hash, filename, original_name, source_path,
              size, _normalize_color(color), int(is_default), ts),
         )
-        return int(cur.lastrowid)
+        rid = int(cur.lastrowid)
+    invalidate_groups_cache()
+    return rid
 
 
 def ensure_from_bytes(
@@ -581,12 +656,26 @@ def ensure_from_path(path: Path | str, *, label: str = "",
     p = Path(path).expanduser()
     if not p.is_file():
         raise FileNotFoundError(f"Resume not found: {p}")
+    try:
+        resolved = str(p.resolve())
+    except OSError:
+        resolved = str(p)
+    # Fast path: already imported from this exact path (skip re-hashing large PDFs).
+    with get_connection() as conn:
+        existing = conn.execute(
+            "SELECT * FROM resumes WHERE source_path=? LIMIT 1", (resolved,)
+        ).fetchone()
+    if existing:
+        rid = int(existing["id"])
+        if make_default:
+            set_default(rid)
+        return rid, False
     data = p.read_bytes()
     return ensure_from_bytes(
         data,
         original_name=p.name,
         label=label or _label_from_name(p.name),
-        source_path=str(p.resolve()),
+        source_path=resolved,
         color=color,
         make_default=make_default,
     )
@@ -641,6 +730,7 @@ def set_label(resume_id: int, label: str) -> None:
         return
     with get_connection() as conn:
         conn.execute("UPDATE resumes SET label=? WHERE id=?", (label, resume_id))
+    invalidate_groups_cache()
 
 
 def set_color(resume_id: int, color: str) -> None:
@@ -649,6 +739,7 @@ def set_color(resume_id: int, color: str) -> None:
             "UPDATE resumes SET color=? WHERE id=?",
             (_normalize_color(color), resume_id),
         )
+    invalidate_groups_cache()
 
 
 def set_default(resume_id: int, *, update_settings_path: bool = True) -> None:
@@ -664,6 +755,7 @@ def set_default(resume_id: int, *, update_settings_path: bool = True) -> None:
         conn.execute("UPDATE resumes SET is_default=0")
         conn.execute(
             "UPDATE resumes SET is_default=1 WHERE id=?", (resume_id,))
+    invalidate_groups_cache()
     if update_settings_path:
         path = path_for(row)
         if path.is_file():
@@ -743,6 +835,7 @@ def rename_file(resume_id: int, new_name: str) -> str:
             (desired, new_stored, new_source[:500] if new_source else "",
              resume_id),
         )
+    invalidate_groups_cache()
 
     if row["is_default"] and new_path.is_file():
         try:
@@ -780,11 +873,20 @@ def save_html(resume_id: int, html: str) -> None:
             f"(#{other['id']}: {other['label']}).")
     path = path_for(row)
     path.write_bytes(data)
+    old_hash = row["content_hash"]
     with get_connection() as conn:
         conn.execute(
             "UPDATE resumes SET content_hash=?, bytes=? WHERE id=?",
             (content_hash, len(data), resume_id),
         )
+    _invalidate_text_cache(old_hash)
+    _invalidate_text_cache(content_hash)
+    # Warm text cache from the HTML we just wrote
+    try:
+        _text_cache_path(content_hash).write_text(html or "", encoding="utf-8")
+    except OSError:
+        pass
+    invalidate_groups_cache()
 
 
 def draft_path(resume_id: int) -> Path:
