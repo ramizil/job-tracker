@@ -86,3 +86,41 @@ def open_app_window(url: str, fullscreen: bool = False) -> None:
             webbrowser.open(url)
         except Exception:
             pass
+
+
+def open_in_default_browser(url: str) -> bool:
+    """Open ``url`` in the user's normal default browser.
+
+    The Job Tracker UI runs in an isolated Chrome app profile
+    (``~/.jobtracker_app``). Sites like matrix.co.il WAF-block that profile
+    (403) while the same URL works in the user's regular Chrome. Always hand
+    external job links to the OS default browser instead of navigating inside
+    the app window.
+    """
+    url = (url or "").strip()
+    if not url:
+        return False
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(
+                ["open", url],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                close_fds=True,
+            )
+            return True
+        if sys.platform.startswith("linux"):
+            opener = shutil.which("xdg-open") or shutil.which("gio")
+            if opener:
+                args = [opener, url] if "xdg-open" in opener else [opener, "open", url]
+                subprocess.Popen(
+                    args,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    close_fds=True,
+                )
+                return True
+        if os.name == "nt":
+            os.startfile(url)  # type: ignore[attr-defined]
+            return True
+        return bool(webbrowser.open(url))
+    except Exception:
+        return False

@@ -24,4 +24,9 @@ def create_app() -> Flask:
     start_auto_fetch()
     from ..gmail_rejections import start_auto_fetch as start_rejections_fetch
     start_rejections_fetch()
+    # Probe Google OAuth tokens shortly after startup (and every 30 min) so
+    # expired Sheets/Gmail logins surface a reconnect banner instead of failing
+    # silently in the background.
+    from ..connection_status import start_health_probe
+    start_health_probe()
     return app

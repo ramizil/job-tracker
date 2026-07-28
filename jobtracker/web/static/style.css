@@ -269,6 +269,9 @@ html[data-theme="slate"] .dp-btn:hover:not(:disabled){background:rgba(29,78,216,
   font-size:calc(var(--base-font) * .78);font-weight:600;color:var(--muted);
   border:1px solid var(--rule);background:var(--panel);white-space:nowrap;flex:0 0 auto}
 .sync-chip:hover{color:var(--nav-hover);border-color:var(--accent);text-shadow:none;background:rgba(148,163,184,.08)}
+.sync-chip.warn{border-color:rgba(251,191,36,.7);color:var(--warn);background:rgba(251,191,36,.12);font-weight:700}
+.sync-chip.warn:hover{border-color:var(--warn);color:#fff;background:rgba(251,191,36,.22)}
+.conn-alert-banner{margin-top:12px}
 .profile-switch{display:inline-flex;margin:0;flex:0 0 auto}
 .profile-switch select{
   background:var(--panel);color:var(--muted);border:1px solid var(--rule);

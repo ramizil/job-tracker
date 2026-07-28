@@ -84,7 +84,7 @@
           <span class="muted">Could not parse — pick a match manually</span>
         {% endif %}
         {% if r.job_url %}
-          <div><a href="{{ r.job_url }}" target="_blank" rel="noopener" class="sm">job link ↗</a></div>
+          <div><a href="{{ url_for('main.open_external', url=r.job_url) }}" target="_blank" rel="noopener" class="sm">job link ↗</a></div>
         {% endif %}
       </td>
       <td>

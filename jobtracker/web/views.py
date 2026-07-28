@@ -19,9 +19,9 @@ from flask import (
     render_template, request, send_file, url_for,
 )
 
-from .. import (ai, analytics, backup, config, exporter, gitbackup, gsheets,
-                gmail_alerts, gmail_rejections, pitch, resumes, search_hidden,
-                search_meta, syncstatus, tracker, tts,
+from .. import (ai, analytics, backup, config, connection_status, exporter,
+                gitbackup, gsheets, gmail_alerts, gmail_rejections, pitch,
+                resumes, search_hidden, search_meta, syncstatus, tracker, tts,
                 usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
@@ -32,6 +32,65 @@ from ..sources.base import JobResult
 from ..db import now_iso
 
 bp = Blueprint("main", __name__)
+
+
+def _external_redirect(url: str):
+    """Open an external job URL in the user's normal default browser.
+
+    Job Tracker runs in an isolated Chrome app profile (``~/.jobtracker_app``).
+    Navigating Matrix (and similar WAF-protected sites) *inside* that profile
+    returns 403 Access Denied; the same URL works in the user's regular Chrome.
+    Hand the URL to the OS default browser, then close the temporary app tab.
+    """
+    from ..launcher import open_in_default_browser
+
+    url = (url or "").strip()
+    if not url:
+        return redirect(url_for("main.search"))
+    safe_href = html_lib.escape(url, quote=True)
+    opened = open_in_default_browser(url)
+    if opened:
+        body = (
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+            "<title>Opened</title>"
+            "<script>setTimeout(function(){try{window.close()}catch(e){}},400)</script>"
+            "</head><body style=\"font-family:system-ui,sans-serif;padding:28px;"
+            "text-align:center;background:#0f172a;color:#e2e8f0\">"
+            "<p style=\"font-size:16px;margin:0 0 10px\">Opened in your default browser.</p>"
+            "<p style=\"font-size:13px;opacity:.75;margin:0\">"
+            f"<a href=\"{safe_href}\" rel=\"noreferrer\" style=\"color:#93c5fd\">Open again</a>"
+            " · <a href=\"javascript:window.close()\" style=\"color:#93c5fd\">Close</a>"
+            "</p></body></html>"
+        )
+        resp = make_response(body)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    # Fallback: no-referrer hop inside this window (last resort).
+    js_url = json.dumps(url)
+    body = (
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+        "<meta name=\"referrer\" content=\"no-referrer\">"
+        f"<meta http-equiv=\"refresh\" content=\"0;url={safe_href}\">"
+        "<title>Opening…</title>"
+        f"<script>location.replace({js_url})</script>"
+        "</head><body>"
+        f"<p><a href=\"{safe_href}\" rel=\"noreferrer\">Continue to job</a></p>"
+        "</body></html>"
+    )
+    resp = make_response(body)
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@bp.route("/go")
+def open_external():
+    """Open any external URL in the system default browser."""
+    url = (request.args.get("url") or "").strip()
+    if not url:
+        abort(404)
+    return _external_redirect(url)
 
 
 @bp.app_context_processor
@@ -60,6 +119,20 @@ def inject_sync_status():
         return {"sync_status": syncstatus.status_summary()}
     except Exception:
         return {"sync_status": {}}
+
+
+@bp.app_context_processor
+def inject_connection_alerts():
+    """Expired/revoked Google OAuth connections — global reconnect banner."""
+    try:
+        alerts = connection_status.inactive_alerts()
+        keys = {a["key"] for a in alerts}
+        return {
+            "connection_alerts": alerts,
+            "connection_alert_keys": keys,
+        }
+    except Exception:
+        return {"connection_alerts": [], "connection_alert_keys": set()}
 
 
 @bp.app_context_processor
@@ -425,6 +498,8 @@ def gsheet_sync():
     try:
         url = gsheets.sync()
         flash(f"Google Sheet updated: {url}", "ok")
+    except gsheets.SyncError as exc:
+        flash(str(exc), "error")
     except Exception as exc:
         flash(f"Google Sheet sync failed: {exc}", "error")
     return redirect(url_for("main.settings"))
@@ -1318,7 +1393,7 @@ def alert_open(alert_id: int):
     gmail_alerts.set_seen(alert_id, True)
     url = gmail_alerts.alert_url(alert_id)
     if url:
-        return redirect(url)
+        return _external_redirect(url)
     flash("Alert has no job URL.", "error")
     return redirect(url_for("main.alerts", **request.args))
 
@@ -3705,7 +3780,7 @@ def search_open():
             search_meta.set_seen(url=url, title=title, company=company, seen=True)
         except ValueError:
             pass
-        return redirect(url)
+        return _external_redirect(url)
     return redirect(url_for("main.search"))
 
 

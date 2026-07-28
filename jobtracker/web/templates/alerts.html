@@ -104,7 +104,7 @@
       <td data-val="{{ r.alert_at or '' }}">{{ (r.alert_at or '')[:10] }}</td>
       <td>
         {% if r.url %}
-          <a href="{{ url_for('main.alert_open', alert_id=r.id) }}" target="_blank" rel="noopener"
+          <a href="{{ url_for('main.alert_open', alert_id=r.id) }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
              class="alert-title-link{% if unread %} unread{% endif %}"
              title="Open job and mark as read">{{ r.title }} ↗</a>
         {% else %}

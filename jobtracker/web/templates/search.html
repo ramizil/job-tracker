@@ -52,7 +52,7 @@
     {% for r in hidden_rows %}
     <tr class="muted">
       <td data-val="{{ r.created_at or '' }}">{{ (r.created_at or '')[:10] }}</td>
-      <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title or r.url }} ↗</a>{% else %}{{ r.title }}{% endif %}</td>
+      <td>{% if r.url %}<a href="{{ url_for('main.open_external', url=r.url) }}" target="_blank" rel="noopener">{{ r.title or r.url }} ↗</a>{% else %}{{ r.title }}{% endif %}</td>
       <td>{{ r.company }}</td>
       <td class="actions-cell">
         {% if show_ignored %}
@@ -142,7 +142,7 @@
       <td data-val="{{ '%.0f'|format(item.score) }}">{{ '%.0f'|format(item.score) }}%</td>
       <td>
         <a href="{{ url_for('main.search_open', url=j.url, title=j.title, company=j.company) }}"
-           target="_blank" rel="noopener"
+           target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
            class="alert-title-link{% if unread %} unread{% endif %}"
            title="Open job and mark as read">{{ j.title }} ↗</a>
       </td>

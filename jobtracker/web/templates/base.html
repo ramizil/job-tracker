@@ -46,9 +46,12 @@
     <div class="nav-tools" aria-label="Tools">
       <a href="{{ url_for('main.export_csv') }}" title="Export CSV">CSV</a>
       <a href="{{ url_for('main.export_xlsx') }}" title="Export Excel">Excel</a>
-      <a class="sync-chip" href="{{ url_for('main.settings') }}#tab-backup"
-         title="Last backup / Google Sheets sync">
-        {% if sync_status and sync_status.backup_at %}
+      <a class="sync-chip{{ ' warn' if 'sheets' in (connection_alert_keys or []) }}"
+         href="{{ url_for('main.settings') }}{{ '#tab-google' if 'sheets' in (connection_alert_keys or []) else '#tab-backup' }}"
+         title="{% if 'sheets' in (connection_alert_keys or []) %}Google Sheets login expired — reconnect in Settings{% else %}Last backup / Google Sheets sync{% endif %}">
+        {% if 'sheets' in (connection_alert_keys or []) %}
+          Sync ⚠
+        {% elif sync_status and sync_status.backup_at %}
           Backup {{ sync_status.backup_at[5:10] }}
         {% elif sync_status and sync_status.sheets_at %}
           Sync {{ sync_status.sheets_at[5:10] }}
@@ -91,6 +94,20 @@
       </div>
     {% endif %}
   {% endwith %}
+
+  {% if connection_alerts %}
+  <div class="flashes">
+    <div class="setup-banner conn-alert-banner" role="alert">
+      <div class="sb-head">⚠ Google connection needs attention</div>
+      <ul class="sb-list">
+        {% for a in connection_alerts %}
+        <li><b>{{ a.label }}</b> — login expired or was revoked{% if a.at %} ({{ a.at }} UTC){% endif %}.</li>
+        {% endfor %}
+      </ul>
+      <a class="btn primary sm" href="{{ url_for('main.settings') }}#tab-google">Reconnect in Settings → Google</a>
+    </div>
+  </div>
+  {% endif %}
 
   <main class="container">
     {% block content %}{% endblock %}

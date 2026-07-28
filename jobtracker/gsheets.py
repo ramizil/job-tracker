@@ -75,10 +75,28 @@ def connect() -> None:
     creds = flow.run_local_server(port=0, open_browser=True,
                                   authorization_prompt_message="")
     _token_path().write_text(creds.to_json(), encoding="utf-8")
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.SHEETS)
+    except Exception:
+        pass
 
 
 def disconnect() -> None:
     _token_path().unlink(missing_ok=True)
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.SHEETS)
+    except Exception:
+        pass
+
+
+def _mark_auth_inactive(msg: str) -> None:
+    try:
+        from . import connection_status
+        connection_status.mark_inactive(connection_status.SHEETS, msg)
+    except Exception:
+        pass
 
 
 def _credentials():
@@ -86,18 +104,44 @@ def _credentials():
     if not token_path.exists():
         raise SyncError("Google account isn't connected yet — click "
                         "\u201cConnect Google\u201d in Settings first.")
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
     creds = Credentials.from_authorized_user_info(
         json.loads(token_path.read_text(encoding="utf-8")), SCOPES)
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        token_path.write_text(creds.to_json(), encoding="utf-8")
+        try:
+            creds.refresh(Request())
+            token_path.write_text(creds.to_json(), encoding="utf-8")
+        except RefreshError as exc:
+            # invalid_grant — token revoked / expired / password changed.
+            token_path.unlink(missing_ok=True)
+            msg = (
+                "Google Sheets login expired or was revoked. Open Settings → "
+                "Google → Connect Google and sign in again."
+            )
+            _mark_auth_inactive(msg)
+            raise SyncError(msg) from exc
     if not creds.valid:
-        raise SyncError("Google login expired — click \u201cConnect Google\u201d "
-                        "in Settings to sign in again.")
+        token_path.unlink(missing_ok=True)
+        msg = ("Google login expired — click \u201cConnect Google\u201d "
+               "in Settings to sign in again.")
+        _mark_auth_inactive(msg)
+        raise SyncError(msg)
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.SHEETS)
+    except Exception:
+        pass
     return creds
+
+
+def probe_credentials() -> None:
+    """Refresh token if needed; mark inactive on auth failure. No-op if unused."""
+    if not (is_configured() and is_connected()):
+        return
+    _credentials()
 
 
 def _find_or_create_sheet(drive, folder_id: str) -> str:
@@ -165,6 +209,11 @@ _timer_lock = threading.Lock()
 def _sync_quietly() -> None:
     try:
         sync()
+    except SyncError as exc:
+        # Auth failures already mark inactive inside _credentials().
+        text = str(exc).lower()
+        if "expired" in text or "revoked" in text or "connect google" in text:
+            _mark_auth_inactive(str(exc))
     except Exception:
         pass  # background best-effort; the manual button surfaces errors
 

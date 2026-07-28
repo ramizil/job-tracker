@@ -62,6 +62,44 @@ _STATION_RE = re.compile(
 _BULLET_RE = re.compile(r"^[\-•\*]\s+(.+)$")
 _TIP_RE = re.compile(r"^(טיפ|Tip)\s*[:：\-–]?\s*(.+)$", re.I)
 
+# Spoken openers that must never become the blue <header> banner.
+_BANNER_OPENER_RE = re.compile(
+    r"^(נעים מאוד|שלום|היי|בוקר טוב|hi[,!\s]|hello\b|i['’]?m\b|i am\b|my name\b)",
+    re.I,
+)
+
+
+def _is_banner_title(line: str) -> bool:
+    """True if line is a short document title — not spoken script prose."""
+    s = (line or "").strip()
+    if not s or len(s) > 90:
+        return False
+    if (_SECTION_RE.match(s) or _STATION_RE.match(s)
+            or _BULLET_RE.match(s) or _TIP_RE.match(s)):
+        return False
+    if _BANNER_OPENER_RE.match(s):
+        return False
+    # Multi-sentence lines are body copy, not an h1.
+    if s.count(".") + s.count("!") + s.count("?") >= 2:
+        return False
+    return True
+
+
+def _is_banner_subtitle(line: str) -> bool:
+    """True if line is a short lead under the title — not a script paragraph."""
+    s = (line or "").strip()
+    if not s or len(s) > 180:
+        return False
+    if (_SECTION_RE.match(s) or _STATION_RE.match(s)
+            or _BULLET_RE.match(s) or _TIP_RE.match(s)):
+        return False
+    if _BANNER_OPENER_RE.match(s):
+        return False
+    # Dense spoken paragraphs (tech lists) belong in quote cards.
+    if len(s) > 110 and (s.count(",") >= 3 or s.count("·") + s.count("•") >= 2):
+        return False
+    return True
+
 
 def normalize_kind(kind: str | None) -> str:
     k = (kind or "interview").strip().lower()
@@ -296,14 +334,18 @@ def html_from_plain(text: str, *, template_html: str = "",
     header_sub = ""
     body_start = 0
     if lines:
-        header_title = lines[0].strip()
-        body_start = 1
-        if len(lines) > 1 and lines[1].strip() and not _SECTION_RE.match(lines[1].strip()):
-            # second line is subtitle unless it's already a section heading
-            if not _STATION_RE.match(lines[1].strip()) and not _BULLET_RE.match(lines[1].strip()):
-                header_sub = lines[1].strip()
-                body_start = 2
-        if header_title:
+        first = lines[0].strip()
+        # Only put short title-like lines in the blue <header>. Tailored AI
+        # scripts often start with spoken prose ("נעים מאוד…") — that must
+        # stay in white quote cards, not the banner.
+        if _is_banner_title(first):
+            header_title = first
+            body_start = 1
+            if len(lines) > 1:
+                second = lines[1].strip()
+                if second and _is_banner_subtitle(second):
+                    header_sub = second
+                    body_start = 2
             title = header_title
 
     # Skip blank lines after header

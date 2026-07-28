@@ -62,10 +62,28 @@ def connect() -> None:
     creds = flow.run_local_server(port=0, open_browser=True,
                                   authorization_prompt_message="")
     _token_path().write_text(creds.to_json(), encoding="utf-8")
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.GMAIL_ALERTS)
+    except Exception:
+        pass
 
 
 def disconnect() -> None:
     _token_path().unlink(missing_ok=True)
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.GMAIL_ALERTS)
+    except Exception:
+        pass
+
+
+def _mark_auth_inactive(msg: str) -> None:
+    try:
+        from . import connection_status
+        connection_status.mark_inactive(connection_status.GMAIL_ALERTS, msg)
+    except Exception:
+        pass
 
 
 def _credentials():
@@ -86,16 +104,32 @@ def _credentials():
         except RefreshError as exc:
             # invalid_grant — token revoked / expired / password changed.
             token_path.unlink(missing_ok=True)
-            raise AlertsError(
+            msg = (
                 "Gmail login expired or was revoked. Open Settings → "
                 "Gmail job alerts → Connect Gmail and sign in again "
                 "(one-time browser login)."
-            ) from exc
+            )
+            _mark_auth_inactive(msg)
+            raise AlertsError(msg) from exc
     if not creds.valid:
         token_path.unlink(missing_ok=True)
-        raise AlertsError("Gmail login expired — click \u201cConnect Gmail\u201d "
-                          "in Settings to sign in again.")
+        msg = ("Gmail login expired — click \u201cConnect Gmail\u201d "
+               "in Settings to sign in again.")
+        _mark_auth_inactive(msg)
+        raise AlertsError(msg)
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.GMAIL_ALERTS)
+    except Exception:
+        pass
     return creds
+
+
+def probe_credentials() -> None:
+    """Refresh token if needed; mark inactive on auth failure. No-op if unused."""
+    if not is_connected():
+        return
+    _credentials()
 
 
 def _service():
@@ -772,6 +806,10 @@ def _auto_loop() -> None:
         try:
             if is_connected():
                 fetch_alerts()
+        except AlertsError as exc:
+            text = str(exc).lower()
+            if "expired" in text or "revoked" in text or "connect gmail" in text:
+                _mark_auth_inactive(str(exc))
         except Exception:
             pass  # best-effort; the manual Fetch button surfaces errors
         time.sleep(AUTO_FETCH_INTERVAL_S)

@@ -234,9 +234,9 @@
     <div class="setting">
       <label>Matrix — מטריקס משרות <span class="rec">no key needed</span></label>
       <small>QA / automation categories via RSS:
-        <a href="https://www.matrix.co.il/jobs/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA/testing-automation/" target="_blank" rel="noopener">testing-automation</a>
+        <a href="{{ url_for('main.open_external', url='https://www.matrix.co.il/jobs/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA/testing-automation/') }}" target="_blank" rel="noopener">testing-automation</a>
         ·
-        <a href="https://www.matrix.co.il/jobs/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA/%D7%A4%D7%99%D7%AA%D7%95%D7%97-%D7%90%D7%95%D7%98%D7%95%D7%9E%D7%A6%D7%99%D7%94/" target="_blank" rel="noopener">פיתוח אוטומציה</a>.
+        <a href="{{ url_for('main.open_external', url='https://www.matrix.co.il/jobs/%D7%9E%D7%A9%D7%A8%D7%95%D7%AA/%D7%A4%D7%99%D7%AA%D7%95%D7%97-%D7%90%D7%95%D7%98%D7%95%D7%9E%D7%A6%D7%99%D7%94/') }}" target="_blank" rel="noopener">פיתוח אוטומציה</a>.
       </small>
       <label class="check-setting src-off">
         <input type="checkbox" name="SOURCES_DISABLED" value="matrix" form="settings-form"
@@ -321,11 +321,22 @@
           <form method="post" action="{{ url_for('main.gsheet_sync') }}">
             <button class="btn primary" type="submit">🔄 Sync to Google Sheet now</button>
           </form>
+          <form method="post" action="{{ url_for('main.gsheet_connect') }}">
+            <button class="btn" type="submit"
+                    title="If sync fails with invalid_grant / expired token">🔑 Reconnect Google</button>
+          </form>
           <form method="post" action="{{ url_for('main.gsheet_disconnect') }}">
             <button class="btn danger" type="submit">Disconnect Google</button>
           </form>
         {% endif %}
       </div>
+      {% if 'sheets' in (connection_alert_keys or []) %}
+      <div class="dup-warning mt">
+        <div class="dw-head">Sheets login expired</div>
+        <p class="dw-sub">Sign in again with <b>Connect Google</b> / <b>Reconnect Google</b>
+          so automatic sync can resume.</p>
+      </div>
+      {% endif %}
       <p class="muted sm mt">Status:
         {% if gs_connected %}<span class="fit fit-yes">Google connected</span> — the sheet
         also updates by itself a few seconds after you add, edit, reject or delete an
@@ -337,7 +348,11 @@
         {% else %}
           <br>Last sync: <i>not yet</i> — press “Sync to Google Sheet now” once.
         {% endif %}
-        {% else %}<span class="fit fit-no">not connected</span>{% endif %}</p>
+        {% else %}<span class="fit fit-no">not connected</span>
+          {% if 'sheets' in (connection_alert_keys or []) %}
+            — <b>login expired</b>; press Connect Google to sign in again.
+          {% endif %}
+        {% endif %}</p>
     {% else %}
       <p class="muted sm">Paste your Drive folder URL above and save settings to enable connect &amp; sync.</p>
     {% endif %}
@@ -373,10 +388,17 @@
         </form>
       {% endif %}
     </div>
+    {% if 'gmail_alerts' in (connection_alert_keys or []) %}
+    <div class="dup-warning mt">
+      <div class="dw-head">Gmail job alerts login expired</div>
+      <p class="dw-sub">Press <b>Connect Gmail</b> / <b>Reconnect Gmail</b> and sign in
+        with the alerts mailbox so new job emails are fetched again.</p>
+    </div>
+    {% endif %}
     <p class="muted sm mt">Sign in with the mailbox that receives the alerts
       (e.g. <code>ramizil1@gmail.com</code>). If you see
       <b>invalid_grant / Token expired</b>, press <b>Reconnect Gmail</b>.
-      Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
+      Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% if 'gmail_alerts' in (connection_alert_keys or []) %} — <b>login expired</b>{% endif %}{% endif %}.</p>
   </section>
 
   <section class="panel">
@@ -400,14 +422,25 @@
         </form>
       {% else %}
         <a class="btn primary" href="{{ url_for('main.rejection_inbox') }}">📭 Open Rejection inbox</a>
+        <form method="post" action="{{ url_for('main.gmail_rejections_connect') }}">
+          <button class="btn" type="submit"
+                  title="If fetch fails with invalid_grant / expired token">🔑 Reconnect</button>
+        </form>
         <form method="post" action="{{ url_for('main.gmail_rejections_disconnect') }}">
           <button class="btn danger" type="submit">Disconnect</button>
         </form>
       {% endif %}
     </div>
+    {% if 'gmail_rejections' in (connection_alert_keys or []) %}
+    <div class="dup-warning mt">
+      <div class="dw-head">Rejections Gmail login expired</div>
+      <p class="dw-sub">Press <b>Connect rejections Gmail</b> and sign in with the
+        rejections mailbox so new emails are fetched again.</p>
+    </div>
+    {% endif %}
     <p class="muted sm mt">Sign in with the mailbox that receives rejection emails
       (can differ from the alerts mailbox).
-      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.
+      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% if 'gmail_rejections' in (connection_alert_keys or []) %} — <b>login expired</b>{% endif %}{% endif %}.
       {% if not gmail_rejections_connected %}If Google shows <b>Access blocked / 403 access_denied</b>,
       add <code>zilber.rami@gmail.com</code> as a <b>Test user</b> in
       <a href="#rb-google-cloud">Google Cloud → OAuth consent screen</a>, then try again.{% endif %}</p>

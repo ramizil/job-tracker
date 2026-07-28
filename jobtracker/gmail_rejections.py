@@ -113,10 +113,28 @@ def connect() -> None:
     creds = flow.run_local_server(port=0, open_browser=True,
                                   authorization_prompt_message="")
     _token_path().write_text(creds.to_json(), encoding="utf-8")
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.GMAIL_REJECTIONS)
+    except Exception:
+        pass
 
 
 def disconnect() -> None:
     _token_path().unlink(missing_ok=True)
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.GMAIL_REJECTIONS)
+    except Exception:
+        pass
+
+
+def _mark_auth_inactive(msg: str) -> None:
+    try:
+        from . import connection_status
+        connection_status.mark_inactive(connection_status.GMAIL_REJECTIONS, msg)
+    except Exception:
+        pass
 
 
 def _credentials():
@@ -136,16 +154,30 @@ def _credentials():
             token_path.write_text(creds.to_json(), encoding="utf-8")
         except RefreshError as exc:
             token_path.unlink(missing_ok=True)
-            raise RejectionsError(
+            msg = (
                 "Rejections Gmail login expired or was revoked. Open Settings → "
-                "Rejection inbox → Connect and sign in again "
-                "(one-time browser login)."
-            ) from exc
+                "Google → Connect rejections Gmail and sign in again."
+            )
+            _mark_auth_inactive(msg)
+            raise RejectionsError(msg) from exc
     if not creds.valid:
         token_path.unlink(missing_ok=True)
-        raise RejectionsError("Rejections Gmail login expired — reconnect in "
-                              "Settings.")
+        msg = ("Rejections Gmail login expired — reconnect in Settings.")
+        _mark_auth_inactive(msg)
+        raise RejectionsError(msg)
+    try:
+        from . import connection_status
+        connection_status.clear(connection_status.GMAIL_REJECTIONS)
+    except Exception:
+        pass
     return creds
+
+
+def probe_credentials() -> None:
+    """Refresh token if needed; mark inactive on auth failure. No-op if unused."""
+    if not is_connected():
+        return
+    _credentials()
 
 
 def _service():
@@ -851,6 +883,10 @@ def _auto_loop() -> None:
         try:
             if is_connected():
                 fetch_rejections()
+        except RejectionsError as exc:
+            text = str(exc).lower()
+            if "expired" in text or "revoked" in text or "reconnect" in text:
+                _mark_auth_inactive(str(exc))
         except Exception:
             pass
         time.sleep(AUTO_FETCH_INTERVAL_S)
