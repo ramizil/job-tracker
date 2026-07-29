@@ -272,6 +272,11 @@ html[data-theme="slate"] .dp-btn:hover:not(:disabled){background:rgba(29,78,216,
 .sync-chip.warn{border-color:rgba(251,191,36,.7);color:var(--warn);background:rgba(251,191,36,.12);font-weight:700}
 .sync-chip.warn:hover{border-color:var(--warn);color:#fff;background:rgba(251,191,36,.22)}
 .conn-alert-banner{margin-top:12px}
+.mailbox-list{display:flex;flex-direction:column;gap:12px}
+.mailbox-row{border:1px solid var(--rule);border-radius:10px;padding:12px 14px;background:var(--panel)}
+.mailbox-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.mailbox-labels{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.mailbox-labels input[type="text"]{flex:1 1 220px;min-width:160px}
 .profile-switch{display:inline-flex;margin:0;flex:0 0 auto}
 .profile-switch select{
   background:var(--panel);color:var(--muted);border:1px solid var(--rule);

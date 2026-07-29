@@ -127,6 +127,10 @@ def inject_connection_alerts():
     try:
         alerts = connection_status.inactive_alerts()
         keys = {a["key"] for a in alerts}
+        # Also expose feature prefixes so templates can check 'gmail_alerts' etc.
+        for k in list(keys):
+            if ":" in k:
+                keys.add(k.split(":", 1)[0])
         return {
             "connection_alerts": alerts,
             "connection_alert_keys": keys,
@@ -376,6 +380,8 @@ def settings():
         gs_connected=gsheets.is_connected(),
         gmail_connected=gmail_alerts.is_connected(),
         gmail_rejections_connected=gmail_rejections.is_connected(),
+        gmail_alert_accounts=gmail_alerts.list_mailboxes(),
+        gmail_rejection_accounts=gmail_rejections.list_mailboxes(),
         gs_secret_found=Path(str(config.GOOGLE_CLIENT_SECRET)).exists(),
         env_path=str(config.ENV_PATH),
         backup_dir=str(config.BACKUP_DIR),
@@ -514,38 +520,70 @@ def gsheet_disconnect():
 
 @bp.route("/settings/gmail-connect", methods=["POST"])
 def gmail_connect():
-    """One-time Gmail sign-in (use the job-alerts mailbox account)."""
+    """Add or reconnect a Gmail job-alerts mailbox."""
+    account_id = (request.form.get("account_id") or "").strip() or None
     try:
-        gmail_alerts.connect()
-        flash("Gmail connected — open Job Alerts and fetch.", "ok")
+        entry = gmail_alerts.connect(account_id=account_id)
+        flash(f"Gmail alerts mailbox connected: {entry.get('email')}. "
+              "Open Job Alerts and fetch.", "ok")
     except Exception as exc:
         flash(f"Gmail connection failed: {exc}", "error")
-    return redirect(url_for("main.settings"))
+    return redirect(url_for("main.settings") + "#tab-google")
 
 
 @bp.route("/settings/gmail-disconnect", methods=["POST"])
 def gmail_disconnect():
-    gmail_alerts.disconnect()
-    flash("Gmail disconnected.", "ok")
-    return redirect(url_for("main.settings"))
+    account_id = (request.form.get("account_id") or "").strip() or None
+    gmail_alerts.disconnect(account_id)
+    flash("Gmail alerts mailbox removed." if account_id else "All Gmail alerts mailboxes disconnected.",
+          "ok")
+    return redirect(url_for("main.settings") + "#tab-google")
+
+
+@bp.route("/settings/gmail-labels", methods=["POST"])
+def gmail_labels():
+    account_id = (request.form.get("account_id") or "").strip()
+    labels = request.form.get("labels") or ""
+    try:
+        gmail_alerts.update_mailbox_labels(account_id, labels)
+        flash("Alerts mailbox labels saved.", "ok")
+    except Exception as exc:
+        flash(f"Could not save labels: {exc}", "error")
+    return redirect(url_for("main.settings") + "#tab-google")
 
 
 @bp.route("/settings/gmail-rejections-connect", methods=["POST"])
 def gmail_rejections_connect():
-    """One-time Gmail sign-in for the rejections mailbox."""
+    """Add or reconnect a Gmail rejections mailbox."""
+    account_id = (request.form.get("account_id") or "").strip() or None
     try:
-        gmail_rejections.connect()
-        flash("Rejections Gmail connected — open Rejection inbox and fetch.", "ok")
+        entry = gmail_rejections.connect(account_id=account_id)
+        flash(f"Rejections mailbox connected: {entry.get('email')}. "
+              "Open Rejection inbox and fetch.", "ok")
     except Exception as exc:
         flash(f"Rejections Gmail connection failed: {exc}", "error")
-    return redirect(url_for("main.settings"))
+    return redirect(url_for("main.settings") + "#tab-google")
 
 
 @bp.route("/settings/gmail-rejections-disconnect", methods=["POST"])
 def gmail_rejections_disconnect():
-    gmail_rejections.disconnect()
-    flash("Rejections Gmail disconnected.", "ok")
-    return redirect(url_for("main.settings"))
+    account_id = (request.form.get("account_id") or "").strip() or None
+    gmail_rejections.disconnect(account_id)
+    flash("Rejections mailbox removed." if account_id else "All rejections mailboxes disconnected.",
+          "ok")
+    return redirect(url_for("main.settings") + "#tab-google")
+
+
+@bp.route("/settings/gmail-rejections-labels", methods=["POST"])
+def gmail_rejections_labels():
+    account_id = (request.form.get("account_id") or "").strip()
+    labels = request.form.get("labels") or ""
+    try:
+        gmail_rejections.update_mailbox_labels(account_id, labels)
+        flash("Rejections mailbox label saved.", "ok")
+    except Exception as exc:
+        flash(f"Could not save label: {exc}", "error")
+    return redirect(url_for("main.settings") + "#tab-google")
 
 
 @bp.after_app_request
@@ -1223,6 +1261,8 @@ def alerts():
         show_queue=show_queue, connected=connected, app_names=app_names,
         app_dates=app_dates, app_status=app_status, app_paths=app_paths,
         label=config.GMAIL_LABEL,
+        mailbox_emails=gmail_alerts.mailbox_emails(),
+        mailboxes=gmail_alerts.list_mailboxes(),
         queue_count=gmail_alerts.action_queue_count(),
         pending=sum(1 for r in rows
                     if not r["dismissed"] and not r["matched_app_id"]
@@ -1485,6 +1525,8 @@ def rejection_inbox():
         connected=connected, app_names=app_names, picker_by_row=picker_by_row,
         picker_filtered=picker_filtered,
         label=config.GMAIL_REJECTION_LABEL,
+        mailbox_emails=gmail_rejections.mailbox_emails(),
+        mailboxes=gmail_rejections.list_mailboxes(),
         stages=REJECTION_STAGES, reasons=COMMON_REJECTION_REASONS,
         pending=sum(1 for r in rows if r["status"] == "pending"
                     and r["matched_app_id"]))

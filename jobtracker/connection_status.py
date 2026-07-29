@@ -4,6 +4,9 @@ When Sheets / Gmail tokens expire or are revoked (``invalid_grant``), the
 background loops used to swallow the error and leave the UI looking fine.
 This module records those failures so every page can show a reconnect banner
 until the user signs in again.
+
+Gmail keys may be feature-wide (``gmail_alerts``) or per-mailbox
+(``gmail_alerts:<account_id>``).
 """
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ from .db import now_iso
 _FILE = "connection_alerts.json"
 _lock = threading.Lock()
 
-# Stable keys used in the JSON file and UI.
+# Stable feature-wide keys (also used as prefixes for per-mailbox keys).
 SHEETS = "sheets"
 GMAIL_ALERTS = "gmail_alerts"
 GMAIL_REJECTIONS = "gmail_rejections"
@@ -48,9 +51,27 @@ def _write(data: dict) -> None:
                     encoding="utf-8")
 
 
-def mark_inactive(key: str, reason: str = "") -> None:
+def _known_key(key: str) -> bool:
+    if key in _LABELS:
+        return True
+    if key.startswith(GMAIL_ALERTS + ":") or key.startswith(GMAIL_REJECTIONS + ":"):
+        return True
+    return False
+
+
+def _default_label(key: str) -> str:
+    if key in _LABELS:
+        return _LABELS[key]
+    if key.startswith(GMAIL_ALERTS + ":"):
+        return f"Gmail job alerts ({key.split(':', 1)[1]})"
+    if key.startswith(GMAIL_REJECTIONS + ":"):
+        return f"Gmail rejections ({key.split(':', 1)[1]})"
+    return key
+
+
+def mark_inactive(key: str, reason: str = "", *, label: str = "") -> None:
     """Record that a previously working Google connection needs reconnect."""
-    if key not in _LABELS:
+    if not _known_key(key):
         return
     with _lock:
         data = _read()
@@ -58,14 +79,14 @@ def mark_inactive(key: str, reason: str = "") -> None:
             "inactive": True,
             "reason": (reason or "").strip()[:400],
             "at": now_iso(),
-            "label": _LABELS[key],
+            "label": (label or "").strip() or _default_label(key),
         }
         _write(data)
 
 
 def clear(key: str) -> None:
     """Clear an inactive alert (after reconnect or intentional disconnect)."""
-    if key not in _LABELS:
+    if not key:
         return
     with _lock:
         data = _read()
@@ -84,17 +105,29 @@ def inactive_alerts() -> list[dict]:
     with _lock:
         data = _read()
     out: list[dict] = []
-    for key, label in _LABELS.items():
-        entry = data.get(key) or {}
-        if not entry.get("inactive"):
+    for key, entry in data.items():
+        if not isinstance(entry, dict) or not entry.get("inactive"):
+            continue
+        if not _known_key(key):
             continue
         out.append({
             "key": key,
-            "label": entry.get("label") or label,
+            "label": entry.get("label") or _default_label(key),
             "reason": entry.get("reason") or "",
             "at": (entry.get("at") or "")[:16].replace("T", " "),
             "settings_hash": "#tab-google",
         })
+    # Stable order: sheets, then alerts*, then rejections*
+    def _sort_key(item: dict) -> tuple:
+        k = item["key"]
+        if k == SHEETS:
+            return (0, k)
+        if k == GMAIL_ALERTS or k.startswith(GMAIL_ALERTS + ":"):
+            return (1, k)
+        if k == GMAIL_REJECTIONS or k.startswith(GMAIL_REJECTIONS + ":"):
+            return (2, k)
+        return (3, k)
+    out.sort(key=_sort_key)
     return out
 
 

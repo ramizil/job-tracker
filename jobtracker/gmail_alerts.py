@@ -1,16 +1,9 @@
 """Read job-alert emails from Gmail (LinkedIn + Indeed) and track them as leads.
 
-A dedicated mailbox (or Gmail labels such as ``linkedin-jobs`` and
-``indeed-job-posting``) collects job-alert emails. On demand we fetch new
-messages under those labels via the Gmail API (read-only scope), extract the
-individual job postings (title, company, location, link) from each email, and
-store them in the ``job_alerts`` table. Each alert is then cross-checked
-against the applications list, so the UI can show "applied" vs "not applied yet".
-
-Auth mirrors gsheets.py: the same Desktop-app OAuth client JSON, but a
-separate per-profile token (``gmail_token.json``) with the minimal
-``gmail.readonly`` scope — sign in with the alerts mailbox account, which
-may differ from the Drive/Sheets account.
+One or more Gmail mailboxes can be connected (see ``gmail_accounts``). Each
+account has its own OAuth token and label list. On demand (and in the
+background) we fetch new messages under those labels, extract LinkedIn /
+Indeed job postings, and store them in ``job_alerts``.
 """
 from __future__ import annotations
 
@@ -21,7 +14,7 @@ import threading
 import time
 from difflib import SequenceMatcher
 
-from . import config
+from . import config, gmail_accounts
 from .db import get_connection, now_iso
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -29,117 +22,116 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 # Background auto-fetch cadence while the server is running.
 AUTO_FETCH_INTERVAL_S = 600  # 10 minutes
 
+_FEATURE = gmail_accounts.ALERTS
+
 
 class AlertsError(Exception):
     """User-readable Gmail job-alerts failure."""
 
 
-def _token_path():
-    # Per active profile, like the Sheets token (and covered by backups).
-    return config.PROFILE_DIR / "gmail_token.json"
-
-
 def is_connected() -> bool:
-    return _token_path().exists()
+    return gmail_accounts.is_connected(_FEATURE)
 
 
-def connect() -> None:
-    """Run the one-time OAuth browser flow and store the Gmail token."""
-    from pathlib import Path
+def list_mailboxes() -> list[dict]:
+    return gmail_accounts.list_accounts(_FEATURE)
 
-    secret = Path(str(config.GOOGLE_CLIENT_SECRET))
-    if not secret.exists():
-        raise AlertsError(
-            f"OAuth client file not found at {secret}. It's the same Desktop-app "
-            "client JSON used for Google Sheets — set its path in Settings.")
+
+def mailbox_emails() -> dict[str, str]:
+    return gmail_accounts.email_map(_FEATURE)
+
+
+def connect(*, account_id: str | None = None,
+            labels: list[str] | None = None) -> dict:
+    """OAuth browser flow — adds a mailbox (or reconnects ``account_id``)."""
     try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
+        creds = gmail_accounts.run_oauth(SCOPES)
+    except FileNotFoundError as exc:
+        raise AlertsError(str(exc)) from exc
     except ImportError as exc:
         raise AlertsError(
             "Google client libraries are missing — restart via start.command "
             "to install dependencies.") from exc
-    flow = InstalledAppFlow.from_client_secrets_file(str(secret), SCOPES)
-    creds = flow.run_local_server(port=0, open_browser=True,
-                                  authorization_prompt_message="")
-    _token_path().write_text(creds.to_json(), encoding="utf-8")
+    email = gmail_accounts.fetch_profile_email(creds) or "unknown@gmail.com"
+    if labels is None and account_id:
+        existing = gmail_accounts.get_account(_FEATURE, account_id)
+        labels = list((existing or {}).get("labels") or []) or None
+    entry = gmail_accounts.add_account_from_creds(
+        _FEATURE, creds.to_json(), email=email, labels=labels,
+        account_id=account_id)
     try:
         from . import connection_status
+        connection_status.clear(
+            gmail_accounts.status_key(_FEATURE, entry["id"]))
         connection_status.clear(connection_status.GMAIL_ALERTS)
     except Exception:
         pass
+    return entry
 
 
-def disconnect() -> None:
-    _token_path().unlink(missing_ok=True)
+def disconnect(account_id: str | None = None) -> None:
+    """Remove one mailbox, or all if ``account_id`` is None."""
+    if account_id:
+        gmail_accounts.remove_account(_FEATURE, account_id)
+        return
+    for acct in list(list_mailboxes()):
+        gmail_accounts.remove_account(_FEATURE, acct["id"])
+
+
+def update_mailbox_labels(account_id: str, labels_csv: str) -> None:
+    labels = [p.strip() for p in (labels_csv or "").split(",") if p.strip()]
+    try:
+        gmail_accounts.update_labels(_FEATURE, account_id, labels)
+    except KeyError as exc:
+        raise AlertsError(f"Unknown alerts mailbox: {account_id}") from exc
+
+
+def _mark_auth_inactive(account_id: str, msg: str) -> None:
     try:
         from . import connection_status
-        connection_status.clear(connection_status.GMAIL_ALERTS)
+        acct = gmail_accounts.get_account(_FEATURE, account_id) or {}
+        email = acct.get("email") or account_id
+        connection_status.mark_inactive(
+            gmail_accounts.status_key(_FEATURE, account_id), msg,
+            label=f"Gmail job alerts ({email})")
     except Exception:
         pass
 
 
-def _mark_auth_inactive(msg: str) -> None:
+def _credentials(account: dict):
     try:
-        from . import connection_status
-        connection_status.mark_inactive(connection_status.GMAIL_ALERTS, msg)
-    except Exception:
-        pass
-
-
-def _credentials():
-    token_path = _token_path()
-    if not token_path.exists():
-        raise AlertsError("Gmail isn't connected yet — click "
-                          "\u201cConnect Gmail\u201d in Settings first.")
-    from google.auth.exceptions import RefreshError
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-
-    creds = Credentials.from_authorized_user_info(
-        json.loads(token_path.read_text(encoding="utf-8")), SCOPES)
-    if creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            token_path.write_text(creds.to_json(), encoding="utf-8")
-        except RefreshError as exc:
-            # invalid_grant — token revoked / expired / password changed.
-            token_path.unlink(missing_ok=True)
-            msg = (
-                "Gmail login expired or was revoked. Open Settings → "
-                "Gmail job alerts → Connect Gmail and sign in again "
-                "(one-time browser login)."
-            )
-            _mark_auth_inactive(msg)
-            raise AlertsError(msg) from exc
-    if not creds.valid:
-        token_path.unlink(missing_ok=True)
-        msg = ("Gmail login expired — click \u201cConnect Gmail\u201d "
-               "in Settings to sign in again.")
-        _mark_auth_inactive(msg)
-        raise AlertsError(msg)
-    try:
-        from . import connection_status
-        connection_status.clear(connection_status.GMAIL_ALERTS)
-    except Exception:
-        pass
-    return creds
+        return gmail_accounts.load_credentials(
+            _FEATURE, account,
+            on_inactive=_mark_auth_inactive)
+    except FileNotFoundError as exc:
+        raise AlertsError(str(exc)) from exc
+    except RuntimeError as exc:
+        raise AlertsError(str(exc)) from exc
 
 
 def probe_credentials() -> None:
-    """Refresh token if needed; mark inactive on auth failure. No-op if unused."""
-    if not is_connected():
-        return
-    _credentials()
+    """Refresh tokens for all mailboxes; mark inactive on auth failure."""
+    for acct in list_mailboxes():
+        if not acct.get("enabled", True):
+            continue
+        try:
+            if not gmail_accounts.token_path_for(_FEATURE, acct).exists():
+                continue
+            _credentials(acct)
+        except AlertsError:
+            pass
+        except Exception:
+            pass
 
 
-def _service():
+def _service(account: dict):
     try:
         from googleapiclient.discovery import build
     except ImportError as exc:
         raise AlertsError(
             "Google client libraries are missing — restart via start.command "
             "to install dependencies.") from exc
-    return build("gmail", "v1", credentials=_credentials())
+    return build("gmail", "v1", credentials=_credentials(account))
 
 
 def _label_key(name: str) -> str:
@@ -452,8 +444,12 @@ def _header(msg: dict, name: str) -> str:
     return ""
 
 
-def _label_names() -> list[str]:
-    """GMAIL_LABEL may be a single label or comma-separated list."""
+def _label_names(account: dict | None = None) -> list[str]:
+    """Labels for one mailbox (or the .env default)."""
+    if account and account.get("labels"):
+        names = [str(p).strip() for p in account["labels"] if str(p).strip()]
+        if names:
+            return names
     raw = (config.GMAIL_LABEL or "").strip() or "linkedin-jobs"
     names = [p.strip() for p in raw.split(",") if p.strip()]
     return names or ["linkedin-jobs"]
@@ -463,18 +459,47 @@ def _label_names() -> list[str]:
 # Fetch + store
 # --------------------------------------------------------------------------- #
 def fetch_alerts() -> dict:
-    """Pull new alert emails, parse them, store new jobs. Returns a summary."""
-    svc = _service()
+    """Pull new alert emails from every connected mailbox."""
+    accounts = [a for a in list_mailboxes() if a.get("enabled", True)]
+    if not accounts:
+        raise AlertsError(
+            "No Gmail alerts mailbox connected — add one in Settings → Google.")
+    total_emails = 0
+    total_jobs = 0
+    errors: list[str] = []
+    for acct in accounts:
+        try:
+            if not gmail_accounts.token_path_for(_FEATURE, acct).exists():
+                continue
+            summary = _fetch_alerts_for_account(acct)
+            total_emails += summary.get("emails", 0)
+            total_jobs += summary.get("jobs", 0)
+        except AlertsError as exc:
+            errors.append(str(exc))
+        except Exception as exc:
+            errors.append(f"{acct.get('email') or acct.get('id')}: {exc}")
+    refresh_matches()
+    out = {"emails": total_emails, "jobs": total_jobs, "mailboxes": len(accounts)}
+    if errors and not (total_emails or total_jobs):
+        raise AlertsError("; ".join(errors))
+    if errors:
+        out["warnings"] = errors
+    return out
+
+
+def _fetch_alerts_for_account(account: dict) -> dict:
+    """Pull new alert emails for one mailbox, parse them, store new jobs."""
+    mailbox_id = account["id"]
+    svc = _service(account)
     try:
         from googleapiclient.errors import HttpError
-    except ImportError as exc:  # pragma: no cover - checked in _service already
+    except ImportError as exc:  # pragma: no cover
         raise AlertsError("Google client libraries are missing.") from exc
 
     try:
-        # Union of messages across all configured labels (LinkedIn + Indeed, …).
         message_ids: list[str] = []
         seen_mid: set[str] = set()
-        for name in _label_names():
+        for name in _label_names(account):
             label = _label_id(svc, name)
             page_token = None
             while True:
@@ -491,18 +516,20 @@ def fetch_alerts() -> dict:
                     break
 
         with get_connection() as conn:
-            seen = {r["gmail_id"] for r in
-                    conn.execute("SELECT gmail_id FROM alert_emails")}
-            # Re-parse emails we already saw but that yielded no jobs (e.g. Indeed
-            # messages ingested before the Indeed parser existed).
+            seen = {r["gmail_id"] for r in conn.execute(
+                "SELECT gmail_id FROM alert_emails WHERE mailbox_id = ?",
+                (mailbox_id,))}
             orphans = {
                 r["gmail_id"] for r in conn.execute(
                     """SELECT e.gmail_id FROM alert_emails e
-                        WHERE NOT EXISTS (
-                          SELECT 1 FROM job_alerts a WHERE a.gmail_id = e.gmail_id
-                        )""")
+                        WHERE e.mailbox_id = ?
+                          AND NOT EXISTS (
+                          SELECT 1 FROM job_alerts a
+                           WHERE a.gmail_id = e.gmail_id
+                             AND COALESCE(a.mailbox_id, 'legacy') = e.mailbox_id
+                        )""",
+                    (mailbox_id,))
             }
-        # New messages first, then orphans that are still under a scanned label
         new_ids = [mid for mid in message_ids if mid not in seen]
         retry_ids = [mid for mid in message_ids
                      if mid in orphans and mid not in set(new_ids)]
@@ -517,7 +544,6 @@ def fetch_alerts() -> dict:
             subject = _header(msg, "Subject")
             from_addr = _header(msg, "From")
             found = parse_alert_email(html, subject=subject, from_addr=from_addr)
-            # Email arrival time (ms epoch) -> ISO, for the alert list ordering.
             try:
                 from datetime import datetime, timezone
                 ts = datetime.fromtimestamp(
@@ -530,14 +556,14 @@ def fetch_alerts() -> dict:
                     cur = conn.execute(
                         """INSERT OR IGNORE INTO job_alerts
                              (job_key, title, company, location, url,
-                              gmail_id, alert_at, last_alert_at, created_at)
-                           VALUES (?,?,?,?,?,?,?,?,?)""",
+                              gmail_id, mailbox_id, alert_at, last_alert_at,
+                              created_at)
+                           VALUES (?,?,?,?,?,?,?,?,?,?)""",
                         (job["job_key"], job["title"], job["company"],
-                         job["location"], job["url"], mid, ts, ts, now_iso()))
+                         job["location"], job["url"], mid, mailbox_id,
+                         ts, ts, now_iso()))
                     new_jobs += cur.rowcount
                     if not cur.rowcount:
-                        # Known job resurfacing: bump count, mark unread again
-                        # (dismissed/ignored kept; badge only counts active).
                         conn.execute(
                             """UPDATE job_alerts
                                   SET times_seen = times_seen + 1,
@@ -547,8 +573,9 @@ def fetch_alerts() -> dict:
                                 WHERE job_key = ?""",
                             (ts, job["job_key"]))
                 conn.execute(
-                    "INSERT OR IGNORE INTO alert_emails (gmail_id, fetched_at) "
-                    "VALUES (?,?)", (mid, now_iso()))
+                    """INSERT OR IGNORE INTO alert_emails
+                         (mailbox_id, gmail_id, fetched_at) VALUES (?,?,?)""",
+                    (mailbox_id, mid, now_iso()))
             if mid in set(new_ids):
                 new_emails += 1
     except HttpError as exc:
@@ -559,7 +586,6 @@ def fetch_alerts() -> dict:
                 "Services → Library → Gmail API), then reconnect.") from exc
         raise AlertsError(f"Gmail API error: {exc.reason or exc}") from exc
 
-    refresh_matches()
     return {"emails": new_emails, "jobs": new_jobs}
 
 
@@ -808,8 +834,9 @@ def _auto_loop() -> None:
                 fetch_alerts()
         except AlertsError as exc:
             text = str(exc).lower()
-            if "expired" in text or "revoked" in text or "connect gmail" in text:
-                _mark_auth_inactive(str(exc))
+            if "expired" in text or "revoked" in text or "reconnect" in text:
+                # Per-account mark already done inside credentials; keep banner.
+                pass
         except Exception:
             pass  # best-effort; the manual Fetch button surfaces errors
         time.sleep(AUTO_FETCH_INTERVAL_S)

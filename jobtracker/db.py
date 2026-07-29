@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS job_alerts (
     location       TEXT,
     url            TEXT,
     gmail_id       TEXT,                 -- source email (Gmail message id)
+    mailbox_id     TEXT,                 -- gmail_accounts registry id
     alert_at       TEXT,                 -- when the alert email arrived
     matched_app_id INTEGER,              -- application this alert matches (if any)
     dismissed      INTEGER DEFAULT 0,
@@ -66,14 +67,17 @@ CREATE TABLE IF NOT EXISTS job_alerts (
 
 -- Alert emails already parsed, so a fetch never re-processes them.
 CREATE TABLE IF NOT EXISTS alert_emails (
-    gmail_id   TEXT PRIMARY KEY,
-    fetched_at TEXT NOT NULL
+    mailbox_id TEXT NOT NULL,
+    gmail_id   TEXT NOT NULL,
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (mailbox_id, gmail_id)
 );
 
 -- Rejection emails parsed from a dedicated Gmail mailbox (gmail_rejections.py).
 CREATE TABLE IF NOT EXISTS rejection_inbox (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    gmail_id         TEXT UNIQUE,
+    gmail_id         TEXT NOT NULL,
+    mailbox_id       TEXT,
     subject          TEXT,
     from_addr        TEXT,
     snippet          TEXT,
@@ -89,13 +93,16 @@ CREATE TABLE IF NOT EXISTS rejection_inbox (
     match_confidence TEXT,
     status           TEXT DEFAULT 'pending',
     seen             INTEGER DEFAULT 0,
-    created_at       TEXT NOT NULL
+    created_at       TEXT NOT NULL,
+    UNIQUE (mailbox_id, gmail_id)
 );
 
 -- Rejection emails already parsed (incremental fetch).
 CREATE TABLE IF NOT EXISTS rejection_mail_seen (
-    gmail_id   TEXT PRIMARY KEY,
-    fetched_at TEXT NOT NULL
+    mailbox_id TEXT NOT NULL,
+    gmail_id   TEXT NOT NULL,
+    fetched_at TEXT NOT NULL,
+    PRIMARY KEY (mailbox_id, gmail_id)
 );
 
 -- Search results the user dismissed or ignored (search_hidden.py).
@@ -206,6 +213,129 @@ EXTRA_COLUMNS: dict[str, str] = {
     "resume_id": "INTEGER",          # FK → resumes.id (which CV was sent)
 }
 
+_LEGACY_MAILBOX = "legacy"
+
+
+def _migrate_mailbox_tables(conn: sqlite3.Connection) -> None:
+    """Add mailbox_id columns and rebuild seen tables with composite keys."""
+    # job_alerts.mailbox_id
+    alert_cols = {r["name"] for r in conn.execute("PRAGMA table_info(job_alerts)")}
+    if alert_cols and "mailbox_id" not in alert_cols:
+        conn.execute("ALTER TABLE job_alerts ADD COLUMN mailbox_id TEXT")
+        conn.execute(
+            "UPDATE job_alerts SET mailbox_id = ? WHERE mailbox_id IS NULL OR mailbox_id = ''",
+            (_LEGACY_MAILBOX,))
+
+    # rejection_inbox.mailbox_id + drop bare gmail_id UNIQUE via table rebuild
+    rej_cols = {r["name"] for r in conn.execute("PRAGMA table_info(rejection_inbox)")}
+    if rej_cols and "mailbox_id" not in rej_cols:
+        conn.execute("ALTER TABLE rejection_inbox ADD COLUMN mailbox_id TEXT")
+        conn.execute(
+            "UPDATE rejection_inbox SET mailbox_id = ? "
+            "WHERE mailbox_id IS NULL OR mailbox_id = ''",
+            (_LEGACY_MAILBOX,))
+
+    # Rebuild rejection_inbox if gmail_id is still a global UNIQUE (no mailbox).
+    # Detect via sqlite_master index / unique list.
+    if rej_cols:
+        _ensure_rejection_inbox_mailbox_unique(conn)
+
+    # alert_emails: composite PK (mailbox_id, gmail_id)
+    ae_cols = {r["name"] for r in conn.execute("PRAGMA table_info(alert_emails)")}
+    if ae_cols and "mailbox_id" not in ae_cols:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS alert_emails_v2 (
+                   mailbox_id TEXT NOT NULL,
+                   gmail_id   TEXT NOT NULL,
+                   fetched_at TEXT NOT NULL,
+                   PRIMARY KEY (mailbox_id, gmail_id)
+               )""")
+        conn.execute(
+            """INSERT OR IGNORE INTO alert_emails_v2 (mailbox_id, gmail_id, fetched_at)
+               SELECT ?, gmail_id, fetched_at FROM alert_emails""",
+            (_LEGACY_MAILBOX,))
+        conn.execute("DROP TABLE alert_emails")
+        conn.execute("ALTER TABLE alert_emails_v2 RENAME TO alert_emails")
+
+    # rejection_mail_seen: composite PK
+    rs_cols = {r["name"] for r in
+               conn.execute("PRAGMA table_info(rejection_mail_seen)")}
+    if rs_cols and "mailbox_id" not in rs_cols:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS rejection_mail_seen_v2 (
+                   mailbox_id TEXT NOT NULL,
+                   gmail_id   TEXT NOT NULL,
+                   fetched_at TEXT NOT NULL,
+                   PRIMARY KEY (mailbox_id, gmail_id)
+               )""")
+        conn.execute(
+            """INSERT OR IGNORE INTO rejection_mail_seen_v2
+                   (mailbox_id, gmail_id, fetched_at)
+               SELECT ?, gmail_id, fetched_at FROM rejection_mail_seen""",
+            (_LEGACY_MAILBOX,))
+        conn.execute("DROP TABLE rejection_mail_seen")
+        conn.execute(
+            "ALTER TABLE rejection_mail_seen_v2 RENAME TO rejection_mail_seen")
+
+
+def _ensure_rejection_inbox_mailbox_unique(conn: sqlite3.Connection) -> None:
+    """Rebuild rejection_inbox so uniqueness is (mailbox_id, gmail_id)."""
+    # If a UNIQUE index on gmail_id alone exists (from CREATE TABLE), rebuild.
+    indexes = list(conn.execute("PRAGMA index_list(rejection_inbox)"))
+    needs = False
+    for idx in indexes:
+        # idx: seq, name, unique, origin, partial
+        if not idx["unique"]:
+            continue
+        cols = [r["name"] for r in
+                conn.execute(f"PRAGMA index_info('{idx['name']}')")]
+        if cols == ["gmail_id"]:
+            needs = True
+            break
+    if not needs:
+        return
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS rejection_inbox_v2 (
+               id               INTEGER PRIMARY KEY AUTOINCREMENT,
+               gmail_id         TEXT NOT NULL,
+               mailbox_id       TEXT,
+               subject          TEXT,
+               from_addr        TEXT,
+               snippet          TEXT,
+               body_text        TEXT,
+               title            TEXT,
+               company          TEXT,
+               stage            TEXT,
+               reason           TEXT,
+               note             TEXT,
+               job_url          TEXT,
+               mail_at          TEXT,
+               matched_app_id   INTEGER,
+               match_confidence TEXT,
+               status           TEXT DEFAULT 'pending',
+               seen             INTEGER DEFAULT 0,
+               created_at       TEXT NOT NULL,
+               UNIQUE (mailbox_id, gmail_id)
+           )""")
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(rejection_inbox)")}
+    src = ["id", "gmail_id"]
+    if "mailbox_id" in cols:
+        src.append("COALESCE(NULLIF(mailbox_id,''), 'legacy')")
+    else:
+        src.append("'legacy'")
+    for c in ("subject", "from_addr", "snippet", "body_text", "title", "company",
+              "stage", "reason", "note", "job_url", "mail_at", "matched_app_id",
+              "match_confidence", "status", "seen", "created_at"):
+        src.append(c if c in cols else "NULL")
+    conn.execute(
+        f"""INSERT OR IGNORE INTO rejection_inbox_v2
+              (id, gmail_id, mailbox_id, subject, from_addr, snippet, body_text,
+               title, company, stage, reason, note, job_url, mail_at,
+               matched_app_id, match_confidence, status, seen, created_at)
+            SELECT {', '.join(src)} FROM rejection_inbox""")
+    conn.execute("DROP TABLE rejection_inbox")
+    conn.execute("ALTER TABLE rejection_inbox_v2 RENAME TO rejection_inbox")
+
 
 def _migrate(conn: sqlite3.Connection) -> None:
     # Columns added to job_alerts after the alerts feature shipped.
@@ -273,6 +403,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
                        ORDER BY h.changed_at DESC LIMIT 1)
                 WHERE status = 'rejected'"""
         )
+
+    _migrate_mailbox_tables(conn)
 
 
 def init_db() -> None:

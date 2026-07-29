@@ -361,88 +361,138 @@
   <section class="panel">
     <h2>📬 Gmail job alerts</h2>
     <div class="setting">
-      <label for="GMAIL_LABEL">Gmail label(s) to scan</label>
+      <label for="GMAIL_LABEL">Default label(s) for new mailboxes</label>
       <input type="text" id="GMAIL_LABEL" name="GMAIL_LABEL" form="settings-form" value="{{ values.GMAIL_LABEL }}" placeholder="linkedin-jobs, indeed-job-posting" autocomplete="off">
-      <small>Point LinkedIn / Indeed job-alert emails at Gmail labels (filters that
-        apply them). You can list <b>several labels</b>, comma-separated — e.g.
-        <code>linkedin-jobs, indeed-job-posting</code>.
-        The <b>Job Alerts</b> page reads emails under these labels (<b>read-only</b> —
-        the app can never send or delete mail), extracts LinkedIn <b>and</b> Indeed
-        jobs, and flags the ones you haven't applied to yet. Requires the
-        <b>Gmail API</b> enabled on the same Cloud project
-        (<a href="#rb-google-cloud">📖 setup guide</a>).</small>
+      <small>Used when you <b>add</b> a mailbox. Each connected mailbox can override
+        labels below. Point LinkedIn / Indeed alert filters at these Gmail labels.
+        Requires the <b>Gmail API</b> on the same Cloud project
+        (<a href="#rb-google-cloud">📖 setup guide</a>). Access is <b>read-only</b>.</small>
     </div>
-    <div class="actions">
-      {% if not gmail_connected %}
-        <form method="post" action="{{ url_for('main.gmail_connect') }}">
-          <button class="btn primary" type="submit">🔑 Connect Gmail (opens a sign-in window)</button>
+
+    {% if gmail_alert_accounts %}
+    <div class="mailbox-list mt">
+      {% for acct in gmail_alert_accounts %}
+      <div class="mailbox-row">
+        <div class="mailbox-head">
+          <b>{{ acct.email or acct.id }}</b>
+          {% set sk = 'gmail_alerts:' ~ acct.id %}
+          {% if sk in (connection_alert_keys or []) or (acct.id == 'legacy' and 'gmail_alerts' in (connection_alert_keys or [])) %}
+            <span class="fit fit-no">login expired</span>
+          {% else %}
+            <span class="fit fit-yes">connected</span>
+          {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('main.gmail_labels') }}" class="mailbox-labels">
+          <input type="hidden" name="account_id" value="{{ acct.id }}">
+          <label class="sr-only" for="alert-labels-{{ acct.id }}">Labels</label>
+          <input type="text" id="alert-labels-{{ acct.id }}" name="labels"
+                 value="{{ (acct.labels or [])|join(', ') }}"
+                 placeholder="linkedin-jobs, indeed-job-posting" autocomplete="off">
+          <button class="btn sm" type="submit">Save labels</button>
         </form>
-      {% else %}
-        <a class="btn primary" href="{{ url_for('main.alerts') }}">📬 Open Job Alerts</a>
-        <form method="post" action="{{ url_for('main.gmail_connect') }}">
-          <button class="btn" type="submit"
-                  title="If fetch fails with invalid_grant / expired token">🔑 Reconnect Gmail</button>
-        </form>
-        <form method="post" action="{{ url_for('main.gmail_disconnect') }}">
-          <button class="btn danger" type="submit">Disconnect Gmail</button>
-        </form>
+        <div class="actions">
+          <form method="post" action="{{ url_for('main.gmail_connect') }}">
+            <input type="hidden" name="account_id" value="{{ acct.id }}">
+            <button class="btn sm" type="submit" title="Re-run Google sign-in for this mailbox">🔑 Reconnect</button>
+          </form>
+          <form method="post" action="{{ url_for('main.gmail_disconnect') }}"
+                onsubmit="return confirm('Remove this alerts mailbox?')">
+            <input type="hidden" name="account_id" value="{{ acct.id }}">
+            <button class="btn sm danger" type="submit">Remove</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="actions mt">
+      <form method="post" action="{{ url_for('main.gmail_connect') }}">
+        <button class="btn primary" type="submit">➕ Add alerts mailbox</button>
+      </form>
+      {% if gmail_connected %}
+        <a class="btn" href="{{ url_for('main.alerts') }}">📬 Open Job Alerts</a>
       {% endif %}
     </div>
     {% if 'gmail_alerts' in (connection_alert_keys or []) %}
     <div class="dup-warning mt">
       <div class="dw-head">Gmail job alerts login expired</div>
-      <p class="dw-sub">Press <b>Connect Gmail</b> / <b>Reconnect Gmail</b> and sign in
-        with the alerts mailbox so new job emails are fetched again.</p>
+      <p class="dw-sub">Press <b>Reconnect</b> on the affected mailbox (or add it again)
+        so new job emails are fetched.</p>
     </div>
     {% endif %}
-    <p class="muted sm mt">Sign in with the mailbox that receives the alerts
-      (e.g. <code>ramizil1@gmail.com</code>). If you see
-      <b>invalid_grant / Token expired</b>, press <b>Reconnect Gmail</b>.
-      Status: {% if gmail_connected %}<span class="fit fit-yes">Gmail connected</span>{% else %}<span class="fit fit-no">not connected</span>{% if 'gmail_alerts' in (connection_alert_keys or []) %} — <b>login expired</b>{% endif %}{% endif %}.</p>
+    <p class="muted sm mt">You can monitor <b>several Gmail accounts</b>. Each new address
+      must be a Google Cloud <b>Test user</b>
+      (<a href="#rb-google-cloud">setup guide</a>).
+      Status: {% if gmail_connected %}<span class="fit fit-yes">{{ gmail_alert_accounts|length }} mailbox{{ 'es' if gmail_alert_accounts|length != 1 else '' }}</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.</p>
   </section>
 
   <section class="panel">
     <h2>📭 Gmail rejections</h2>
     <div class="setting">
-      <label for="GMAIL_REJECTION_LABEL">Gmail label to scan</label>
+      <label for="GMAIL_REJECTION_LABEL">Default label for new mailboxes</label>
       <input type="text" id="GMAIL_REJECTION_LABEL" name="GMAIL_REJECTION_LABEL" form="settings-form"
              value="{{ values.GMAIL_REJECTION_LABEL }}" placeholder="job-rejection" autocomplete="off">
-      <small>Rejection emails from your applications mailbox (e.g.
-        <code>zilber.rami@gmail.com</code>). Tag them with label
-        <code>{{ values.GMAIL_REJECTION_LABEL or 'job-rejection' }}</code>
-        (manually or via a broad filter — see guide below). The tracker
-        <b>reads the email body</b> to detect real rejections and extract
-        company/title. <b>Read-only</b>; nothing is auto-marked rejected until
-        you confirm on the <b>Rej.</b> page.</small>
+      <small>Used when you <b>add</b> a rejections mailbox. Override per mailbox below.
+        The tracker <b>reads the email body</b> for decision language. <b>Read-only</b>;
+        nothing is auto-marked rejected until you confirm.</small>
     </div>
-    <div class="actions">
-      {% if not gmail_rejections_connected %}
-        <form method="post" action="{{ url_for('main.gmail_rejections_connect') }}">
-          <button class="btn primary" type="submit">🔑 Connect rejections Gmail</button>
+
+    {% if gmail_rejection_accounts %}
+    <div class="mailbox-list mt">
+      {% for acct in gmail_rejection_accounts %}
+      <div class="mailbox-row">
+        <div class="mailbox-head">
+          <b>{{ acct.email or acct.id }}</b>
+          {% set sk = 'gmail_rejections:' ~ acct.id %}
+          {% if sk in (connection_alert_keys or []) or (acct.id == 'legacy' and 'gmail_rejections' in (connection_alert_keys or [])) %}
+            <span class="fit fit-no">login expired</span>
+          {% else %}
+            <span class="fit fit-yes">connected</span>
+          {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('main.gmail_rejections_labels') }}" class="mailbox-labels">
+          <input type="hidden" name="account_id" value="{{ acct.id }}">
+          <label class="sr-only" for="rej-labels-{{ acct.id }}">Label</label>
+          <input type="text" id="rej-labels-{{ acct.id }}" name="labels"
+                 value="{{ (acct.labels or [])|join(', ') }}"
+                 placeholder="job-rejection" autocomplete="off">
+          <button class="btn sm" type="submit">Save label</button>
         </form>
-      {% else %}
-        <a class="btn primary" href="{{ url_for('main.rejection_inbox') }}">📭 Open Rejection inbox</a>
-        <form method="post" action="{{ url_for('main.gmail_rejections_connect') }}">
-          <button class="btn" type="submit"
-                  title="If fetch fails with invalid_grant / expired token">🔑 Reconnect</button>
-        </form>
-        <form method="post" action="{{ url_for('main.gmail_rejections_disconnect') }}">
-          <button class="btn danger" type="submit">Disconnect</button>
-        </form>
+        <div class="actions">
+          <form method="post" action="{{ url_for('main.gmail_rejections_connect') }}">
+            <input type="hidden" name="account_id" value="{{ acct.id }}">
+            <button class="btn sm" type="submit">🔑 Reconnect</button>
+          </form>
+          <form method="post" action="{{ url_for('main.gmail_rejections_disconnect') }}"
+                onsubmit="return confirm('Remove this rejections mailbox?')">
+            <input type="hidden" name="account_id" value="{{ acct.id }}">
+            <button class="btn sm danger" type="submit">Remove</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="actions mt">
+      <form method="post" action="{{ url_for('main.gmail_rejections_connect') }}">
+        <button class="btn primary" type="submit">➕ Add rejections mailbox</button>
+      </form>
+      {% if gmail_rejections_connected %}
+        <a class="btn" href="{{ url_for('main.rejection_inbox') }}">📭 Open Rejection inbox</a>
       {% endif %}
     </div>
     {% if 'gmail_rejections' in (connection_alert_keys or []) %}
     <div class="dup-warning mt">
       <div class="dw-head">Rejections Gmail login expired</div>
-      <p class="dw-sub">Press <b>Connect rejections Gmail</b> and sign in with the
-        rejections mailbox so new emails are fetched again.</p>
+      <p class="dw-sub">Press <b>Reconnect</b> on the affected mailbox so new emails are fetched.</p>
     </div>
     {% endif %}
-    <p class="muted sm mt">Sign in with the mailbox that receives rejection emails
-      (can differ from the alerts mailbox).
-      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">connected</span>{% else %}<span class="fit fit-no">not connected</span>{% if 'gmail_rejections' in (connection_alert_keys or []) %} — <b>login expired</b>{% endif %}{% endif %}.
+    <p class="muted sm mt">Each new address must be a Google Cloud <b>Test user</b>.
+      Status: {% if gmail_rejections_connected %}<span class="fit fit-yes">{{ gmail_rejection_accounts|length }} mailbox{{ 'es' if gmail_rejection_accounts|length != 1 else '' }}</span>{% else %}<span class="fit fit-no">not connected</span>{% endif %}.
       {% if not gmail_rejections_connected %}If Google shows <b>Access blocked / 403 access_denied</b>,
-      add <code>zilber.rami@gmail.com</code> as a <b>Test user</b> in
+      add the mailbox as a <b>Test user</b> in
       <a href="#rb-google-cloud">Google Cloud → OAuth consent screen</a>, then try again.{% endif %}</p>
 
     <details class="runbook" id="rb-gmail-rejections">
@@ -455,14 +505,14 @@
           to tell a real rejection from a mere acknowledgment.</p>
 
         <h4>Recommended — label you already use</h4>
-        <p>You created <code>job-rejection</code> — perfect. Set that name in the
-          field above (default). Any email under that label is imported; the tracker
+        <p>You created <code>job-rejection</code> — perfect. Set that name per mailbox
+          (or as the default above). Any email under that label is imported; the tracker
           parses company + title from the body.</p>
         <ol>
           <li>When a rejection arrives, Gmail → select the message → click the
             <b>Label</b> icon → tick <code>job-rejection</code>.</li>
           <li>Or drag the email to the label in the left sidebar.</li>
-          <li>In Job Tracker: connect rejections Gmail → <b>Rej.</b> →
+          <li>In Job Tracker: add the rejections mailbox → <b>Rej.</b> →
             <b>Fetch from Gmail</b>.</li>
         </ol>
 

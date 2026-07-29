@@ -24,15 +24,14 @@
 
 {% if not connected %}
 <div class="panel">
-  <p class="muted">Reads <b>rejection emails</b> from your applications mailbox
-    (e.g. <code>zilber.rami@gmail.com</code>). Tag them with the
-    <code>job-rejection</code> label in Gmail, or let the tracker scan your inbox
-    and read each email's <b>body</b> for decision language (“unfortunately”,
-    “after reviewing we've decided…”). Matches jobs you applied to — you
-    <b>confirm</b> before marking anything rejected.</p>
-  <p class="muted">Connect in
-    <a href="{{ url_for('main.settings') }}">Settings → Gmail rejections</a>
-    (one-time Google sign-in, read-only), then come back and fetch.</p>
+  <p class="muted">Reads <b>rejection emails</b> from one or more Gmail mailboxes.
+    Tag them with the <code>job-rejection</code> label (or your per-mailbox label),
+    or let the tracker scan the inbox and read each email's <b>body</b> for decision
+    language. Matches jobs you applied to — you <b>confirm</b> before marking anything
+    rejected.</p>
+  <p class="muted">Add a mailbox in
+    <a href="{{ url_for('main.settings') }}#tab-google">Settings → Google</a>
+    (one-time Google sign-in per account, read-only), then come back and fetch.</p>
 </div>
 {% endif %}
 
@@ -40,8 +39,13 @@
   <p class="muted">Only emails whose <b>body</b> contains definite rejection language
     (“unfortunately”, “decided not to move forward”, “other candidates”…) —
     acks (“we received your application”) and in-review mail are filtered out.
-    Label <code>{{ label }}</code>
-    (or a built-in search if the label doesn't exist yet).
+    {% if mailboxes and mailboxes|length %}
+      Monitoring <b>{{ mailboxes|length }}</b> mailbox{{ 'es' if mailboxes|length != 1 else '' }}
+      ({% for m in mailboxes %}{{ m.email or m.id }}{% if not loop.last %}, {% endif %}{% endfor %}).
+    {% else %}
+      Label <code>{{ label }}</code>
+      (or a built-in search if the label doesn't exist yet).
+    {% endif %}
     {% if connected %}While Job Tracker is running, Gmail is checked automatically
     <b>every 10 minutes</b> — new matches pop up in the nav badge.{% endif %}
   {% if pending %}<b>{{ pending }}</b> matched and waiting for your confirmation.{% endif %}
@@ -59,6 +63,7 @@
   <thead><tr>
     <th data-sort="desc" class="sorted-desc">Date</th>
     <th>Email</th>
+    <th>Mailbox</th>
     <th>Parsed job</th>
     <th>Match</th>
     <th>Actions</th>
@@ -75,6 +80,14 @@
         <button type="button" class="btn sm rej-toggle" data-target="rej-{{ r.id }}"
                 style="margin-top:.35rem">📧 View full email</button>
         {% endif %}
+      </td>
+      <td class="muted sm">
+        {% set mid = r.mailbox_id or 'legacy' %}
+        {% if mailbox_emails and mailbox_emails.get(mid) %}
+          <span class="chip" title="Source mailbox">{{ mailbox_emails.get(mid) }}</span>
+        {% elif mid and mid != 'legacy' %}
+          <span class="chip">{{ mid }}</span>
+        {% else %}—{% endif %}
       </td>
       <td>
         {% if r.title or r.company %}

@@ -1,14 +1,10 @@
 """Read rejection emails from Gmail and match them to applications.
 
-A dedicated mailbox (e.g. ``zilber.rami@gmail.com``) collects rejection
-notifications. We fetch messages under a Gmail label (or a built-in search
-query when the label is missing), parse company/title/stage from each email,
-and cross-check against the applications list. Nothing is auto-marked rejected
+One or more Gmail mailboxes can be connected (see ``gmail_accounts``). We
+fetch messages under a per-mailbox label (or a built-in search when the
+label is missing), parse company/title/stage from each email, and
+cross-check against the applications list. Nothing is auto-marked rejected
 — the UI lets you confirm, dismiss, or fix a wrong match.
-
-Auth uses the same Desktop-app OAuth client as Sheets/alerts, but a separate
-per-profile token (``gmail_rejections_token.json``) — sign in with the
-rejections mailbox, which may differ from the job-alerts account.
 """
 from __future__ import annotations
 
@@ -20,11 +16,13 @@ import time
 from difflib import SequenceMatcher
 from html import escape, unescape
 
-from . import config
+from . import config, gmail_accounts
 from .db import get_connection, now_iso
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 AUTO_FETCH_INTERVAL_S = 600  # 10 minutes
+
+_FEATURE = gmail_accounts.REJECTIONS
 
 # Gmail search used when the configured label doesn't exist yet.
 # Subjects alone are unreliable — the query casts a wide net; body parsing
@@ -86,108 +84,109 @@ class RejectionsError(Exception):
     """User-readable Gmail rejection-inbox failure."""
 
 
-def _token_path():
-    return config.PROFILE_DIR / "gmail_rejections_token.json"
-
-
 def is_connected() -> bool:
-    return _token_path().exists()
+    return gmail_accounts.is_connected(_FEATURE)
 
 
-def connect() -> None:
-    """Run the one-time OAuth browser flow for the rejections mailbox."""
-    from pathlib import Path
+def list_mailboxes() -> list[dict]:
+    return gmail_accounts.list_accounts(_FEATURE)
 
-    secret = Path(str(config.GOOGLE_CLIENT_SECRET))
-    if not secret.exists():
-        raise RejectionsError(
-            f"OAuth client file not found at {secret}. It's the same Desktop-app "
-            "client JSON used for Google Sheets — set its path in Settings.")
+
+def mailbox_emails() -> dict[str, str]:
+    return gmail_accounts.email_map(_FEATURE)
+
+
+def connect(*, account_id: str | None = None,
+            labels: list[str] | None = None) -> dict:
+    """OAuth browser flow — adds a mailbox (or reconnects ``account_id``)."""
     try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
+        creds = gmail_accounts.run_oauth(SCOPES)
+    except FileNotFoundError as exc:
+        raise RejectionsError(str(exc)) from exc
     except ImportError as exc:
         raise RejectionsError(
             "Google client libraries are missing — restart via start.command "
             "to install dependencies.") from exc
-    flow = InstalledAppFlow.from_client_secrets_file(str(secret), SCOPES)
-    creds = flow.run_local_server(port=0, open_browser=True,
-                                  authorization_prompt_message="")
-    _token_path().write_text(creds.to_json(), encoding="utf-8")
+    email = gmail_accounts.fetch_profile_email(creds) or "unknown@gmail.com"
+    if labels is None and account_id:
+        existing = gmail_accounts.get_account(_FEATURE, account_id)
+        labels = list((existing or {}).get("labels") or []) or None
+    entry = gmail_accounts.add_account_from_creds(
+        _FEATURE, creds.to_json(), email=email, labels=labels,
+        account_id=account_id)
     try:
         from . import connection_status
+        connection_status.clear(
+            gmail_accounts.status_key(_FEATURE, entry["id"]))
         connection_status.clear(connection_status.GMAIL_REJECTIONS)
     except Exception:
         pass
+    return entry
 
 
-def disconnect() -> None:
-    _token_path().unlink(missing_ok=True)
+def disconnect(account_id: str | None = None) -> None:
+    """Remove one mailbox, or all if ``account_id`` is None."""
+    if account_id:
+        gmail_accounts.remove_account(_FEATURE, account_id)
+        return
+    for acct in list(list_mailboxes()):
+        gmail_accounts.remove_account(_FEATURE, acct["id"])
+
+
+def update_mailbox_labels(account_id: str, labels_csv: str) -> None:
+    labels = [p.strip() for p in (labels_csv or "").split(",") if p.strip()]
+    try:
+        gmail_accounts.update_labels(_FEATURE, account_id, labels)
+    except KeyError as exc:
+        raise RejectionsError(f"Unknown rejections mailbox: {account_id}") from exc
+
+
+def _mark_auth_inactive(account_id: str, msg: str) -> None:
     try:
         from . import connection_status
-        connection_status.clear(connection_status.GMAIL_REJECTIONS)
+        acct = gmail_accounts.get_account(_FEATURE, account_id) or {}
+        email = acct.get("email") or account_id
+        connection_status.mark_inactive(
+            gmail_accounts.status_key(_FEATURE, account_id), msg,
+            label=f"Gmail rejections ({email})")
     except Exception:
         pass
 
 
-def _mark_auth_inactive(msg: str) -> None:
+def _credentials(account: dict):
     try:
-        from . import connection_status
-        connection_status.mark_inactive(connection_status.GMAIL_REJECTIONS, msg)
-    except Exception:
-        pass
-
-
-def _credentials():
-    token_path = _token_path()
-    if not token_path.exists():
-        raise RejectionsError("Rejections Gmail isn't connected yet — click "
-                              "\u201cConnect rejections Gmail\u201d in Settings.")
-    from google.auth.exceptions import RefreshError
-    from google.auth.transport.requests import Request
-    from google.oauth2.credentials import Credentials
-
-    creds = Credentials.from_authorized_user_info(
-        json.loads(token_path.read_text(encoding="utf-8")), SCOPES)
-    if creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            token_path.write_text(creds.to_json(), encoding="utf-8")
-        except RefreshError as exc:
-            token_path.unlink(missing_ok=True)
-            msg = (
-                "Rejections Gmail login expired or was revoked. Open Settings → "
-                "Google → Connect rejections Gmail and sign in again."
-            )
-            _mark_auth_inactive(msg)
-            raise RejectionsError(msg) from exc
-    if not creds.valid:
-        token_path.unlink(missing_ok=True)
-        msg = ("Rejections Gmail login expired — reconnect in Settings.")
-        _mark_auth_inactive(msg)
-        raise RejectionsError(msg)
-    try:
-        from . import connection_status
-        connection_status.clear(connection_status.GMAIL_REJECTIONS)
-    except Exception:
-        pass
-    return creds
+        return gmail_accounts.load_credentials(
+            _FEATURE, account,
+            on_inactive=_mark_auth_inactive)
+    except FileNotFoundError as exc:
+        raise RejectionsError(str(exc)) from exc
+    except RuntimeError as exc:
+        raise RejectionsError(str(exc)) from exc
 
 
 def probe_credentials() -> None:
-    """Refresh token if needed; mark inactive on auth failure. No-op if unused."""
-    if not is_connected():
-        return
-    _credentials()
+    """Refresh tokens for all mailboxes; mark inactive on auth failure."""
+    for acct in list_mailboxes():
+        if not acct.get("enabled", True):
+            continue
+        try:
+            if not gmail_accounts.token_path_for(_FEATURE, acct).exists():
+                continue
+            _credentials(acct)
+        except RejectionsError:
+            pass
+        except Exception:
+            pass
 
 
-def _service():
+def _service(account: dict):
     try:
         from googleapiclient.discovery import build
     except ImportError as exc:
         raise RejectionsError(
             "Google client libraries are missing — restart via start.command "
             "to install dependencies.") from exc
-    return build("gmail", "v1", credentials=_credentials())
+    return build("gmail", "v1", credentials=_credentials(account))
 
 
 def _label_key(name: str) -> str:
@@ -632,15 +631,63 @@ def refresh_matches() -> None:
 # --------------------------------------------------------------------------- #
 # Fetch + store
 # --------------------------------------------------------------------------- #
+def _account_labels(account: dict) -> list[str]:
+    if account and account.get("labels"):
+        names = [str(p).strip() for p in account["labels"] if str(p).strip()]
+        if names:
+            return names
+    raw = (config.GMAIL_REJECTION_LABEL or "").strip() or "job-rejection"
+    return [raw]
+
+
 def fetch_rejections() -> dict:
-    """Pull new rejection emails, parse and store. Returns a summary."""
-    svc = _service()
+    """Pull new rejection emails from every connected mailbox."""
+    accounts = [a for a in list_mailboxes() if a.get("enabled", True)]
+    if not accounts:
+        raise RejectionsError(
+            "No rejections mailbox connected — add one in Settings → Google.")
+    total_emails = 0
+    total_rejections = 0
+    used_fallback = False
+    errors: list[str] = []
+    for acct in accounts:
+        try:
+            if not gmail_accounts.token_path_for(_FEATURE, acct).exists():
+                continue
+            summary = _fetch_rejections_for_account(acct)
+            total_emails += summary.get("emails", 0)
+            total_rejections += summary.get("rejections", 0)
+            used_fallback = used_fallback or summary.get("used_fallback", False)
+        except RejectionsError as exc:
+            errors.append(str(exc))
+        except Exception as exc:
+            errors.append(f"{acct.get('email') or acct.get('id')}: {exc}")
+    refresh_matches()
+    _dismiss_noise()
+    out = {
+        "emails": total_emails,
+        "rejections": total_rejections,
+        "used_fallback": used_fallback,
+        "mailboxes": len(accounts),
+    }
+    if errors and not (total_emails or total_rejections):
+        raise RejectionsError("; ".join(errors))
+    if errors:
+        out["warnings"] = errors
+    return out
+
+
+def _fetch_rejections_for_account(account: dict) -> dict:
+    """Pull new rejection emails for one mailbox."""
+    mailbox_id = account["id"]
+    svc = _service(account)
     try:
         from googleapiclient.errors import HttpError
     except ImportError as exc:
         raise RejectionsError("Google client libraries are missing.") from exc
 
-    label_name = config.GMAIL_REJECTION_LABEL
+    label_names = _account_labels(account)
+    label_name = label_names[0] if label_names else "job-rejection"
     label = _label_id(svc, label_name)
     used_fallback = label is None
 
@@ -659,8 +706,9 @@ def fetch_rejections() -> dict:
             break
 
     with get_connection() as conn:
-        seen = {r["gmail_id"] for r in
-                conn.execute("SELECT gmail_id FROM rejection_mail_seen")}
+        seen = {r["gmail_id"] for r in conn.execute(
+            "SELECT gmail_id FROM rejection_mail_seen WHERE mailbox_id = ?",
+            (mailbox_id,))}
 
     new_ids = [mid for mid in message_ids if mid not in seen]
     new_emails = 0
@@ -698,12 +746,13 @@ def fetch_rejections() -> dict:
                     ).fetchall())
                     cur = conn.execute(
                         """INSERT OR IGNORE INTO rejection_inbox
-                             (gmail_id, subject, from_addr, snippet, body_text,
-                              title, company, stage, reason, note, job_url,
-                              mail_at, matched_app_id, match_confidence,
+                             (gmail_id, mailbox_id, subject, from_addr, snippet,
+                              body_text, title, company, stage, reason, note,
+                              job_url, mail_at, matched_app_id, match_confidence,
                               status, seen, created_at)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                        (mid, subject, from_addr, parsed.get("snippet", ""),
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (mid, mailbox_id, subject, from_addr,
+                         parsed.get("snippet", ""),
                          plain[:12000], parsed.get("title", ""),
                          parsed.get("company", ""), parsed.get("stage", "cv_screen"),
                          parsed.get("reason", "no_feedback"),
@@ -711,8 +760,9 @@ def fetch_rejections() -> dict:
                          ts, app_id, conf, "pending", 0, now_iso()))
                     new_rejections += cur.rowcount
                 conn.execute(
-                    "INSERT OR IGNORE INTO rejection_mail_seen (gmail_id, fetched_at) "
-                    "VALUES (?,?)", (mid, now_iso()))
+                    """INSERT OR IGNORE INTO rejection_mail_seen
+                         (mailbox_id, gmail_id, fetched_at) VALUES (?,?,?)""",
+                    (mailbox_id, mid, now_iso()))
             new_emails += 1
     except HttpError as exc:
         if exc.resp.status == 403:
@@ -721,8 +771,6 @@ def fetch_rejections() -> dict:
                 "Google Cloud project, then reconnect.") from exc
         raise RejectionsError(f"Gmail API error: {exc.reason or exc}") from exc
 
-    refresh_matches()
-    _dismiss_noise()
     return {
         "emails": new_emails,
         "rejections": new_rejections,
@@ -883,10 +931,8 @@ def _auto_loop() -> None:
         try:
             if is_connected():
                 fetch_rejections()
-        except RejectionsError as exc:
-            text = str(exc).lower()
-            if "expired" in text or "revoked" in text or "reconnect" in text:
-                _mark_auth_inactive(str(exc))
+        except RejectionsError:
+            pass
         except Exception:
             pass
         time.sleep(AUTO_FETCH_INTERVAL_S)
