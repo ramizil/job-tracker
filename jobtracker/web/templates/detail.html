@@ -303,7 +303,7 @@
             {% if h.note %}
             <div class="hist-note-body md">{{ h.note | md | safe }}</div>
             <details class="hist-note-edit">
-              <summary class="btn sm">Edit note</summary>
+              <summary class="btn-icon" title="Edit note" aria-label="Edit note">✎</summary>
               <form method="post"
                     action="{{ url_for('main.history_note_save', app_id=app.id, hist_id=h.id) }}"
                     class="stack mt">
@@ -314,7 +314,7 @@
             {% else %}
             <span class="muted">—</span>
             <details class="hist-note-edit">
-              <summary class="btn sm">Add note</summary>
+              <summary class="btn-icon" title="Add note" aria-label="Add note">✎</summary>
               <form method="post"
                     action="{{ url_for('main.history_note_save', app_id=app.id, hist_id=h.id) }}"
                     class="stack mt">

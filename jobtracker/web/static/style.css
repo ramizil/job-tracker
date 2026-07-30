@@ -466,7 +466,7 @@ table.mini td.r{text-align:right;color:var(--muted)}
 }
 .hist-note-body p,.notes-body p{margin:0 0 .55em}
 .hist-note-body p:last-child,.notes-body p:last-child{margin-bottom:0}
-.hist-note-edit{margin-top:6px}
+.hist-note-edit{margin-top:4px}
 .hist-note-edit > summary{cursor:pointer;list-style:none}
 .hist-note-edit textarea,.notes-body + details textarea,details .stack textarea{
   width:100%;min-height:6rem;resize:vertical
@@ -617,6 +617,17 @@ html[data-theme="light"] .status-not-applied{
 .btn.danger{background:rgba(58,20,20,.7);border-color:rgba(251,113,133,.5);color:#ffc0c8}
 .btn.danger:hover{box-shadow:0 10px 22px -12px rgba(251,113,133,.7);border-color:rgba(251,113,133,.8)}
 .btn.sm{padding:5px 11px;font-size:calc(var(--base-font) * .86)}
+.btn-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:1.6rem;height:1.6rem;padding:0;margin:0;
+  border:1px solid transparent;border-radius:6px;
+  background:transparent;color:var(--muted);cursor:pointer;
+  font-size:calc(var(--base-font) * .95);line-height:1;
+  opacity:.7;transition:opacity .15s,color .15s,border-color .15s,background .15s;
+}
+.btn-icon:hover{opacity:1;color:var(--ink);border-color:var(--rule);background:var(--panel2)}
+summary.btn-icon{list-style:none}
+summary.btn-icon::-webkit-details-marker{display:none}
 input,select,textarea{background:var(--pre-bg);border:1px solid var(--rule);color:var(--ink);padding:9px 11px;border-radius:10px;font:inherit;font-size:var(--base-font);transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(34,211,238,.18),0 0 18px -4px rgba(34,211,238,.55)}
 select option{background:var(--bg2);color:var(--ink)}
