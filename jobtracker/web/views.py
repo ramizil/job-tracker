@@ -2096,6 +2096,25 @@ def description_save(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id) + "#job-description")
 
 
+@bp.route("/application/<int:app_id>/details", methods=["POST"])
+def details_save(app_id: int):
+    """Edit company / title / location / source after capture."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    try:
+        tracker.update_details(
+            app_id,
+            company=request.form.get("company", ""),
+            title=request.form.get("title", ""),
+            location=request.form.get("location", ""),
+            source=request.form.get("source", ""),
+        )
+        flash("Job details saved — match score refreshed.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#job-details")
+
+
 @bp.route("/application/<int:app_id>/delete", methods=["POST"])
 def delete(app_id: int):
     tracker.delete_application(app_id)

@@ -8,11 +8,13 @@
   {% if app.ai_fit_level %}<span class="fit fit-{{ app.ai_fit_level|lower }}" title="{{ app.ai_fit_level }}{% if app.ai_verdict %} · {{ app.ai_verdict }}{% endif %}">{% if app.ai_fit_score is not none %}{{ app.ai_fit_score }}%{% else %}{{ app.ai_fit_level }}{% endif %}</span>{% endif %}
 </div>
 <p class="sub">{{ app.company }}{% if app.location %} · {{ app.location }}{% endif %}
+  {% if app.source %} · <span class="muted" title="Source">{{ app.source }}</span>{% endif %}
   · match {{ '%.0f'|format(app.match_score or 0) }}%
   {% if app.url %} · <a href="{{ url_for('main.open_external', url=app.url) }}" target="_blank" rel="noopener">job link ↗</a>{% endif %}
   {% if app.contact %} · <span title="{{ app.contact }}">👤 {{ app.contact.splitlines()[0] }}</span>{% endif %}
   · <a href="#company">🔎 company insight</a>
-  · <a href="{{ url_for('main.share', app_id=app.id) }}" title="Download the AI insights as a standalone HTML page you can email">📤 export analysis (HTML)</a></p>
+  · <a href="{{ url_for('main.share', app_id=app.id) }}" title="Download the AI insights as a standalone HTML page you can email">📤 export analysis (HTML)</a>
+  · <a href="#job-details">✏️ edit details</a></p>
 
 <nav class="tabbar" id="detail-tabs">
   <button type="button" class="tab-btn active" data-tab="overview">📋 Overview</button>
@@ -168,6 +170,48 @@
         <button class="btn" type="submit">Save resume link</button>
         <p class="muted sm">Manage labels &amp; defaults in
           <a href="{{ url_for('main.my_resumes') }}">My resumes</a>.</p>
+      </form>
+    </section>
+
+    <section class="panel" id="job-details">
+      <div class="panel-head">
+        <h2>Job details</h2>
+      </div>
+      <p class="muted sm">Fix company / title / location / source after capture
+        (LinkedIn alerts often leave these incomplete or wrong).</p>
+      <form method="post" action="{{ url_for('main.details_save', app_id=app.id) }}"
+            class="stack">
+        <div class="row">
+          <label style="flex:1">Company
+            <input name="company" required value="{{ app.company or '' }}"
+                   autocomplete="organization">
+          </label>
+          <label style="flex:1">Title
+            <input name="title" required value="{{ app.title or '' }}">
+          </label>
+        </div>
+        <div class="row">
+          <label style="flex:1">Location
+            <input name="location" value="{{ app.location or '' }}"
+                   placeholder="City / remote">
+          </label>
+          <label style="flex:1">Source
+            <input name="source" value="{{ app.source or '' }}"
+                   placeholder="linkedin, alljobs, paste, …" list="source-suggestions">
+            <datalist id="source-suggestions">
+              <option value="linkedin">
+              <option value="linkedin-alert">
+              <option value="indeed">
+              <option value="alljobs">
+              <option value="drushim">
+              <option value="matrix">
+              <option value="paste">
+              <option value="manual">
+              <option value="search">
+            </datalist>
+          </label>
+        </div>
+        <button class="btn primary" type="submit">Save job details</button>
       </form>
     </section>
 

@@ -587,6 +587,41 @@ def set_description(app_id: int, description: str,
         return cur.rowcount > 0
 
 
+def update_details(app_id: int, *, company: str, title: str,
+                   location: str = "", source: str = "") -> bool:
+    """Update core job fields (company / title / location / source).
+
+    Refreshes ``match_score`` from the (possibly new) title + existing
+    description. Raises ``ValueError`` if the new company+title+url collides
+    with another application.
+    """
+    company = (company or "").strip()
+    title = (title or "").strip()
+    location = (location or "").strip()
+    source = (source or "").strip()
+    if not company or not title:
+        raise ValueError("Company and title are required.")
+    row = get_application(app_id)
+    if not row:
+        return False
+    from .matcher import score_job
+    score = score_job(title, row["description"] or "").score
+    try:
+        with get_connection() as conn:
+            cur = conn.execute(
+                """UPDATE applications
+                      SET company=?, title=?, location=?, source=?,
+                          match_score=?, updated_at=?
+                    WHERE id=?""",
+                (company, title, location, source, score, now_iso(), app_id),
+            )
+            return cur.rowcount > 0
+    except sqlite3.IntegrityError as exc:
+        raise ValueError(
+            "Another application already uses this company + title + URL."
+        ) from exc
+
+
 def set_ai_analysis(app_id: int, analysis: dict[str, Any]) -> bool:
     """Persist a Gemini fit-analysis result on the application."""
     import json
