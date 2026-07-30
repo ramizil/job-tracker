@@ -1424,6 +1424,11 @@ def alert_capture(alert_id: int):
     gmail_alerts.link_application(alert_id, app_id)
     flash(f"Captured alert as application #{app_id} — review and apply when ready.",
           "ok")
+    if request.form.get("quick_ai") and ai.is_configured():
+        done, failed = _run_quick_ai(app_id)
+        _flash_quick_ai(done, failed)
+    elif request.form.get("quick_ai") and not ai.is_configured():
+        flash("Quick AI skipped — AI is not configured in Settings.", "error")
     return redirect(url_for("main.detail", app_id=app_id))
 
 
@@ -2078,6 +2083,15 @@ def description_save(app_id: int):
         abort(404)
     text = request.form.get("description", "")
     tracker.set_description(app_id, text)
+    run_quick = bool(request.form.get("quick_ai"))
+    if run_quick:
+        if not ai.is_configured():
+            flash("Job description saved, but AI is not configured.", "error")
+            return redirect(url_for("main.detail", app_id=app_id) + "#job-description")
+        flash("Job description saved — running Quick AI Analysis…", "ok")
+        done, failed = _run_quick_ai(app_id)
+        _flash_quick_ai(done, failed)
+        return redirect(url_for("main.detail", app_id=app_id) + "#ai-generate")
     flash("Job description saved — match score refreshed.", "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#job-description")
 
@@ -2367,13 +2381,62 @@ _BATCH_ITEMS = {
 # doesn't trip the provider's per-minute rate limit (e.g. Gemini free tier).
 _AUTOGEN_GAP_S = 1.0
 
+# One-click “Quick AI Analysis” plan (alert capture / save description / panel).
+# Fit analysis already cascades ATS + recruiter pitch inside _generate_one.
+# Cover uses language="bi" (HE + EN). Note uses "he" (HE + EN divider).
+_QUICK_AI_PLAN: list[tuple[str, str]] = [
+    ("company", "en"),
+    ("analyze", "en"),
+    ("salary", "en"),
+    ("note", "he"),
+    ("cover", "bi"),
+    ("pitch", "he"),
+]
+
+
+def _run_quick_ai(app_id: int) -> tuple[list[str], list[str]]:
+    """Run the Quick AI Analysis plan. Returns (done_labels, failed_labels)."""
+    r = tracker.get_application(app_id)
+    if not r:
+        return [], ["application not found"]
+    if not (r["description"] or "").strip():
+        return [], ["job description is empty — paste the posting text first"]
+    done: list[str] = []
+    failed: list[str] = []
+    for idx, (key, lang) in enumerate(_QUICK_AI_PLAN):
+        if idx:
+            time.sleep(_AUTOGEN_GAP_S)
+        try:
+            # Reload so analyze → pitch hints see fresh analysis.
+            r = tracker.get_application(app_id) or r
+            _generate_one(app_id, key, r, language=lang)
+            label = _BATCH_ITEMS[key]
+            if key == "analyze":
+                label = "fit analysis + ATS check + recruiter pitch"
+            elif key == "cover" and lang == "bi":
+                label = "cover letter (EN + HE)"
+            elif key == "note" and lang == "he":
+                label = "recruiter note (HE + EN)"
+            done.append(label)
+        except Exception as exc:
+            failed.append(f"{_BATCH_ITEMS.get(key, key)} ({exc})")
+    return done, failed
+
+
+def _flash_quick_ai(done: list[str], failed: list[str]) -> None:
+    if done:
+        flash("Quick AI Analysis — generated: " + ", ".join(done) + ".", "ok")
+    if failed:
+        flash("Quick AI Analysis — failed: " + "; ".join(failed) + ".", "error")
+
 
 def _generate_one(app_id, key, r, language="en", instructions=""):
     """Generate a single AI artefact and persist it. Raises on failure.
 
     Fit analysis, company research, interview prep, mock interview and QA
     exercise are always bilingual (EN+HE). The recruiter note always includes
-    an English version. ``language`` still applies to cover letter.
+    an English version. ``language`` still applies to cover letter; use
+    ``language="bi"`` for a Hebrew + English cover letter (divider).
     """
     title, company = r["title"], r["company"]
     location, description = r["location"] or "", r["description"] or ""
@@ -2394,9 +2457,23 @@ def _generate_one(app_id, key, r, language="en", instructions=""):
             # Fit analysis already saved — recruiter tailor is best-effort.
             pass
     elif key == "cover":
-        tracker.set_cover_letter(app_id, ai.cover_letter(
-            title=title, company=company, location=location,
-            description=description, instructions=instructions, language=language))
+        if (language or "").lower() == "bi":
+            he = ai.cover_letter(
+                title=title, company=company, location=location,
+                description=description, instructions=instructions,
+                language="he")
+            time.sleep(_AUTOGEN_GAP_S)
+            en = ai.cover_letter(
+                title=title, company=company, location=location,
+                description=description, instructions=instructions,
+                language="en")
+            text = f"Hebrew:\n{he.strip()}\n\n———\n\nEnglish:\n{en.strip()}"
+            tracker.set_cover_letter(app_id, text)
+        else:
+            tracker.set_cover_letter(app_id, ai.cover_letter(
+                title=title, company=company, location=location,
+                description=description, instructions=instructions,
+                language=language))
     elif key == "note":
         tracker.set_recruiter_note(app_id, ai.recruiter_note(
             title=title, company=company, instructions=instructions,
@@ -2511,6 +2588,19 @@ def generate_batch(app_id: int):
     if failed:
         flash("Failed: " + "; ".join(failed) + ".", "error")
     return redirect(url_for("main.detail", app_id=app_id))
+
+
+@bp.route("/application/<int:app_id>/quick-ai", methods=["POST"])
+def quick_ai(app_id: int):
+    """Run the fixed Quick AI Analysis pack (fit, cover, note, pitches, research)."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    if not ai.is_configured():
+        flash("AI is not configured — set a provider key in Settings.", "error")
+        return redirect(url_for("main.detail", app_id=app_id))
+    done, failed = _run_quick_ai(app_id)
+    _flash_quick_ai(done, failed)
+    return redirect(url_for("main.detail", app_id=app_id) + "#ai-generate")
 
 
 @bp.route("/application/<int:app_id>/ats-check", methods=["POST"])

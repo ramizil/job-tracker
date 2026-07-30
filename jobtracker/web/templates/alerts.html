@@ -177,6 +177,13 @@
               <button class="btn sm primary" type="submit"
                       title="One-click: fetch the job page and save as an application. Falls back to Paste if the page is blocked.">📋 Capture</button>
             </form>
+            <form method="post" action="{{ url_for('main.alert_capture', alert_id=r.id) }}"
+                  style="display:inline"
+                  data-loading="Capturing job and running Quick AI Analysis (fit, cover, pitches, research)… this can take several minutes.">
+              <input type="hidden" name="quick_ai" value="1">
+              <button class="btn sm" type="submit"
+                      title="Capture the job, then run Quick AI Analysis (fit, cover letter, recruiter note, pitches, salary, company, ATS)">⚡ Quick AI</button>
+            </form>
           {% endif %}
           {% if r.dismissed %}
             <form method="post" action="{{ url_for('main.alert_restore', alert_id=r.id) }}" style="display:inline">

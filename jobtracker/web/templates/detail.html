@@ -186,11 +186,17 @@
         <pre class="jd jd-view">{{ app.description }}</pre>
       {% endif %}
       <form method="post" action="{{ url_for('main.description_save', app_id=app.id) }}"
-            class="stack jd-edit-form">
+            class="stack jd-edit-form" id="jd-edit-form">
         <textarea name="description" rows="16" dir="auto"
                   placeholder="Paste the full job description here…">{{ app.description or '' }}</textarea>
         <div class="inline">
           <button class="btn primary" type="submit">Save description</button>
+          {% if ai_on %}
+          <button class="btn" type="submit" name="quick_ai" value="1"
+                  title="Save the description, then run Quick AI Analysis (fit, cover, note, pitches, research, ATS)"
+                  onclick="var f=this.form; f.setAttribute('data-loading','Saving description and running Quick AI Analysis… this can take several minutes.');">
+            ⚡ Save &amp; Quick AI Analysis</button>
+          {% endif %}
           {% if app.description %}
           <button type="button" class="btn jd-edit-cancel">Cancel</button>
           {% endif %}
@@ -302,6 +308,16 @@
         <p class="muted">Add <code>GEMINI_API_KEY</code> in <a href="{{ url_for('main.settings') }}">Settings</a> to enable AI generation.</p>
       {% else %}
         <p class="muted">Tick what you want and generate it all in one click. Re-running an item overwrites the previous result.</p>
+        <form method="post" action="{{ url_for('main.quick_ai', app_id=app.id) }}"
+              data-loading="Running Quick AI Analysis (company, fit+ATS, salary, note, cover, pitches)… this can take several minutes."
+              class="stack" style="margin-bottom:14px">
+          <button class="btn primary" type="submit"
+                  title="Fit analysis, cover letter (EN+HE), recruiter note (HE+EN), recruiter + interview pitches, salary, company research, ATS">
+            ⚡ Quick AI Analysis</button>
+          <p class="muted sm" style="margin:4px 0 0">One click:
+            fit (EN+HE) + ATS + recruiter pitch · cover letter (EN+HE) · note to recruiter (HE+EN) ·
+            interview pitch (HE) · salary + company research (EN+HE).</p>
+        </form>
         <form method="post" action="{{ url_for('main.generate_batch', app_id=app.id) }}" data-loading="Generating your selected items with Gemini… this can take a minute or two." class="stack">
           <div class="gen-picks">
             <label class="gen-pick"><input type="checkbox" name="items" value="analyze" checked>
