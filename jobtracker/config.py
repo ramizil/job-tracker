@@ -121,6 +121,7 @@ EDITABLE_KEYS: dict[str, str] = {
     "ADZUNA_APP_KEY": "Adzuna app key (optional)",
     "WEB_SEARCH_SITES": "Comma-separated site: filters for the web-search source (ATS job boards)",
     "SOURCES_DISABLED": "Comma-separated source names to skip (jsearch, jooble, adzuna, websearch, remotive, drushim, sqlink, alljobs, matrix)",
+    "AUTO_SEARCH": "Re-run the last Search query automatically every hour (1/0)",
     "AI_PROVIDER": "AI provider: gemini | openai | anthropic | groq | cursor",
     "AI_FALLBACK": "Auto-switch to another configured AI provider when one fails (1/0)",
     "GEMINI_API_KEY": "Gemini AI key (fit analysis + resume tailoring)",
@@ -153,6 +154,7 @@ DEFAULT_WEB_SEARCH_SITES = ("comeet.com, greenhouse.io, jobs.lever.co, "
                             "jobs.smartrecruiters.com")
 WEB_SEARCH_SITES = DEFAULT_WEB_SEARCH_SITES
 SOURCES_DISABLED = ""
+AUTO_SEARCH = True
 AI_PROVIDER = "gemini"
 AI_FALLBACK = False
 GEMINI_API_KEY = ""
@@ -182,7 +184,7 @@ def reload() -> None:
     global PITCH_RECRUITER_PATH, PITCH_RECRUITER_HTML_PATH
     global BUILT_RESUME_PATH, TAILORED_DIR
     global RAPIDAPI_KEY, JOOBLE_API_KEY, ADZUNA_APP_ID, ADZUNA_APP_KEY
-    global WEB_SEARCH_SITES, SOURCES_DISABLED
+    global WEB_SEARCH_SITES, SOURCES_DISABLED, AUTO_SEARCH
     global AI_PROVIDER, AI_FALLBACK, GEMINI_API_KEY, GEMINI_MODEL
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
     global GROQ_API_KEY, GROQ_MODEL
@@ -219,6 +221,9 @@ def reload() -> None:
                         or os.getenv("GOOGLE_CSE_SITES", "").strip()
                         or DEFAULT_WEB_SEARCH_SITES)
     SOURCES_DISABLED = os.getenv("SOURCES_DISABLED", "").strip().lower()
+    # Default ON when unset — hourly re-run of the last Search query.
+    _auto = os.getenv("AUTO_SEARCH", "1").strip().lower()
+    AUTO_SEARCH = _auto in ("1", "true", "yes", "on")
     AI_PROVIDER = (os.getenv("AI_PROVIDER", "gemini").strip().lower() or "gemini")
     AI_FALLBACK = os.getenv("AI_FALLBACK", "").strip().lower() in ("1", "true", "yes", "on")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -252,6 +257,7 @@ def current_settings() -> dict[str, str]:
         "ADZUNA_APP_KEY": ADZUNA_APP_KEY,
         "WEB_SEARCH_SITES": WEB_SEARCH_SITES,
         "SOURCES_DISABLED": SOURCES_DISABLED,
+        "AUTO_SEARCH": "1" if AUTO_SEARCH else "",
         "AI_PROVIDER": AI_PROVIDER,
         "AI_FALLBACK": "1" if AI_FALLBACK else "",
         "GEMINI_API_KEY": GEMINI_API_KEY,

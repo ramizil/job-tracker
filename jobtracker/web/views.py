@@ -20,9 +20,9 @@ from flask import (
 )
 
 from .. import (ai, analytics, backup, config, connection_status, exporter,
-                gitbackup, gsheets, gmail_alerts, gmail_rejections, pitch,
-                resumes, search_hidden, search_meta, syncstatus, tracker, tts,
-                usage)
+                gitbackup, gsheets, gmail_alerts, gmail_rejections, job_search,
+                pitch, resumes, search_hidden, search_meta, syncstatus, tracker,
+                tts, usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
@@ -3607,58 +3607,23 @@ def resume_builder_pdf():
 # Job search — cache last query + results per profile (web search is slow).
 # --------------------------------------------------------------------------- #
 def _last_search_path() -> Path:
-    return Path(config.PROFILE_DIR) / "last_search.json"
+    return job_search.last_search_path()
 
 
 def _job_result_to_dict(job: JobResult) -> dict:
-    return {
-        "source": job.source,
-        "title": job.title,
-        "company": job.company,
-        "location": job.location,
-        "url": job.url,
-        "description": job.description,
-        "salary": job.salary,
-        "posted": job.posted,
-        "external_id": job.external_id,
-    }
+    return job_search.job_result_to_dict(job)
 
 
 def _job_result_from_dict(data: dict) -> JobResult:
-    return JobResult(
-        source=data.get("source", ""),
-        title=data.get("title", ""),
-        company=data.get("company", ""),
-        location=data.get("location", ""),
-        url=data.get("url", ""),
-        description=data.get("description", ""),
-        salary=data.get("salary", ""),
-        posted=data.get("posted", ""),
-        external_id=data.get("external_id", ""),
-    )
+    return job_search.job_result_from_dict(data)
 
 
 def _save_last_search(query: str, location: str, results: list) -> None:
-    payload = {
-        "query": query,
-        "location": location,
-        "searched_at": now_iso(),
-        "results": [
-            {"job": _job_result_to_dict(item["job"]), "score": item["score"]}
-            for item in results
-        ],
-    }
-    path = _last_search_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    job_search.save_last_search(query, location, results)
 
 
 def _load_last_search() -> dict | None:
-    try:
-        data = json.loads(_last_search_path().read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except (OSError, ValueError):
-        return None
+    return job_search.load_last_search()
 
 
 def _enrich_search_results(results: list, query: str = "",
@@ -3740,6 +3705,7 @@ def search():
             configured=configured, jooble_usage=None, ready=rd, cached_at=None,
             show_dismissed=show_dismissed, show_ignored=show_ignored,
             hidden_rows=rows, hide_counts=hide_counts,
+            auto_search=config.AUTO_SEARCH,
         )
 
     if request.method == "POST" and not rd["ready"]:
@@ -3760,6 +3726,7 @@ def search():
             configured=configured, jooble_usage=None, ready=rd,
             cached_at=cached_at, show_dismissed=False, show_ignored=False,
             hidden_rows=[], hide_counts=hide_counts,
+            auto_search=config.AUTO_SEARCH,
         )
     if request.method == "GET":
         cached = _load_last_search()
@@ -3773,64 +3740,9 @@ def search():
                 if isinstance(r, dict) and isinstance(r.get("job"), dict)
             ], query=query)
     if request.method == "POST" and configured:
-        prof = resume_mod.load_profile()
-        if not query:
-            query = " OR ".join(prof.get("target_titles", [])[:3])
-        hide_keys = search_hidden.hidden_key_set()
-        for src in get_sources():
-            try:
-                count = 0
-                # Ask sources for a deeper pool; we filter irrelevant titles
-                # (e.g. Remotive returning sales roles for query "QA").
-                for job in src.search(query, location=location, limit=40):
-                    if not job_matches_query(
-                            query, title=job.title,
-                            description=job.description or ""):
-                        continue
-                    if search_hidden.is_hidden(
-                            job.url, job.company, job.title, key_set=hide_keys):
-                        continue
-                    m = score_job(job.title, job.description, prof)
-                    results.append({"job": job, "score": m.score})
-                    count += 1
-                    if count >= 20:
-                        break
-                if src.name != "websearch":
-                    flash(f"{src.name}: {count} result(s).", "ok")
-                else:
-                    soft = sum(
-                        1 for item in results
-                        if getattr(item.get("job"), "raw", None)
-                        and (item["job"].raw or {}).get("soft_verify")
-                    ) if count else 0
-                    if count and soft:
-                        flash(f"websearch: {count} result(s) for “{location or 'any'}” "
-                              f"— some links could not be fully verified live.",
-                              "ok")
-                    elif count:
-                        flash(f"websearch: {count} live posting(s) in "
-                              f"“{location or 'any'}”.", "ok")
-                    else:
-                        # DuckDuckGo is often rate-limited or empty; other
-                        # boards (Drushim/AllJobs/Matrix…) usually still work.
-                        others = sum(
-                            1 for item in results
-                            if not str(getattr(item.get("job"), "source", "")
-                                       ).startswith("web:")
-                        )
-                        tip = ("DuckDuckGo found nothing useful this time "
-                               f"for “{location or 'any'}”. Wait ~1 min and "
-                               "retry, or use a shorter keyword.")
-                        if others:
-                            flash(f"websearch: skipped — {tip} "
-                                  f"({others} result(s) from other sources).",
-                                  "ok")
-                        else:
-                            flash(f"websearch: {tip}", "error")
-            except Exception as exc:
-                flash(f"{src.name}: {exc}", "error")
-        results.sort(key=lambda x: x["score"], reverse=True)
-        _save_last_search(query, location, results)
+        if not (query or "").strip():
+            query, location = job_search.resolve_query_location("", location)
+        results = job_search.run_search(query, location, flash_cb=flash)
         cached_at = now_iso()
     # Jooble free-tier usage feedback (only while the source is active).
     ju = (usage.jooble_usage(config.JOOBLE_API_KEY)
@@ -3851,7 +3763,7 @@ def search():
         "search.html", results=results, query=query, location=location,
         configured=configured, jooble_usage=ju, ready=rd, cached_at=cached_at,
         show_dismissed=False, show_ignored=False, hidden_rows=[],
-        hide_counts=hide_counts,
+        hide_counts=hide_counts, auto_search=config.AUTO_SEARCH,
     )
 
 

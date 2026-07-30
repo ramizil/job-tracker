@@ -12,6 +12,13 @@
     {% if jooble_usage and jooble_usage.tracked %}
       · Jooble: <b class="{{ 'fit fit-no' if jooble_usage.low else '' }}">{{ jooble_usage.remaining }}</b>/{{ jooble_usage.limit }} requests left
     {% endif %}
+    {% if auto_search %}
+      · Auto-search every hour (uses your last query — toggle in
+      <a href="{{ url_for('main.settings') }}#tab-sources">Settings → Job sources</a>)
+    {% else %}
+      · Auto-search off
+      (<a href="{{ url_for('main.settings') }}#tab-sources">enable in Settings</a>)
+    {% endif %}
   </p>
 {% endif %}
 

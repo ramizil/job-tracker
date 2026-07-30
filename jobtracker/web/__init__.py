@@ -29,4 +29,7 @@ def create_app() -> Flask:
     # silently in the background.
     from ..connection_status import start_health_probe
     start_health_probe()
+    # Re-run the last Search query every hour (toggle AUTO_SEARCH in Settings).
+    from ..job_search import start_auto_search
+    start_auto_search()
     return app

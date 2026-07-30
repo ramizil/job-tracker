@@ -256,6 +256,15 @@
         </label></div>
     </div>
     <p class="muted">Currently active sources: <b>{{ sources | join(', ') if sources else 'none' }}</b></p>
+    <div class="setting mt">
+      <label class="check-setting" for="AUTO_SEARCH">
+        <input type="checkbox" id="AUTO_SEARCH" name="AUTO_SEARCH" form="settings-form" value="1"
+               {{ 'checked' if values.AUTO_SEARCH }}>
+        Auto-search every hour</label>
+      <small>While Job Tracker is running, re-runs your <b>last Search</b> query
+        (or your resume target titles if you haven’t searched yet) and refreshes
+        the Search page results. Does not auto-save applications.</small>
+    </div>
   </section>
 </div>
 
