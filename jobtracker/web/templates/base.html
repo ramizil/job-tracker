@@ -163,9 +163,17 @@
         }, MAX_MS);
       }
 
-      document.querySelectorAll('form[data-loading]').forEach(function (form) {
-        form.addEventListener('submit', function () {
-          show(form.getAttribute('data-loading'));
+      document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+          var msg = null;
+          // Prefer per-button data-loading (e.g. Save vs Save & Quick AI).
+          if (e.submitter && e.submitter.getAttribute('data-loading')) {
+            msg = e.submitter.getAttribute('data-loading');
+          } else if (form.getAttribute('data-loading')) {
+            msg = form.getAttribute('data-loading');
+          }
+          if (!msg) return;
+          show(msg);
           form.querySelectorAll('button[type="submit"]').forEach(function (b) {
             b.disabled = true; b.classList.add('is-busy');
           });

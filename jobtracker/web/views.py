@@ -2083,7 +2083,8 @@ def description_save(app_id: int):
         abort(404)
     text = request.form.get("description", "")
     tracker.set_description(app_id, text)
-    run_quick = bool(request.form.get("quick_ai"))
+    # Accept either the submit-button name or ?quick_ai=1 on formaction.
+    run_quick = bool(request.form.get("quick_ai") or request.args.get("quick_ai"))
     if run_quick:
         if not ai.is_configured():
             flash("Job description saved, but AI is not configured.", "error")

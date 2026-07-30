@@ -233,13 +233,15 @@
             class="stack jd-edit-form" id="jd-edit-form">
         <textarea name="description" rows="16" dir="auto"
                   placeholder="Paste the full job description here…">{{ app.description or '' }}</textarea>
-        <div class="inline">
-          <button class="btn primary" type="submit">Save description</button>
+        <div class="inline" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button class="btn primary" type="submit"
+                  data-loading="Saving description…">Save description</button>
           {% if ai_on %}
           <button class="btn" type="submit" name="quick_ai" value="1"
-                  title="Save the description, then run Quick AI Analysis (fit, cover, note, pitches, research, ATS)"
-                  onclick="var f=this.form; f.setAttribute('data-loading','Saving description and running Quick AI Analysis… this can take several minutes.');">
-            ⚡ Save &amp; Quick AI Analysis</button>
+                  formaction="{{ url_for('main.description_save', app_id=app.id, quick_ai=1) }}"
+                  data-loading="Saving description and running Quick AI Analysis — this can take several minutes…"
+                  title="Save the description, then run Quick AI Analysis (fit, cover, note, pitches, research, ATS)">
+            Save &amp; Quick AI Analysis</button>
           {% endif %}
           {% if app.description %}
           <button type="button" class="btn jd-edit-cancel">Cancel</button>
