@@ -704,6 +704,162 @@
 </div>
 
 <div class="tab-page" id="tab-interview">
+    <section class="panel ai" id="call-debrief"
+             data-transcribe="{{ url_for('main.call_transcribe', app_id=app.id) }}"
+             data-gemini="{{ '1' if is_gemini else '0' }}">
+      <div class="panel-head"><h2>📞 Call debrief</h2>
+        {% if app.call_insights_at %}<span class="muted sm">insights {{ (app.call_insights_at or '')[:16].replace('T',' ') }}</span>{% endif %}
+      </div>
+      <p class="muted">Record or upload a recruiter / interview call, edit the transcript, then get bilingual
+        coaching — what to improve next time, follow-ups, and a revised spoken pitch.</p>
+
+      <form method="post" action="{{ url_for('main.call_save', app_id=app.id) }}" class="stack" id="call-debrief-form">
+        <div class="row" style="flex-wrap:wrap;gap:10px;align-items:center">
+          <label class="muted sm">Call type
+            <select name="call_kind">
+              {% set ck = app.call_kind or 'screening' %}
+              <option value="screening" {{ 'selected' if ck == 'screening' }}>Recruiter screen</option>
+              <option value="interview" {{ 'selected' if ck == 'interview' }}>Interview</option>
+              <option value="followup" {{ 'selected' if ck == 'followup' }}>Follow-up</option>
+              <option value="other" {{ 'selected' if ck == 'other' }}>Other</option>
+            </select>
+          </label>
+          <label class="muted sm">Transcript language
+            <select id="call-lang" name="language">
+              <option value="he" selected>עברית</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="call-rec-bar" id="call-rec-bar">
+          <button type="button" class="btn sm" id="call-rec-btn">🎙 Record</button>
+          <button type="button" class="btn sm" id="call-stop-btn" disabled>⏹ Stop &amp; transcribe</button>
+          <button type="button" class="btn sm" id="call-file-btn" hidden>📁 Upload audio</button>
+          <input type="file" id="call-file-input" accept="audio/*" capture="microphone" hidden>
+          <span class="muted sm" id="call-rec-status"></span>
+        </div>
+        {% if not is_gemini %}
+        <p class="muted sm">Live transcription needs the AI provider set to <b>Gemini</b> in
+          <a href="{{ url_for('main.settings') }}">Settings</a>. You can still paste a transcript below.</p>
+        {% endif %}
+
+        <label class="muted sm">Transcript
+          <textarea name="transcript" id="call-transcript" rows="12" class="gen-text" dir="auto"
+                    placeholder="Paste the conversation here, or record / upload audio to transcribe…">{{ app.call_transcript or '' }}</textarea>
+        </label>
+        <div class="inline" style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="btn" type="submit">Save transcript</button>
+          {% if ai_on %}
+          <button class="btn primary" type="submit"
+                  formaction="{{ url_for('main.call_insights', app_id=app.id) }}"
+                  data-loading="Analyzing the call (EN + HE coaching)…">
+            ✨ Generate insights
+          </button>
+          {% endif %}
+        </div>
+      </form>
+
+      {% if call_insights %}
+      <div class="call-insights mt">
+        <div class="inline" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+          <span class="pill">{{ call_insights.tone or 'mixed' }}</span>
+          <span class="pill muted">confidence: {{ call_insights.confidence or '—' }}</span>
+          {% if call_insights.call_kind %}<span class="pill muted">{{ call_insights.call_kind }}</span>{% endif %}
+        </div>
+        {% if call_insights.summary_he or call_insights.summary %}
+        <h3 class="sm">Summary</h3>
+        <div class="bi cols">
+          <div class="md" dir="ltr">{{ call_insights.summary | md | safe }}</div>
+          <div class="md he">{{ call_insights.summary_he | md | safe }}</div>
+        </div>
+        {% endif %}
+
+        {% macro bi_list(title, items) -%}
+        {% if items %}
+        <h3 class="sm mt">{{ title }}</h3>
+        <ul class="bi-list">
+          {% for it in items %}
+          <li>
+            {% if it.he %}
+            <div class="bi">
+              <div dir="ltr">{{ it.en }}</div>
+              <div class="he">{{ it.he }}</div>
+            </div>
+            {% else %}
+            <span dir="auto">{{ it.en }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {%- endmacro %}
+
+        {{ bi_list('What went well', call_insights.went_well) }}
+        {{ bi_list('Improve next time', call_insights.improve) }}
+        {{ bi_list('Missed opportunities', call_insights.missed_opportunities) }}
+        {{ bi_list('Follow-ups', call_insights.follow_ups) }}
+        {{ bi_list('Stronger answers', call_insights.suggested_answers) }}
+
+        {% if call_insights.revised_pitch or call_insights.revised_pitch_en %}
+        <h3 class="sm mt">Revised pitch from this call</h3>
+        <div class="bi cols">
+          <div>
+            {% if call_insights.revised_pitch_en %}
+            <pre class="notes" dir="ltr">{{ call_insights.revised_pitch_en }}</pre>
+            {% endif %}
+          </div>
+          <div class="he">
+            {% if call_insights.revised_pitch %}
+            <pre class="notes" dir="rtl">{{ call_insights.revised_pitch }}</pre>
+            {% endif %}
+          </div>
+        </div>
+        {% if ai_on %}
+        <div class="inline mt" style="display:flex;flex-wrap:wrap;gap:8px">
+          <form method="post" action="{{ url_for('main.call_apply_pitch', app_id=app.id) }}">
+            <input type="hidden" name="pitch" value="recruiter">
+            <button class="btn primary sm" type="submit"
+                    data-loading="Saving recruiter pitch from call insights…">
+              Save as recruiter pitch
+            </button>
+          </form>
+          <form method="post" action="{{ url_for('main.call_apply_pitch', app_id=app.id) }}">
+            <input type="hidden" name="pitch" value="interview">
+            <button class="btn sm" type="submit"
+                    data-loading="Saving interview pitch from call insights…">
+              Save as interview pitch
+            </button>
+          </form>
+          <form method="post" action="{{ url_for('main.call_apply_pitch', app_id=app.id) }}"
+                data-loading="Rewriting pitch from this call…">
+            <input type="hidden" name="pitch" value="recruiter">
+            <input type="hidden" name="regenerate" value="1">
+            <button class="btn sm" type="submit">↻ Rewrite recruiter pitch (AI)</button>
+          </form>
+          <form method="post" action="{{ url_for('main.call_apply_pitch', app_id=app.id) }}"
+                data-loading="Rewriting interview pitch from this call…">
+            <input type="hidden" name="pitch" value="interview">
+            <input type="hidden" name="regenerate" value="1">
+            <button class="btn sm" type="submit">↻ Rewrite interview pitch (AI)</button>
+          </form>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {% if ai_on %}
+        <form method="post" action="{{ url_for('main.call_insights', app_id=app.id) }}" class="mt"
+              data-loading="Regenerating call insights…"
+              onsubmit="return confirm('Regenerate call insights? Current EN + HE coaching will be replaced.')">
+          <button class="btn sm" type="submit">↻ Regenerate insights</button>
+        </form>
+        {% endif %}
+      </div>
+      {% elif not ai_on %}
+      <p class="muted mt">Add an AI API key in <a href="{{ url_for('main.settings') }}">Settings</a> to generate insights.</p>
+      {% endif %}
+    </section>
+
     <section class="panel ai" id="prep">
       <div class="panel-head"><h2>🎤 Interview &amp; test prep</h2>
         {% if app.interview_prep_at %}<span class="muted sm">saved {{ (app.interview_prep_at or '')[:16].replace('T',' ') }}</span>{% endif %}
@@ -1354,6 +1510,164 @@
   if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = function () {};
   // Stop speech if the user navigates away.
   window.addEventListener('beforeunload', function () { synth.cancel(); });
+})();
+</script>
+<script>
+// Call debrief: record / upload → Gemini transcription into #call-transcript.
+(function () {
+  var root = document.getElementById('call-debrief');
+  if (!root) return;
+  var URL_TX = root.dataset.transcribe;
+  var GEMINI = root.dataset.gemini === '1';
+  var textEl = document.getElementById('call-transcript');
+  var langEl = document.getElementById('call-lang');
+  var recBtn = document.getElementById('call-rec-btn');
+  var stopBtn = document.getElementById('call-stop-btn');
+  var fileBtn = document.getElementById('call-file-btn');
+  var fileInput = document.getElementById('call-file-input');
+  var recStatus = document.getElementById('call-rec-status');
+  var overlay = document.getElementById('loading-overlay');
+  var msgEl = document.getElementById('loading-msg');
+  if (!textEl || !recBtn) return;
+
+  var media = { on: false, stream: null, ctx: null, src: null, proc: null,
+                buffers: [], length: 0, rate: 16000 };
+
+  function showOverlay(msg) {
+    if (msgEl && msg) msgEl.textContent = msg;
+    if (overlay) overlay.hidden = false;
+  }
+  function hideOverlay() {
+    if (overlay) overlay.hidden = true;
+  }
+
+  function floatTo16BitWav(samples, sampleRate) {
+    var buffer = new ArrayBuffer(44 + samples.length * 2);
+    var view = new DataView(buffer);
+    function wr(off, s) { for (var i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); }
+    wr(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); wr(8, 'WAVE');
+    wr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true); wr(36, 'data'); view.setUint32(40, samples.length * 2, true);
+    var off = 44;
+    for (var i = 0; i < samples.length; i++, off += 2) {
+      var s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+  }
+  function downsample(buffer, inRate, outRate) {
+    if (outRate >= inRate) return buffer;
+    var ratio = inRate / outRate, outLen = Math.round(buffer.length / ratio);
+    var result = new Float32Array(outLen), oi = 0, ii = 0;
+    while (oi < outLen) {
+      var next = Math.round((oi + 1) * ratio), sum = 0, n = 0;
+      for (; ii < next && ii < buffer.length; ii++) { sum += buffer[ii]; n++; }
+      result[oi++] = n ? sum / n : 0;
+    }
+    return result;
+  }
+
+  function uploadForTranscription(blob, filename) {
+    if (!GEMINI) {
+      recStatus.textContent = 'Recorded — voice transcription needs Gemini. Paste the transcript instead.';
+      return;
+    }
+    recStatus.textContent = 'Transcribing…';
+    showOverlay('Transcribing the call… מתמלל את השיחה');
+    var fd = new FormData();
+    fd.append('audio', blob, filename || 'call.wav');
+    fd.append('language', (langEl && langEl.value) || 'he');
+    fetch(URL_TX, { method: 'POST', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        hideOverlay();
+        if (!res.ok) {
+          recStatus.textContent = (res.j && res.j.error) || 'Transcription failed.';
+          return;
+        }
+        var t = (res.j.text || '').trim();
+        if (t) {
+          textEl.value = textEl.value ? (textEl.value.trim() + '\n\n' + t) : t;
+        }
+        recStatus.textContent = t
+          ? '✓ Transcribed — edit if needed, then Generate insights.'
+          : 'Heard nothing — try again or paste the transcript.';
+        textEl.focus();
+      })
+      .catch(function () {
+        hideOverlay();
+        recStatus.textContent = 'Transcription failed — paste the transcript instead.';
+      });
+  }
+
+  function startRecording() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      media.stream = stream;
+      media.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      media.rate = media.ctx.sampleRate;
+      media.src = media.ctx.createMediaStreamSource(stream);
+      media.proc = media.ctx.createScriptProcessor(4096, 1, 1);
+      media.buffers = []; media.length = 0; media.on = true;
+      media.proc.onaudioprocess = function (e) {
+        if (!media.on) return;
+        var ch = e.inputBuffer.getChannelData(0);
+        media.buffers.push(new Float32Array(ch)); media.length += ch.length;
+      };
+      media.src.connect(media.proc); media.proc.connect(media.ctx.destination);
+      recBtn.disabled = true; stopBtn.disabled = false;
+      recStatus.textContent = '● Recording…';
+    }).catch(function () {
+      recStatus.textContent = 'No microphone access — upload audio or paste the transcript.';
+    });
+  }
+
+  function stopRecording() {
+    if (!media.on) return;
+    media.on = false;
+    stopBtn.disabled = true; recBtn.disabled = false;
+    try { media.proc.disconnect(); media.src.disconnect(); } catch (e) {}
+    try { media.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    var merged = new Float32Array(media.length), off = 0;
+    media.buffers.forEach(function (b) { merged.set(b, off); off += b.length; });
+    try { media.ctx.close(); } catch (e) {}
+    var ds = downsample(merged, media.rate, 16000);
+    uploadForTranscription(floatTo16BitWav(ds, 16000), 'call.wav');
+  }
+
+  var canLiveRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+                      && window.isSecureContext;
+
+  if (!GEMINI) {
+    recBtn.hidden = true; stopBtn.hidden = true;
+    if (fileBtn) fileBtn.hidden = true;
+  } else if (canLiveRecord) {
+    recBtn.addEventListener('click', startRecording);
+    stopBtn.addEventListener('click', stopRecording);
+    if (fileBtn) {
+      fileBtn.hidden = false;
+      fileBtn.addEventListener('click', function () { fileInput.click(); });
+      fileInput.addEventListener('change', function () {
+        var f = fileInput.files && fileInput.files[0];
+        if (!f) return;
+        uploadForTranscription(f, f.name || 'call');
+        fileInput.value = '';
+      });
+    }
+  } else {
+    recBtn.hidden = true; stopBtn.hidden = true;
+    if (fileBtn) {
+      fileBtn.hidden = false;
+      fileBtn.addEventListener('click', function () { fileInput.click(); });
+      fileInput.addEventListener('change', function () {
+        var f = fileInput.files && fileInput.files[0];
+        if (!f) return;
+        uploadForTranscription(f, f.name || 'call');
+        fileInput.value = '';
+      });
+    }
+  }
 })();
 </script>
 {% endblock %}

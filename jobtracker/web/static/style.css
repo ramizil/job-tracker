@@ -471,6 +471,11 @@ table.mini td.r{text-align:right;color:var(--muted)}
 .hist-note-edit textarea,.notes-body + details textarea,details .stack textarea{
   width:100%;min-height:6rem;resize:vertical
 }
+.call-rec-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px}
+.bi-list{margin:0;padding-left:1.2rem}
+.bi-list > li{margin:0 0 .65em}
+.bi-list .bi{gap:12px}
+h3.sm{font-size:calc(var(--base-font) * .95);margin:1rem 0 .4rem}
 
 /* Horizontal bar charts (rejection stage / reason, etc.) */
 .hbar-chart{display:flex;flex-direction:column;gap:8px;margin-top:4px}

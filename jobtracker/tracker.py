@@ -901,6 +901,46 @@ def get_rejection_analysis(app_id: int) -> dict[str, Any] | None:
         return None
 
 
+def set_call_transcript(app_id: int, text: str, kind: str | None = None) -> bool:
+    """Save / replace the editable call transcript (and optional call kind)."""
+    kind_val = (kind or "").strip().lower() or None
+    with get_connection() as conn:
+        if kind_val is not None:
+            cur = conn.execute(
+                "UPDATE applications SET call_transcript=?, call_kind=?, updated_at=? WHERE id=?",
+                ((text or "").strip(), kind_val, now_iso(), app_id),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE applications SET call_transcript=?, updated_at=? WHERE id=?",
+                ((text or "").strip(), now_iso(), app_id),
+            )
+        return cur.rowcount > 0
+
+
+def set_call_insights(app_id: int, data: dict[str, Any]) -> bool:
+    """Persist bilingual AI call-debrief insights (JSON)."""
+    import json
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET call_insights=?, call_insights_at=?, updated_at=? WHERE id=?",
+            (json.dumps(data, ensure_ascii=False), now_iso(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
+def get_call_insights(app_id: int) -> dict[str, Any] | None:
+    import json
+    row = get_application(app_id)
+    if not row or not row["call_insights"]:
+        return None
+    try:
+        data = json.loads(row["call_insights"])
+        return data if isinstance(data, dict) else None
+    except (TypeError, ValueError):
+        return None
+
+
 def set_ats_check(app_id: int, data: dict[str, Any]) -> bool:
     """Persist the ATS keyword-screen result (stored as JSON)."""
     import json

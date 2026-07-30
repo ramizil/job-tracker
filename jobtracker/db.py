@@ -209,6 +209,10 @@ EXTRA_COLUMNS: dict[str, str] = {
     "feedback_request": "TEXT",    # polite letter asking why I was rejected
     "feedback_request_at": "TEXT",
     "rejection_note": "TEXT",      # free-text note captured on rejection
+    "call_transcript": "TEXT",     # real call / screen conversation transcript
+    "call_kind": "TEXT",           # screening | interview | followup | other
+    "call_insights": "TEXT",       # AI debrief of the call (JSON, bilingual)
+    "call_insights_at": "TEXT",
     "starred": "INTEGER DEFAULT 0",  # preferred / favourite job flag
     "resume_id": "INTEGER",          # FK → resumes.id (which CV was sent)
 }

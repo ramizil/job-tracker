@@ -511,19 +511,22 @@ def _generate_anthropic(prompt: str, *, as_json: bool = False) -> str:
 
 
 def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav",
-                     language: str = "he") -> str:
+                     language: str = "he", *, speakers: bool = False) -> str:
     """Transcribe spoken audio to text using Gemini (multimodal).
 
     Gemini-only: speech-to-text isn't exposed through the OpenAI/Anthropic text
     paths here, so the caller should fall back to typing when the provider isn't
     Gemini. Returns the plain transcript (may be empty for silent audio).
+
+    When ``speakers`` is True (call debriefs), label turns as ``Candidate:`` /
+    ``Other:`` and keep paragraph breaks between speakers.
     """
     if not audio_bytes:
         raise AIError("No audio was received to transcribe.")
     if active_provider() != "gemini" or not config.GEMINI_API_KEY:
         raise AIError(
             "Voice transcription needs a Gemini API key (set the AI provider to "
-            "Gemini in Settings). You can type your answer instead.")
+            "Gemini in Settings). You can type or paste the transcript instead.")
 
     import time
 
@@ -531,11 +534,21 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav",
     from google.genai import types  # type: ignore
 
     ln = _lang_name(language)
-    instruction = (
-        f"Transcribe this {ln} audio recording exactly as spoken. "
-        f"Return ONLY the transcript text in {ln} — no commentary, no speaker "
-        "labels, no quotation marks. If the audio is silent or unintelligible, "
-        "return an empty string.")
+    if speakers:
+        instruction = (
+            f"Transcribe this {ln} phone/video call conversation. "
+            "Label each turn clearly as 'Candidate:' (the job seeker) or "
+            "'Other:' (recruiter / interviewer / hiring manager). Preserve "
+            "natural paragraph breaks between turns. Return ONLY the transcript "
+            f"in {ln} — no commentary, no timestamps, no quotation marks around "
+            "the whole text. If the audio is silent or unintelligible, return "
+            "an empty string.")
+    else:
+        instruction = (
+            f"Transcribe this {ln} audio recording exactly as spoken. "
+            f"Return ONLY the transcript text in {ln} — no commentary, no speaker "
+            "labels, no quotation marks. If the audio is silent or unintelligible, "
+            "return an empty string.")
 
     deadline = time.monotonic() + AI_TIMEOUT_S
     last_exc: Exception | None = None
@@ -555,8 +568,7 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav",
             last_exc = exc
             continue
     raise AIError(f"Could not transcribe the audio (last error: {last_exc}). "
-                  "Please try again or type your answer.")
-
+                  "Please try again or type / paste the transcript.")
 
 def resume_text(resume_path: Path | None = None) -> str:
     from . import resume as _resume
@@ -2111,3 +2123,151 @@ def analyze_rejections_overall(*, verdicts: str, baseline: str) -> dict[str, Any
     for key in ("patterns", "working", "actions"):
         data[key] = _bi_list(data.get(key))
     return data
+
+
+_CALL_DEBRIEF_PROMPT = """You are an interview / recruiter-screen coach reviewing
+a REAL phone or video call between a job candidate and a company contact.
+Using the job posting, the candidate's resume, and the call transcript, give
+honest, specific coaching — what went well, what the candidate should improve
+next time, follow-ups to send, and a short revised spoken pitch they can use.
+
+Be concrete and quote or paraphrase moments from the transcript when useful.
+Do NOT invent facts the candidate did not say. If the transcript is thin or
+one-sided, say so and keep confidence low.
+
+Call type hint: {call_kind}
+
+LANGUAGE (bilingual, REQUIRED): every human-readable text value TWICE —
+English in the base field / "en" key, Hebrew in "*_he" / "he". NEVER mix
+languages in one string. Keep "tone" and "confidence" in English only.
+
+Return ONLY valid JSON with EXACTLY this shape:
+{{
+  "tone": "positive" | "mixed" | "concerning",
+  "confidence": "high" | "medium" | "low",
+  "summary": "4-7 sentence debrief of how the call went (English)",
+  "summary_he": "the same debrief in Hebrew",
+  "went_well": [{{"en": "specific strength from the call (English)", "he": "the same in Hebrew"}}],
+  "improve": [{{"en": "concrete improvement for the candidate's side next time (English)", "he": "the same in Hebrew"}}],
+  "missed_opportunities": [{{"en": "point they could have raised or clarified (English)", "he": "the same in Hebrew"}}],
+  "follow_ups": [{{"en": "concrete follow-up email/message action (English)", "he": "the same in Hebrew"}}],
+  "revised_pitch": "short Hebrew spoken pitch (8-14 sentences) rewritten from this call — stronger answers, clearer story, still truthful",
+  "revised_pitch_en": "English version of that revised pitch (same content)",
+  "suggested_answers": [{{"en": "better answer to a question that came up (English)", "he": "the same in Hebrew"}}]
+}}
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description (excerpt):
+{description}
+
+RESUME (excerpt):
+{resume}
+
+CALL TRANSCRIPT:
+{transcript}
+"""
+
+
+def analyze_call(*, title: str, company: str, location: str = "",
+                 description: str = "", transcript: str = "",
+                 call_kind: str = "screening",
+                 resume: str | None = None) -> dict[str, Any]:
+    """Bilingual coaching debrief for a real recruiter/interview call transcript."""
+    transcript = (transcript or "").strip()
+    if len(transcript) < 40:
+        raise AIError("Paste or transcribe a longer call transcript first "
+                      "(at least a few sentences).")
+    kind = (call_kind or "screening").strip().lower() or "screening"
+    prompt = _CALL_DEBRIEF_PROMPT.format(
+        call_kind=kind,
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:6000],
+        resume=(resume or resume_text())[:9000],
+        transcript=transcript[:20000],
+    )
+    data = _parse_json(_generate(prompt, as_json=True))
+    if not isinstance(data, dict):
+        raise AIError("The AI returned an unexpected call-debrief format. "
+                      "Please try again.")
+    data["tone"] = str(data.get("tone", "mixed")).strip().lower()
+    data["confidence"] = str(data.get("confidence", "medium")).strip().lower()
+    data["summary"] = str(data.get("summary", "")).strip()
+    data["summary_he"] = str(data.get("summary_he", "")).strip()
+    data["revised_pitch"] = str(data.get("revised_pitch", "")).strip()
+    data["revised_pitch_en"] = str(data.get("revised_pitch_en", "")).strip()
+    data["call_kind"] = kind
+    data["language"] = "bi"
+    for key in ("went_well", "improve", "missed_opportunities",
+                "follow_ups", "suggested_answers"):
+        data[key] = _bi_list(data.get(key))
+    return data
+
+
+_CALL_PITCH_PROMPT = """You are an interview coach. Rewrite the candidate's
+spoken {kind} pitch using lessons from a real call they just had for this job.
+
+Hard rules:
+- Output in {lang} only (the spoken script language).
+- Stay truthful — do not invent employers, dates, metrics, or skills.
+- Incorporate the coaching notes and stronger answers from the call.
+- Keep a natural spoken rhythm (short sentences the candidate can say aloud).
+- For recruiter screens: keep it SHORT (about 45–90 seconds spoken).
+- For interview: fuller script (~2–3 minutes) with a clear close.
+
+Return ONLY valid JSON:
+{{
+  "suggestions": ["short note of what you changed / why (in {lang})"],
+  "script": "the full rewritten spoken pitch in {lang}"
+}}
+
+JOB:
+Title: {title}
+Company: {company}
+Location: {location}
+Description (excerpt):
+{description}
+
+CURRENT PITCH:
+{base_pitch}
+
+CALL TRANSCRIPT (excerpt):
+{transcript}
+
+COACHING NOTES (what to improve / use):
+{coaching}
+"""
+
+
+def pitch_from_call(*, title: str, company: str, location: str = "",
+                    description: str = "", base_pitch: str = "",
+                    transcript: str = "", coaching: str = "",
+                    kind: str = "interview",
+                    language: str = "he") -> dict[str, Any]:
+    """Rewrite interview/recruiter pitch using a call transcript + coaching notes."""
+    kind = (kind or "interview").strip().lower()
+    if kind not in ("interview", "recruiter"):
+        kind = "interview"
+    prompt = _CALL_PITCH_PROMPT.format(
+        kind=kind,
+        lang=_lang_name(language),
+        title=title or "", company=company or "", location=location or "",
+        description=(description or "")[:5000],
+        base_pitch=(base_pitch or "")[:6000],
+        transcript=(transcript or "")[:12000],
+        coaching=(coaching or "")[:6000],
+    )
+    data = _parse_json(_generate(prompt, as_json=True))
+    if not isinstance(data, dict):
+        raise AIError("The AI returned an unexpected pitch format. Please try again.")
+    suggestions = data.get("suggestions") or []
+    if isinstance(suggestions, str):
+        suggestions = [suggestions]
+    suggestions = [str(s).strip() for s in suggestions if str(s).strip()]
+    script = str(data.get("script", "")).strip()
+    if not script:
+        raise AIError("The AI didn't return a revised pitch. Please try again.")
+    return {"suggestions": suggestions, "script": script,
+            "language": (language or "he").lower(), "kind": kind}

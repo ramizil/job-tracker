@@ -1678,6 +1678,8 @@ def detail(app_id: int):
         interview_prep=tracker.get_interview_prep(app_id),
         qa_exercise=tracker.get_qa_exercise(app_id),
         ats=tracker.get_ats_check(app_id),
+        call_insights=tracker.get_call_insights(app_id),
+        is_gemini=(ai.active_provider() == "gemini" and bool(config.GEMINI_API_KEY)),
         resume_lib=resume_lib, resume_groups=resume_groups,
         sent_resume=sent_resume,
         resume_history=resume_history,
@@ -2351,6 +2353,131 @@ def interview_prep_save(app_id: int):
         tracker.set_interview_prep(app_id, en)
     flash("Interview prep saved.", "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#prep")
+
+
+def _audio_mime_from_upload(file) -> str:
+    """Infer a Gemini-friendly audio MIME from an uploaded file."""
+    import mimetypes
+    mime = (file.mimetype or "").lower()
+    if not mime or mime in ("application/octet-stream",
+                            "application/x-www-form-urlencoded"):
+        guessed, _ = mimetypes.guess_type(file.filename or "")
+        mime = (guessed or "audio/mp4")
+    return mime.split(";", 1)[0].strip()
+
+
+@bp.route("/application/<int:app_id>/call/transcribe", methods=["POST"])
+def call_transcribe(app_id: int):
+    """Transcribe an uploaded call recording (Gemini multimodal)."""
+    if not tracker.get_application(app_id):
+        return {"error": "Application not found."}, 404
+    file = request.files.get("audio")
+    if not file:
+        return {"error": "No audio was uploaded."}, 400
+    data = file.read()
+    if not data:
+        return {"error": "The audio recording was empty."}, 400
+    language = (request.form.get("language") or "he").strip().lower() or "he"
+    try:
+        text = ai.transcribe_audio(
+            data, mime_type=_audio_mime_from_upload(file),
+            language=language, speakers=True)
+    except ai.AIError as exc:
+        return {"error": str(exc)}, 502
+    return {"text": text}
+
+
+@bp.route("/application/<int:app_id>/call/save", methods=["POST"])
+def call_save(app_id: int):
+    """Save the editable call transcript (+ optional kind)."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    kind = (request.form.get("call_kind") or "").strip()
+    tracker.set_call_transcript(
+        app_id, request.form.get("transcript", ""), kind=kind or None)
+    flash("Call transcript saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#call-debrief")
+
+
+@bp.route("/application/<int:app_id>/call/insights", methods=["POST"])
+def call_insights(app_id: int):
+    """Generate bilingual AI coaching from the saved (or posted) transcript."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    transcript = (request.form.get("transcript") or r["call_transcript"] or "").strip()
+    kind = (request.form.get("call_kind") or r["call_kind"] or "screening").strip()
+    if transcript:
+        tracker.set_call_transcript(app_id, transcript, kind=kind)
+    try:
+        data = ai.analyze_call(
+            title=r["title"], company=r["company"],
+            location=r["location"] or "", description=r["description"] or "",
+            transcript=transcript, call_kind=kind,
+        )
+        tracker.set_call_insights(app_id, data)
+        flash("Call insights generated (English + Hebrew).", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#call-debrief")
+
+
+@bp.route("/application/<int:app_id>/call/apply-pitch", methods=["POST"])
+def call_apply_pitch(app_id: int):
+    """Save the AI revised pitch from call insights onto this application."""
+    r = tracker.get_application(app_id)
+    if not r:
+        abort(404)
+    insights = tracker.get_call_insights(app_id) or {}
+    kind = pitch.normalize_kind(request.form.get("pitch") or "recruiter")
+    # Prefer a freshly rewritten script; else use the one embedded in insights.
+    regenerate = bool(request.form.get("regenerate"))
+    try:
+        if regenerate:
+            coaching_bits = []
+            for key in ("improve", "missed_opportunities", "suggested_answers"):
+                for item in insights.get(key) or []:
+                    if isinstance(item, dict):
+                        bit = item.get("he") or item.get("en") or ""
+                        if bit:
+                            coaching_bits.append(f"- {bit}")
+            if insights.get("summary_he") or insights.get("summary"):
+                coaching_bits.insert(
+                    0, insights.get("summary_he") or insights.get("summary"))
+            base = ((r["pitch_recruiter"] if kind == "recruiter" else r["pitch"])
+                    or "").strip() or pitch.load_base_pitch(kind)
+            res = ai.pitch_from_call(
+                title=r["title"], company=r["company"],
+                location=r["location"] or "", description=r["description"] or "",
+                base_pitch=base,
+                transcript=r["call_transcript"] or "",
+                coaching="\n".join(coaching_bits),
+                kind=kind, language="he",
+            )
+            notes = "\n".join(f"- {s}" for s in res.get("suggestions", []))
+            notes = (notes + "\n\n(From call debrief)").strip()
+            tracker.set_pitch(app_id, res["script"], notes=notes, prev=base,
+                              kind=kind)
+            flash(f"{pitch.KIND_LABELS.get(kind, kind)} updated from this call.",
+                  "ok")
+        else:
+            script = (insights.get("revised_pitch") or "").strip()
+            if not script:
+                flash("No revised pitch in the insights yet — generate insights "
+                      "first, or use Rewrite pitch.", "error")
+            else:
+                base = ((r["pitch_recruiter"] if kind == "recruiter" else r["pitch"])
+                        or "").strip() or pitch.load_base_pitch(kind)
+                tracker.set_pitch(
+                    app_id, script,
+                    notes="Saved from call debrief revised pitch.",
+                    prev=base, kind=kind)
+                flash(f"{pitch.KIND_LABELS.get(kind, kind)} saved from call "
+                      "insights.", "ok")
+    except ai.AIError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        url_for("main.detail", app_id=app_id, pitch=kind) + "#pitch")
 
 
 @bp.route("/application/<int:app_id>/mock-interview", methods=["POST"])
