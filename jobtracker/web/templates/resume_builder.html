@@ -358,6 +358,7 @@
         textEl.value = textEl.value ? (textEl.value.trim() + ' ' + t) : t;
         recStatus.textContent = t ? '✓ Transcribed — edit if needed.' : 'Heard nothing — try again or type.';
         textEl.focus();
+        if (t && window.jtAiSound) window.jtAiSound.play();
       })
       .catch(function () { hideOverlay(); recStatus.textContent = 'Transcription failed — type your answer.'; });
   }
@@ -399,6 +400,7 @@
         hideOverlay();
         nextBtn.disabled = false;
         if (!res.ok) { setStatus((res.j && res.j.error) || 'Could not get the next question.'); return; }
+        if (window.jtAiSound) window.jtAiSound.play();
         if (res.j.done) {
           done = true;
           currentQuestion = ''; currentKind = 'text';
@@ -458,6 +460,7 @@
       .then(function (res) {
         if (!res.ok) { hideOverlay(); setStatus((res.j && res.j.error) || 'Build failed.'); buildBtn.disabled = false; return; }
         overlayMsg.textContent = 'Done! Opening your resume…';
+        if (window.jtAiSound) window.jtAiSound.arm();
         window.location.href = res.j.url;
       })
       .catch(function () { hideOverlay(); setStatus('Build failed — try again.'); buildBtn.disabled = false; });

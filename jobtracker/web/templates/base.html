@@ -131,6 +131,63 @@
       var cancelBtn = document.getElementById('loading-cancel');
       var MAX_MS = 420000;          // auto-cancel after 7 min (batch generates can be long)
       var killTimer = null, tick = null, started = 0;
+      var AI_SOUND_KEY = 'jt-ai-sound';
+
+      // Soft two-tone chime when a long AI job finishes (no audio file needed).
+      function playAiDoneSound() {
+        try {
+          var Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          var ctx = playAiDoneSound._ctx || (playAiDoneSound._ctx = new Ctx());
+          if (ctx.state === 'suspended') ctx.resume();
+          var now = ctx.currentTime;
+          function tone(freq, t0, dur, vol) {
+            var o = ctx.createOscillator();
+            var g = ctx.createGain();
+            o.type = 'sine';
+            o.frequency.setValueAtTime(freq, t0);
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.exponentialRampToValueAtTime(vol, t0 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(t0); o.stop(t0 + dur + 0.05);
+          }
+          tone(784, now, 0.14, 0.07);        // G5
+          tone(1046.5, now + 0.13, 0.22, 0.06); // C6
+        } catch (e) { /* autoplay / unsupported — ignore */ }
+      }
+
+      function armAiSound() { try { sessionStorage.setItem(AI_SOUND_KEY, '1'); } catch (e) {} }
+      function disarmAiSound() { try { sessionStorage.removeItem(AI_SOUND_KEY); } catch (e) {} }
+      function playAiSoundIfArmed() {
+        try {
+          if (sessionStorage.getItem(AI_SOUND_KEY) !== '1') return;
+          sessionStorage.removeItem(AI_SOUND_KEY);
+        } catch (e) { return; }
+        playAiDoneSound();
+      }
+
+      // True for AI / Gemini work; false for plain saves, Gmail sync, job search, etc.
+      function isAiLoading(msg, el) {
+        if (el) {
+          var flag = el.getAttribute('data-ai-sound');
+          if (flag === '0' || flag === 'false') return false;
+          if (flag === '1' || flag === 'true') return true;
+        }
+        if (!msg) return false;
+        if (/^(Saving description…|Checking Gmail|Searching job|Capturing job from the posting page)/i.test(msg)) {
+          return false;
+        }
+        return /AI|Gemini|analy|Generat|Research|Tailor|Transcrib|mock|Interview prep|pitch|cover|ATS|Quick AI|Rewrit|Draft|debrief|coaching|bilingual|feedback request|exercise|Fit analysis|company research|salary|refin/i.test(msg);
+      }
+
+      // Public helpers for fetch-based AI (transcription, resume builder, …).
+      window.jtAiSound = {
+        arm: armAiSound,
+        disarm: disarmAiSound,
+        play: function () { disarmAiSound(); playAiDoneSound(); },
+        playIfArmed: playAiSoundIfArmed,
+      };
 
       function reEnable() {
         document.querySelectorAll('button.is-busy').forEach(function (b) {
@@ -142,6 +199,7 @@
         if (tick) { clearInterval(tick); tick = null; }
       }
       function cancel() {
+        disarmAiSound();
         stopTimers();
         try { window.stop(); } catch (e) {}
         // Reload the current page for a clean, consistent state.
@@ -166,13 +224,17 @@
       document.querySelectorAll('form').forEach(function (form) {
         form.addEventListener('submit', function (e) {
           var msg = null;
+          var src = null;
           // Prefer per-button data-loading (e.g. Save vs Save & Quick AI).
           if (e.submitter && e.submitter.getAttribute('data-loading')) {
             msg = e.submitter.getAttribute('data-loading');
+            src = e.submitter;
           } else if (form.getAttribute('data-loading')) {
             msg = form.getAttribute('data-loading');
+            src = form;
           }
           if (!msg) return;
+          if (isAiLoading(msg, src) || isAiLoading(msg, form)) armAiSound();
           show(msg);
           form.querySelectorAll('button[type="submit"]').forEach(function (b) {
             b.disabled = true; b.classList.add('is-busy');
@@ -181,8 +243,10 @@
       });
       cancelBtn.addEventListener('click', cancel);
       // Hide overlay / re-enable if the user navigates back to a cached page.
+      // When an AI job was armed, play a short done chime after the redirect.
       window.addEventListener('pageshow', function () {
         overlay.hidden = true; stopTimers(); reEnable();
+        playAiSoundIfArmed();
       });
     })();
   </script>

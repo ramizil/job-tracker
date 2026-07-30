@@ -1595,6 +1595,7 @@
           ? '✓ Transcribed — edit if needed, then Generate insights.'
           : 'Heard nothing — try again or paste the transcript.';
         textEl.focus();
+        if (t && window.jtAiSound) window.jtAiSound.play();
       })
       .catch(function () {
         hideOverlay();
