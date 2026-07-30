@@ -32,9 +32,10 @@
       <form method="post" action="{{ url_for('main.set_status', app_id=app.id) }}"
             class="stack" id="status-form"
             data-current-status="{{ app.status }}">
-        <div class="inline">
+        <div class="stack">
           <select name="status" id="status-select">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s==app.status }}>{{ s }}</option>{% endfor %}</select>
-          <input name="note" placeholder="note (optional)" style="flex:1;min-width:140px">
+          <textarea name="note" rows="4" dir="auto"
+                    placeholder="Optional note for this status change (line breaks &amp; **bold** kept in History)"></textarea>
           <button class="btn" type="submit">Update</button>
         </div>
         <div class="contact-capture" id="contact-on-screening" hidden>
@@ -111,13 +112,34 @@
       </details>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="notes">
       <h2>Notes</h2>
-      {% if app.notes %}<pre class="notes">{{ app.notes }}</pre>{% endif %}
-      <form method="post" action="{{ url_for('main.note', app_id=app.id) }}" class="inline">
-        <input name="text" placeholder="add a note" style="flex:1">
-        <button class="btn" type="submit">Add</button>
-      </form>
+      {% if app.notes %}
+      <div class="notes-body md" dir="auto">{{ app.notes | md | safe }}</div>
+      {% else %}
+      <p class="muted sm">No notes yet.</p>
+      {% endif %}
+      <details class="mt" {{ 'open' if not app.notes else '' }}>
+        <summary class="btn sm">{{ 'Edit notes' if app.notes else 'Add notes' }}</summary>
+        <form method="post" action="{{ url_for('main.note', app_id=app.id) }}" class="stack mt">
+          <input type="hidden" name="replace" value="1">
+          <textarea name="text" rows="10" dir="auto"
+                    placeholder="Write notes here — line breaks and **bold** are preserved.">{{ app.notes or '' }}</textarea>
+          <div class="inline" style="display:flex;flex-wrap:wrap;gap:8px">
+            <button class="btn primary" type="submit">Save notes</button>
+          </div>
+        </form>
+      </details>
+      {% if app.notes %}
+      <details class="mt">
+        <summary class="btn sm">Append a dated note</summary>
+        <form method="post" action="{{ url_for('main.note', app_id=app.id) }}" class="stack mt">
+          <textarea name="text" rows="4" dir="auto"
+                    placeholder="Short add-on note (stamped with date when saved)"></textarea>
+          <button class="btn" type="submit">Add</button>
+        </form>
+      </details>
+      {% endif %}
     </section>
 
     <section class="panel">
@@ -270,11 +292,40 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" id="history">
       <h2>History</h2>
-      <table class="mini"><tbody>
+      <table class="mini hist-table"><tbody>
         {% for h in history %}
-        <tr><td>{{ (h.changed_at or '')[:19] }}</td><td>{{ h.old_status or '—' }} → {{ h.new_status }}</td><td>{{ h.note }}</td></tr>
+        <tr>
+          <td class="hist-when">{{ (h.changed_at or '')[:19] }}</td>
+          <td class="hist-status">{{ h.old_status or '—' }} → {{ h.new_status }}</td>
+          <td class="hist-note" dir="auto">
+            {% if h.note %}
+            <div class="hist-note-body md">{{ h.note | md | safe }}</div>
+            <details class="hist-note-edit">
+              <summary class="btn sm">Edit note</summary>
+              <form method="post"
+                    action="{{ url_for('main.history_note_save', app_id=app.id, hist_id=h.id) }}"
+                    class="stack mt">
+                <textarea name="note" rows="8" dir="auto">{{ h.note }}</textarea>
+                <button class="btn primary sm" type="submit">Save</button>
+              </form>
+            </details>
+            {% else %}
+            <span class="muted">—</span>
+            <details class="hist-note-edit">
+              <summary class="btn sm">Add note</summary>
+              <form method="post"
+                    action="{{ url_for('main.history_note_save', app_id=app.id, hist_id=h.id) }}"
+                    class="stack mt">
+                <textarea name="note" rows="4" dir="auto"
+                          placeholder="Optional note for this status change"></textarea>
+                <button class="btn primary sm" type="submit">Save</button>
+              </form>
+            </details>
+            {% endif %}
+          </td>
+        </tr>
         {% endfor %}
       </tbody></table>
     </section>

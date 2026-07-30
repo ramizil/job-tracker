@@ -454,6 +454,23 @@ html.table-dense .alert-comment-input{padding:3px 6px}
 table.mini{width:100%;border-collapse:collapse;font-size:13px}
 table.mini td{padding:6px;border-bottom:1px solid var(--rule);vertical-align:top}
 table.mini td.r{text-align:right;color:var(--muted)}
+.hist-table{table-layout:fixed}
+.hist-table .hist-when{width:9.5rem;color:var(--muted);white-space:nowrap}
+.hist-table .hist-status{width:7.5rem;white-space:nowrap}
+.hist-table .hist-note{word-break:break-word;overflow-wrap:anywhere}
+.hist-note-body,.notes-body{
+  white-space:normal;word-break:break-word;overflow-wrap:anywhere;
+  max-height:320px;overflow:auto;line-height:1.45;
+  background:var(--pre-bg);border:1px solid var(--rule);border-radius:10px;
+  padding:10px 12px;font-size:calc(var(--base-font) * .92)
+}
+.hist-note-body p,.notes-body p{margin:0 0 .55em}
+.hist-note-body p:last-child,.notes-body p:last-child{margin-bottom:0}
+.hist-note-edit{margin-top:6px}
+.hist-note-edit > summary{cursor:pointer;list-style:none}
+.hist-note-edit textarea,.notes-body + details textarea,details .stack textarea{
+  width:100%;min-height:6rem;resize:vertical
+}
 
 /* Horizontal bar charts (rejection stage / reason, etc.) */
 .hbar-chart{display:flex;flex-direction:column;gap:8px;margin-top:4px}

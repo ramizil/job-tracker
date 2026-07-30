@@ -557,6 +557,26 @@ def add_note(app_id: int, text: str) -> bool:
         return True
 
 
+def set_notes(app_id: int, text: str) -> bool:
+    """Replace the full notes field (edit existing notes)."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE applications SET notes=?, updated_at=? WHERE id=?",
+            ((text or "").strip(), now_iso(), app_id),
+        )
+        return cur.rowcount > 0
+
+
+def update_history_note(history_id: int, note: str) -> bool:
+    """Edit the free-text note on a status-history row."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE status_history SET note=? WHERE id=?",
+            ((note or "").strip(), history_id),
+        )
+        return cur.rowcount > 0
+
+
 def set_description(app_id: int, description: str,
                     *, rescore: bool = True) -> bool:
     """Replace the job description (e.g. after a bad Alerts capture).

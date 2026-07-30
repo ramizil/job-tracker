@@ -2069,11 +2069,32 @@ def reject(app_id: int):
 
 @bp.route("/application/<int:app_id>/note", methods=["POST"])
 def note(app_id: int):
-    text = request.form.get("text", "").strip()
-    if text:
-        tracker.add_note(app_id, text)
-        flash("Note added.", "ok")
-    return redirect(url_for("main.detail", app_id=app_id))
+    """Append a dated note, or replace the whole notes field when editing."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    if request.form.get("replace"):
+        tracker.set_notes(app_id, request.form.get("text", ""))
+        flash("Notes saved.", "ok")
+    else:
+        text = request.form.get("text", "").strip()
+        if text:
+            tracker.add_note(app_id, text)
+            flash("Note added.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#notes")
+
+
+@bp.route("/application/<int:app_id>/history/<int:hist_id>/note", methods=["POST"])
+def history_note_save(app_id: int, hist_id: int):
+    """Edit the note attached to a status-history entry."""
+    if not tracker.get_application(app_id):
+        abort(404)
+    # Ensure the history row belongs to this application.
+    rows = tracker.get_history(app_id)
+    if not any(int(h["id"]) == hist_id for h in rows):
+        abort(404)
+    tracker.update_history_note(hist_id, request.form.get("note", ""))
+    flash("History note saved.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#history")
 
 
 @bp.route("/application/<int:app_id>/description", methods=["POST"])
