@@ -148,6 +148,8 @@
       <p>Current: <b>{{ sent_resume.label }}</b>
         {% if sent_resume.original_name %}<span class="muted">({{ sent_resume.original_name }})</span>{% endif %}
         <span class="muted sm">· stored {{ (sent_resume.created_at or '')[:10] }}</span>
+        <a class="btn sm" href="{{ url_for('main.resume_lib_view', resume_id=sent_resume.id) }}"
+           target="_blank" rel="noopener" title="Open current resume in a new tab">↗ Open</a>
       </p>
       {% else %}
       <p class="muted">No resume linked yet — pick which CV you sent (or will send) for later stats.</p>
@@ -158,7 +160,12 @@
         {% for h in resume_history %}
         <li>{{ h.label }}{% if h.original_name %} · {{ h.original_name }}{% endif %}
           {% if h.content_hash %} · {{ h.content_hash[:8] }}{% endif %}
-          <span title="{{ h.note or '' }}">· archived {{ (h.attached_at or '')[:10] }}</span></li>
+          <span title="{{ h.note or '' }}">· archived {{ (h.attached_at or '')[:10] }}</span>
+          {% if h.resume_id %}
+          <a href="{{ url_for('main.resume_lib_view', resume_id=h.resume_id) }}"
+             target="_blank" rel="noopener" title="Open this resume">↗</a>
+          {% endif %}
+        </li>
         {% endfor %}
       </ul>
       {% endif %}
@@ -1095,10 +1102,8 @@
           <section class="panel diff-pane">
             <div class="pitch-pane-head">
               <h3>Before</h3>
-              <button type="button" class="btn sm" data-pitch-fs
-                      data-pitch-fs-src="{{ pitch_before_url }}"
-                      data-pitch-fs-title="Before — {{ pitch_labels[pk] }}"
-                      title="Open Before full screen">⛶ Fullscreen</button>
+              <a class="btn sm" href="{{ pitch_before_url }}" target="_blank" rel="noopener"
+                 title="Open Before in a new browser tab">↗ Open in tab</a>
             </div>
             <div class="frame-wrap pitch-frame-sm">
               <iframe title="Pitch before AI" data-src="{{ pitch_before_url }}"></iframe>
@@ -1107,10 +1112,8 @@
           <section class="panel diff-pane">
             <div class="pitch-pane-head">
               <h3>✨ After (this job)</h3>
-              <button type="button" class="btn sm" data-pitch-fs
-                      data-pitch-fs-src="{{ pitch_after_url }}"
-                      data-pitch-fs-title="After — {{ pitch_labels[pk] }}"
-                      title="Open After full screen">⛶ Fullscreen</button>
+              <a class="btn sm" href="{{ pitch_after_url }}" target="_blank" rel="noopener"
+                 title="Open After in a new browser tab">↗ Open in tab</a>
             </div>
             <div class="frame-wrap pitch-frame-sm">
               <iframe title="Pitch after AI" data-src="{{ pitch_after_url }}"></iframe>
@@ -1123,10 +1126,8 @@
         <div class="pitch-fs-bar mt">
           <span class="muted sm">Words removed in the tailored version are marked in
             <span class="pitch-legend-del">red</span>.</span>
-          <button type="button" class="btn sm" data-pitch-fs
-                  data-pitch-fs-src="{{ pitch_before_hl_url }}"
-                  data-pitch-fs-title="Before — {{ pitch_labels[pk] }}"
-                  title="Open Before full screen">⛶ Fullscreen</button>
+          <a class="btn sm" href="{{ pitch_before_hl_url }}" target="_blank" rel="noopener"
+             title="Open Before in a new browser tab">↗ Open in tab</a>
         </div>
         <div class="review wide mt">
           <div class="preview">
@@ -1142,10 +1143,8 @@
         <div class="pitch-fs-bar mt">
           <span class="muted sm">Words added for this job are marked in
             <span class="pitch-legend-ins">green</span>.</span>
-          <button type="button" class="btn sm" data-pitch-fs
-                  data-pitch-fs-src="{{ pitch_after_hl_url }}"
-                  data-pitch-fs-title="After — {{ pitch_labels[pk] }}"
-                  title="Open After full screen">⛶ Fullscreen</button>
+          <a class="btn sm" href="{{ pitch_after_hl_url }}" target="_blank" rel="noopener"
+             title="Open After in a new browser tab">↗ Open in tab</a>
         </div>
         <div class="review wide mt">
           <div class="preview">
@@ -1159,10 +1158,8 @@
       {% else %}
       <div class="pitch-fs-bar mt">
         <span class="muted sm">Styled like My Pitch — drag the corner to resize.</span>
-        <button type="button" class="btn sm" data-pitch-fs
-                data-pitch-fs-src="{{ pitch_single_url }}"
-                data-pitch-fs-title="{{ pitch_labels[pk] }}"
-                title="Open pitch full screen">⛶ Fullscreen</button>
+        <a class="btn sm" href="{{ pitch_single_url }}" target="_blank" rel="noopener"
+           title="Open pitch in a new browser tab">↗ Open in tab</a>
       </div>
       <div class="review wide mt" id="pitch-inline">
         <div class="preview">
@@ -1173,20 +1170,6 @@
         </div>
       </div>
       {% endif %}
-
-      <div class="pitch-fs-overlay" id="pitch-fs" hidden>
-        <div class="pitch-fs-panel" role="dialog" aria-modal="true" aria-label="Pitch full screen">
-          <header class="pitch-fs-head">
-            <h2 id="pitch-fs-title">🎤 Pitch</h2>
-            <button type="button" class="btn sm" data-pitch-fs-close title="Close (Esc)">✕ Close</button>
-          </header>
-          <div class="pitch-fs-body single">
-            <div class="frame-wrap pitch-fs-frame">
-              <iframe id="pitch-fs-frame" title="Pitch fullscreen"></iframe>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <details class="mt" id="pitch-edit">
         <summary><b>✏️ Edit text</b>
@@ -1248,48 +1231,6 @@
     t.addEventListener('click', function () {
       activate(t.getAttribute('data-pitch-cmp'));
     });
-  });
-})();
-</script>
-<script>
-// Pitch fullscreen — one pane at a time (Before or After, or single view).
-(function () {
-  var overlay = document.getElementById('pitch-fs');
-  if (!overlay) return;
-  var titleEl = document.getElementById('pitch-fs-title');
-  var frame = document.getElementById('pitch-fs-frame');
-  var closeBtn = overlay.querySelector('[data-pitch-fs-close]');
-  var lastBtn = null;
-
-  function openFs(btn) {
-    lastBtn = btn;
-    var src = btn.getAttribute('data-pitch-fs-src');
-    var title = btn.getAttribute('data-pitch-fs-title') || 'Pitch';
-    if (titleEl) titleEl.textContent = '🎤 ' + title;
-    if (frame && src && frame.getAttribute('src') !== src) {
-      frame.setAttribute('src', src);
-    }
-    overlay.hidden = false;
-    document.body.classList.add('pitch-fs-open');
-    if (closeBtn) closeBtn.focus();
-  }
-  function closeFs() {
-    overlay.hidden = true;
-    document.body.classList.remove('pitch-fs-open');
-    if (lastBtn) lastBtn.focus();
-  }
-  Array.prototype.forEach.call(document.querySelectorAll('[data-pitch-fs]'), function (btn) {
-    btn.addEventListener('click', function () { openFs(btn); });
-  });
-  if (closeBtn) closeBtn.addEventListener('click', closeFs);
-  overlay.addEventListener('click', function (e) {
-    if (e.target === overlay) closeFs();
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !overlay.hidden) {
-      e.preventDefault();
-      closeFs();
-    }
   });
 })();
 </script>

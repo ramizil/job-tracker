@@ -3501,8 +3501,11 @@ def resume_lib_view(resume_id: int):
         if not draft.strip():
             abort(404)
         return Response(draft, mimetype="text/html; charset=utf-8")
-    # Prefer HTML twin when this id is a PDF of the same content.
-    row = resumes.viewer_row(resume_id)
+    # ``?as=file`` opens this exact library row (e.g. the PDF twin) instead of
+    # preferring the HTML twin via viewer_row().
+    prefer_file = (request.args.get("as") or "").strip().lower() in (
+        "file", "pdf", "raw")
+    row = resumes.get(resume_id) if prefer_file else resumes.viewer_row(resume_id)
     if not row:
         abort(404)
     path = resumes.path_for(row)

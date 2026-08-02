@@ -985,6 +985,10 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
   text-decoration:none;color:inherit;flex:1;cursor:pointer}
 .resume-card .rc-pick{margin:0}
 .resume-card .rc-pick input{margin-top:4px;flex-shrink:0}
+.resume-card .rc-open-row{
+  display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 12px;align-items:center
+}
+.resume-card .rc-open-row .btn{text-decoration:none}
 .rc-swatch{width:10px;min-height:48px;border-radius:6px;flex-shrink:0;align-self:stretch;
   background:var(--rc-accent,#3b82f6)}
 .rc-main{display:flex;flex-direction:column;gap:4px;min-width:0}
@@ -1142,6 +1146,10 @@ html[data-theme="light"] .fit-no{background:#dc2626;color:#fff;border-color:#dc2
   text-decoration:none;color:inherit;flex:1;cursor:pointer}
 .resume-card .rc-pick{margin:0}
 .resume-card .rc-pick input{margin-top:4px;flex-shrink:0}
+.resume-card .rc-open-row{
+  display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 12px;align-items:center
+}
+.resume-card .rc-open-row .btn{text-decoration:none}
 .rc-swatch{width:10px;min-height:48px;border-radius:6px;flex-shrink:0;align-self:stretch;
   background:var(--rc-accent,#3b82f6)}
 .rc-main{display:flex;flex-direction:column;gap:4px;min-width:0}

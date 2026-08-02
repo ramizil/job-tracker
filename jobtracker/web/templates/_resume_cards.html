@@ -39,6 +39,17 @@
         </span>
       </span>
     </label>
+    <div class="rc-open-row">
+      <a class="btn sm" href="{{ url_for('main.resume_lib_view', resume_id=pid) }}"
+         target="_blank" rel="noopener"
+         title="Open resume in a new tab">↗ Open</a>
+      {% if g.html and g.pdf %}
+      <a class="btn sm" href="{{ url_for('main.resume_lib_view', resume_id=g.html.id) }}?as=file"
+         target="_blank" rel="noopener" title="Open HTML file">HTML</a>
+      <a class="btn sm" href="{{ url_for('main.resume_lib_view', resume_id=g.pdf.id) }}?as=file"
+         target="_blank" rel="noopener" title="Open PDF file">PDF</a>
+      {% endif %}
+    </div>
     {% else %}
     <a class="rc-body" href="{{ url_for('main.resume_lib_edit', resume_id=pid) }}">
       <span class="rc-swatch" aria-hidden="true"></span>
@@ -68,7 +79,9 @@
         <button class="btn sm" type="submit" title="Use as default for AI / Settings">★ Default</button>
       </form>
       {% endif %}
-      <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=pid) }}">Open</a>
+      <a class="btn sm" href="{{ url_for('main.resume_lib_view', resume_id=pid) }}"
+         target="_blank" rel="noopener" title="Open resume in a new tab">↗ Open</a>
+      <a class="btn sm" href="{{ url_for('main.resume_lib_edit', resume_id=pid) }}">Edit</a>
       <form method="post" action="{{ url_for('main.resume_lib_delete', resume_id=pid) }}"
             onsubmit="return confirm('Remove this resume from the library?');">
         {% if g.member_ids|length > 1 %}
