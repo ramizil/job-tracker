@@ -26,7 +26,8 @@ from .. import (ai, analytics, backup, config, connection_status, exporter,
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
-from ..models import COMMON_REJECTION_REASONS, REJECTION_STAGES, STATUSES
+from ..models import (COMMON_REJECTION_REASONS, REJECTION_STAGES, STATUSES,
+                      STATUS_LABELS)
 from ..sources import get_sources, job_matches_query
 from ..sources.base import JobResult
 from ..db import now_iso
@@ -156,6 +157,12 @@ def inject_profiles():
                 "active_profile": config.ACTIVE_PROFILE}
     except Exception:
         return {"profiles": [], "active_profile": ""}
+
+
+@bp.app_context_processor
+def inject_status_labels():
+    """Friendly status labels (e.g. closed → closed — no longer hiring)."""
+    return {"status_labels": STATUS_LABELS}
 
 def _tailored_path(app_id: int):
     return config.TAILORED_DIR / f"{app_id}.html"
@@ -1202,8 +1209,9 @@ def applications():
     scope_statuses: list[str] | None = None
     scope_label = None
     if scope == "applied_plus":
-        # Everything past "saved", except withdrawn (matches dashboard Applied+).
-        scope_statuses = [s for s in STATUSES if s not in ("saved", "withdrawn")]
+        # Everything past "saved", except withdrawn/closed (matches dashboard Applied+).
+        scope_statuses = [s for s in STATUSES
+                          if s not in ("saved", "withdrawn", "closed")]
         scope_label = "Applied+"
     elif scope == "active":
         from ..models import ACTIVE_STATUSES
@@ -1707,7 +1715,9 @@ def detail(app_id: int):
     resume_history = resumes.history_for(app_id)
     return render_template(
         "detail.html", app=r, history=tracker.get_history(app_id),
-        analysis=analysis, mock=mock, statuses=STATUSES, stages=REJECTION_STAGES,
+        analysis=analysis, mock=mock, statuses=STATUSES,
+        status_labels=STATUS_LABELS,
+        stages=REJECTION_STAGES,
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
         has_tailored=_tailored_path(app_id).exists(),
         has_resume_draft=_tailored_draft_path(app_id).exists(),

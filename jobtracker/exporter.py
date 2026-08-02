@@ -42,6 +42,7 @@ _STATUS_COLORS = {
     "offer": "16A34A",
     "accepted": "16A34A",
     "rejected": "DC2626",
+    "closed": "78716C",
     "withdrawn": "64748B",
     "ghosted": "64748B",
 }

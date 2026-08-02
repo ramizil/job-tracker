@@ -11,15 +11,31 @@ STATUSES: list[str] = [
     "offer",       # received an offer
     "accepted",    # accepted an offer
     "rejected",    # rejected by the company
+    "closed",      # posting closed / no longer accepting applications
     "withdrawn",   # you withdrew
     "ghosted",     # no response after a long time
 ]
 
+# Short UI labels (fallback = the status key itself).
+STATUS_LABELS: dict[str, str] = {
+    "saved": "saved",
+    "applied": "applied",
+    "reapplied": "reapplied",
+    "screening": "screening",
+    "interview": "interview",
+    "offer": "offer",
+    "accepted": "accepted",
+    "rejected": "rejected",
+    "closed": "closed — no longer hiring",
+    "withdrawn": "withdrawn",
+    "ghosted": "ghosted",
+}
+
 # Statuses that represent a "live" (still-in-play) application.
 ACTIVE_STATUSES = {"saved", "applied", "reapplied", "screening", "interview", "offer"}
 
-# Statuses that count as a negative outcome (for analysis).
-NEGATIVE_STATUSES = {"rejected", "withdrawn", "ghosted"}
+# Statuses that count as a negative / ended outcome (for analysis).
+NEGATIVE_STATUSES = {"rejected", "withdrawn", "ghosted", "closed"}
 
 # The stage at which a rejection happened (for "why was I rejected" analysis).
 REJECTION_STAGES: list[str] = [

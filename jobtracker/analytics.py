@@ -99,7 +99,8 @@ def totals() -> dict[str, Any]:
     total = sum(f.values())
     # "Applied+" = real applications: everything past "saved", except the ones
     # the candidate withdrew (those weren't pursued, so they don't count).
-    applied = sum(v for k, v in f.items() if k not in ("saved", "withdrawn"))
+    applied = sum(v for k, v in f.items()
+                  if k not in ("saved", "withdrawn", "closed"))
     rejected = f.get("rejected", 0)
     interviews = f.get("interview", 0) + f.get("offer", 0) + f.get("accepted", 0)
     active = sum(v for k, v in f.items() if k in ACTIVE_STATUSES)

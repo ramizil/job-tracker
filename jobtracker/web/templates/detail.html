@@ -4,7 +4,7 @@
 <a class="back" href="{{ url_for('main.applications') }}">&larr; All applications</a>
 <div class="detail-head">
   <h1>{{ app.title }}</h1>
-  <span class="pill status-{{ app.status }}">{{ app.status }}</span>
+  <span class="pill status-{{ app.status }}" title="{{ status_labels.get(app.status, app.status) }}">{{ status_labels.get(app.status, app.status) }}</span>
   {% if app.ai_fit_level %}<span class="fit fit-{{ app.ai_fit_level|lower }}" title="{{ app.ai_fit_level }}{% if app.ai_verdict %} · {{ app.ai_verdict }}{% endif %}">{% if app.ai_fit_score is not none %}{{ app.ai_fit_score }}%{% else %}{{ app.ai_fit_level }}{% endif %}</span>{% endif %}
 </div>
 <p class="sub">{{ app.company }}{% if app.location %} · {{ app.location }}{% endif %}
@@ -27,17 +27,30 @@
 <div class="tab-page active" id="tab-overview">
 <div class="grid2">
   <div>
-    <section class="panel">
-      <h2>Move status</h2>
+    <section class="panel status-move-panel" id="move-status">
+      <div class="panel-head">
+        <h2>Move status</h2>
+        <span class="pill status-{{ app.status }} status-current-pill"
+              title="Current status">{{ status_labels.get(app.status, app.status) }}</span>
+      </div>
+      <p class="muted sm status-move-hint">Pick the next stage — including
+        <b>closed — no longer hiring</b> when the posting stopped accepting applications.</p>
       <form method="post" action="{{ url_for('main.set_status', app_id=app.id) }}"
             class="stack" id="status-form"
             data-current-status="{{ app.status }}">
-        <div class="stack">
-          <select name="status" id="status-select">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s==app.status }}>{{ s }}</option>{% endfor %}</select>
-          <textarea name="note" rows="4" dir="auto"
-                    placeholder="Optional note for this status change (line breaks &amp; **bold** kept in History)"></textarea>
-          <button class="btn" type="submit">Update</button>
+        <div class="status-picker" role="radiogroup" aria-label="Application status">
+          {% for s in statuses %}
+          <label class="status-opt{{ ' is-selected' if s == app.status }}"
+                 data-status="{{ s }}">
+            <input type="radio" name="status" value="{{ s }}"
+                   {{ 'checked' if s == app.status }}>
+            <span class="status-opt-pill status-{{ s }}">{{ status_labels.get(s, s) }}</span>
+          </label>
+          {% endfor %}
         </div>
+        <textarea name="note" rows="3" dir="auto" class="status-note"
+                  placeholder="Optional note for this status change (line breaks &amp; **bold** kept in History)"></textarea>
+        <button class="btn primary status-update-btn" type="submit">Update status</button>
         <div class="contact-capture" id="contact-on-screening" hidden>
           <div class="contact-capture-head">👤 Contact person
             <span class="muted sm">— recruiter / interviewer (optional, saved with status)</span>
@@ -1248,16 +1261,27 @@
 })();
 </script>
 <script>
-// Show contact-person fields when moving to screening (or interview).
+// Status picker highlight + contact fields when moving to screening/interview.
 (function () {
-  var sel = document.getElementById('status-select');
+  var form = document.getElementById('status-form');
   var box = document.getElementById('contact-on-screening');
-  if (!sel || !box) return;
+  if (!form) return;
+  var radios = form.querySelectorAll('input[name="status"]');
   var SHOW_FOR = { screening: 1, interview: 1 };
-  function sync() {
-    box.hidden = !SHOW_FOR[sel.value];
+  function selected() {
+    var r = form.querySelector('input[name="status"]:checked');
+    return r ? r.value : '';
   }
-  sel.addEventListener('change', sync);
+  function sync() {
+    var v = selected();
+    Array.prototype.forEach.call(form.querySelectorAll('.status-opt'), function (lab) {
+      lab.classList.toggle('is-selected', lab.getAttribute('data-status') === v);
+    });
+    if (box) box.hidden = !SHOW_FOR[v];
+  }
+  Array.prototype.forEach.call(radios, function (r) {
+    r.addEventListener('change', sync);
+  });
   sync();
 })();
 </script>

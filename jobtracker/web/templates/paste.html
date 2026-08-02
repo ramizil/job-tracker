@@ -71,7 +71,7 @@
       <input name="salary" placeholder="Salary" value="{{ form.get('salary','') }}">
     </div>
     <div class="row">
-      <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == (form.get('status') or 'saved') }}>{{ s }}</option>{% endfor %}</select>
+      <select name="status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if s == (form.get('status') or 'saved') }}>{{ status_labels.get(s, s) }}</option>{% endfor %}</select>
       <input name="source" placeholder="Source (auto-detected from URL, e.g. linkedin)" value="{{ form.get('source','') }}">
     </div>
   </fieldset>

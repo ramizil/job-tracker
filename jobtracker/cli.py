@@ -26,7 +26,8 @@ def _status_style(status: str) -> str:
         "saved": "cyan", "applied": "blue", "reapplied": "cyan",
         "screening": "yellow",
         "interview": "magenta", "offer": "green", "accepted": "bold green",
-        "rejected": "red", "withdrawn": "dim", "ghosted": "dim red",
+        "rejected": "red", "closed": "bright_black",
+        "withdrawn": "dim", "ghosted": "dim red",
     }.get(status, "white")
 
 

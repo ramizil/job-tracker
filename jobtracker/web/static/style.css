@@ -404,6 +404,7 @@ a.funnel-row:focus-visible{outline:2px solid rgba(96,165,250,.7);outline-offset:
 .funnel-label.status-rejected{background:#dc2626!important}
 .funnel-label.status-withdrawn,
 .funnel-label.status-ghosted{background:#64748b!important}
+.funnel-label.status-closed{background:#78716c!important}
 .funnel-bar{background:rgba(8,14,24,.7);border-radius:8px;height:18px;overflow:hidden;border:1px solid var(--rule)}
 .funnel-fill{height:100%;border-radius:8px;min-width:2px;background:var(--grad)!important;background-size:200% 100%;animation:flow 4s linear infinite,grow 1s ease;box-shadow:0 0 16px rgba(34,211,238,.45)}
 @keyframes flow{to{background-position:200% 0}}
@@ -426,6 +427,7 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-rejected{background:#dc2626!important}
 html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-withdrawn,
 html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-ghosted{background:#64748b!important}
+html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="professional"],[data-theme="slate"]) .funnel-fill.status-closed{background:#78716c!important}
 
 /* tables */
 table.grid{width:100%;border-collapse:collapse;margin-top:10px}
@@ -596,8 +598,34 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 .status-rejected{background:#dc2626;color:#fff;border-color:#dc2626;box-shadow:none}
 .status-withdrawn{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none}
 .status-ghosted{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none}
+.status-closed{background:#78716c;color:#fff;border-color:#78716c;box-shadow:none}
 .status-new{background:#0ea5e9;color:#fff;border-color:#0ea5e9;box-shadow:none}
 .status-not-applied{background:#ca8a04;color:#fff;border-color:#ca8a04;box-shadow:none}
+.status-move-panel{
+  border:2px solid var(--accent, #22d3ee);
+  box-shadow:0 0 0 1px rgba(34,211,238,.12),0 12px 28px -18px rgba(34,211,238,.45);
+}
+.status-move-panel .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.status-move-panel .panel-head h2{margin:0}
+.status-move-hint{margin:.35rem 0 .75rem}
+.status-current-pill{font-size:calc(var(--base-font) * .92)}
+.status-picker{
+  display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px;
+  padding:12px;border-radius:12px;background:var(--pre-bg);border:1px solid var(--rule);
+}
+.status-opt{position:relative;cursor:pointer;margin:0}
+.status-opt input{position:absolute;opacity:0;pointer-events:none}
+.status-opt-pill{
+  display:inline-block;padding:8px 12px;border-radius:999px;font-weight:700;
+  font-size:calc(var(--base-font) * .9);line-height:1.2;border:2px solid transparent;
+  opacity:.78;transition:opacity .15s,transform .15s,box-shadow .15s,border-color .15s;
+}
+.status-opt:hover .status-opt-pill{opacity:1;transform:translateY(-1px)}
+.status-opt.is-selected .status-opt-pill{
+  opacity:1;border-color:#fff;box-shadow:0 0 0 2px rgba(34,211,238,.55),0 8px 18px -10px rgba(0,0,0,.45);
+}
+.status-update-btn{align-self:flex-start;min-width:10rem;font-size:calc(var(--base-font) * 1.02);padding:11px 18px}
+.status-note{min-height:4.5rem}
 html[data-theme="professional"] .status-not-applied,
 html[data-theme="slate"] .status-not-applied,
 html[data-theme="futuristic-light"] .status-not-applied,
