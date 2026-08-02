@@ -100,7 +100,8 @@
       </td>
       <td class="col-mail" onclick="event.stopPropagation()">
         {% if unread %}
-          <form method="post" action="{{ url_for('main.alert_read', alert_id=r.id, all=1 if show_all else none, ignored=1 if show_ignored else none) }}" style="display:inline">
+          <form method="post" action="{{ url_for('main.alert_read', alert_id=r.id, all=1 if show_all else none, ignored=1 if show_ignored else none) }}"
+                class="alert-ajax" data-alert-action="read" style="display:inline">
             <button type="submit" class="mail-icon unread" title="Unread — click to mark as read">✉</button>
           </form>
         {% else %}
@@ -161,12 +162,14 @@
       </td>
       <td class="actions-cell" onclick="event.stopPropagation()">
         {% if r.ignored %}
-          <form method="post" action="{{ url_for('main.alert_unignore', alert_id=r.id) }}" style="display:inline">
+          <form method="post" action="{{ url_for('main.alert_unignore', alert_id=r.id) }}"
+                class="alert-ajax" data-alert-action="unignore" style="display:inline">
             <button class="btn sm" type="submit" title="Remove from the ignore list">🔔 Unignore</button>
           </form>
         {% else %}
           {% if unread %}
-            <form method="post" action="{{ url_for('main.alert_read', alert_id=r.id, all=1 if show_all else none) }}" style="display:inline">
+            <form method="post" action="{{ url_for('main.alert_read', alert_id=r.id, all=1 if show_all else none) }}"
+                  class="alert-ajax" data-alert-action="read" style="display:inline">
               <button class="btn sm" type="submit" title="Mark as read">✉ Read</button>
             </form>
           {% endif %}
@@ -186,15 +189,18 @@
             </form>
           {% endif %}
           {% if r.dismissed %}
-            <form method="post" action="{{ url_for('main.alert_restore', alert_id=r.id) }}" style="display:inline">
+            <form method="post" action="{{ url_for('main.alert_restore', alert_id=r.id) }}"
+                  class="alert-ajax" data-alert-action="restore" style="display:inline">
               <button class="btn sm" type="submit" title="Bring this alert back to the active list">↩ Restore</button>
             </form>
           {% else %}
-            <form method="post" action="{{ url_for('main.alert_dismiss', alert_id=r.id, all=1 if show_all else none) }}" style="display:inline">
+            <form method="post" action="{{ url_for('main.alert_dismiss', alert_id=r.id, all=1 if show_all else none) }}"
+                  class="alert-ajax" data-alert-action="dismiss" style="display:inline">
               <button class="btn sm" type="submit" title="Not interested — hide this alert">✕ Dismiss</button>
             </form>
           {% endif %}
-          <form method="post" action="{{ url_for('main.alert_ignore', alert_id=r.id, all=1 if show_all else none) }}" style="display:inline">
+          <form method="post" action="{{ url_for('main.alert_ignore', alert_id=r.id, all=1 if show_all else none) }}"
+                class="alert-ajax" data-alert-action="ignore" style="display:inline">
             <button class="btn sm" type="submit" title="Ignore forever — hide and never notify about this job again">🔕 Ignore</button>
           </form>
         {% endif %}
@@ -212,11 +218,13 @@
 <script>
 (function () {
   var form = document.getElementById('alerts-bulk-form');
-  if (!form) return;
   var bar = document.getElementById('alerts-bulk-bar');
   var countEl = document.getElementById('alerts-selected-count');
   var selectAll = document.getElementById('alerts-select-all');
   var table = document.getElementById('alerts-table');
+  var showQueue = {{ 'true' if show_queue else 'false' }};
+  var showAll = {{ 'true' if show_all else 'false' }};
+  var showIgnored = {{ 'true' if show_ignored else 'false' }};
 
   function checks() {
     return Array.prototype.slice.call(
@@ -245,14 +253,113 @@
       sync();
     });
   }
-  form.addEventListener('submit', function (e) {
-    var n = checks().filter(function (c) { return c.checked; }).length;
-    if (!n) {
-      e.preventDefault();
-      alert('Select at least one alert.');
-    }
-  });
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      var n = checks().filter(function (c) { return c.checked; }).length;
+      if (!n) {
+        e.preventDefault();
+        alert('Select at least one alert.');
+      }
+    });
+  }
   sync();
+
+  function updateNavBadge(n) {
+    var link = document.querySelector('nav a[href$="/alerts"], nav a[href*="/alerts?"]');
+    if (!link) link = document.querySelector('a[href$="/alerts"]');
+    if (!link || typeof n !== 'number') return;
+    var badge = link.querySelector('.nav-badge');
+    if (n <= 0) {
+      if (badge) badge.remove();
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'nav-badge';
+      badge.title = n + ' unread job alert(s)';
+      link.appendChild(badge);
+    }
+    badge.textContent = String(n);
+  }
+
+  function markRowRead(tr) {
+    tr.classList.remove('alert-unread');
+    var mail = tr.querySelector('.col-mail');
+    if (mail) mail.innerHTML = '<span class="mail-icon read" title="Read">📭</span>';
+    var title = tr.querySelector('.alert-title-link');
+    if (title) title.classList.remove('unread');
+    tr.querySelectorAll('form[data-alert-action="read"]').forEach(function (f) {
+      f.remove();
+    });
+  }
+
+  function removeRow(tr) {
+    tr.style.transition = 'opacity .15s';
+    tr.style.opacity = '0';
+    setTimeout(function () {
+      tr.remove();
+      sync();
+      if (table && !table.querySelector('tbody tr[data-alert-id]')) {
+        var tb = table.querySelector('tbody');
+        if (tb) {
+          tb.innerHTML = '<tr><td colspan="10" class="muted">No alerts left in this view.</td></tr>';
+        }
+      }
+    }, 150);
+  }
+
+  // Instant dismiss / ignore / read without reloading the whole (slow) page.
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f || !f.classList || !f.classList.contains('alert-ajax')) return;
+    e.preventDefault();
+    var tr = f.closest('tr[data-alert-id]');
+    var action = f.getAttribute('data-alert-action') || '';
+    var btn = f.querySelector('button[type="submit"]');
+    if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
+    fetch(f.action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'fetch', 'Accept': 'application/json' },
+      body: new FormData(f),
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+      })
+      .then(function (res) {
+        if (!res.ok || !res.j || !res.j.ok) {
+          if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
+          window.location.href = f.action;
+          return;
+        }
+        if (typeof res.j.new_count === 'number') updateNavBadge(res.j.new_count);
+        if (action === 'read' && tr) {
+          markRowRead(tr);
+          return;
+        }
+        // Drop the row when it no longer belongs in the current list.
+        var leavesList =
+          ((action === 'dismiss' || action === 'ignore') && !showAll)
+          || (action === 'restore' && showAll)
+          || (action === 'unignore' && showIgnored);
+        if (tr && leavesList) {
+          removeRow(tr);
+          return;
+        }
+        if (tr && action === 'dismiss' && showAll) {
+          tr.classList.add('muted');
+          var cell = tr.querySelector('.alert-status-cell');
+          if (cell) cell.innerHTML = '<span class="pill">dismissed</span>';
+          f.remove();
+          return;
+        }
+        window.location.reload();
+      })
+      .catch(function () {
+        if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
+        window.location.href = f.action;
+      });
+  });
 })();
 </script>
 {% endblock %}

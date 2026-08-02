@@ -1234,6 +1234,44 @@ def applications():
     )
 
 
+def _alerts_app_maps(matched_ids: list[int]) -> tuple[dict, dict, dict, dict]:
+    """Lightweight app lookup for alert rows (avoid SELECT * from applications)."""
+    from ..db import get_connection
+    ids = sorted({int(i) for i in matched_ids if i})
+    if not ids:
+        return {}, {}, {}, {}
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        apps = conn.execute(
+            f"SELECT id, company, title, date_applied, status FROM applications "
+            f"WHERE id IN ({placeholders})",
+            ids,
+        ).fetchall()
+    app_names = {r["id"]: f"{r['company']} — {r['title']}" for r in apps}
+    app_dates = {r["id"]: (r["date_applied"] or "")[:10] for r in apps}
+    app_status = {r["id"]: r["status"] for r in apps}
+    app_paths = tracker.status_paths_for_apps(ids)
+    return app_names, app_dates, app_status, app_paths
+
+
+def _alert_json(alert_id: int, **extra):
+    """JSON response for AJAX alert actions (dismiss / ignore / read, …)."""
+    body = {
+        "ok": True,
+        "id": alert_id,
+        "queue_count": gmail_alerts.action_queue_count(),
+        "new_count": gmail_alerts.new_alert_count(),
+    }
+    body.update(extra)
+    return body
+
+
+def _wants_alert_json() -> bool:
+    return (request.headers.get("X-Requested-With") == "fetch"
+            or request.accept_mimetypes.best == "application/json"
+            or request.args.get("ajax") == "1")
+
+
 @bp.route("/alerts")
 def alerts():
     """Job postings collected from Gmail alert emails, vs. what you applied to."""
@@ -1244,18 +1282,15 @@ def alerts():
                   and request.args.get("view", "queue") != "all")
     connected = gmail_alerts.is_connected()
     if connected:
-        try:  # keep 'applied' badges fresh (cheap: local fuzzy matching only)
+        try:
+            # Throttled / dirty-flag rematch — full rematch runs after Gmail fetch.
             gmail_alerts.refresh_matches()
         except Exception:
             pass
     rows = gmail_alerts.list_alerts(include_dismissed=show_all,
                                     ignored=show_ignored, queue=show_queue)
-    apps = tracker.list_applications()
-    app_names = {r["id"]: f"{r['company']} — {r['title']}" for r in apps}
-    app_dates = {r["id"]: (r["date_applied"] or "")[:10] for r in apps}
-    app_status = {r["id"]: r["status"] for r in apps}
     matched_ids = [r["matched_app_id"] for r in rows if r["matched_app_id"]]
-    app_paths = tracker.status_paths_for_apps(matched_ids)
+    app_names, app_dates, app_status, app_paths = _alerts_app_maps(matched_ids)
     return render_template(
         "alerts.html", rows=rows, show_all=show_all, show_ignored=show_ignored,
         show_queue=show_queue, connected=connected, app_names=app_names,
@@ -1305,8 +1340,8 @@ def alerts_seen():
 def alert_read(alert_id: int):
     """Mark one alert as read (mailbox-style)."""
     gmail_alerts.set_seen(alert_id, True)
-    if request.headers.get("X-Requested-With") == "fetch":
-        return {"ok": True, "id": alert_id}
+    if _wants_alert_json():
+        return _alert_json(alert_id, action="read")
     return redirect(url_for("main.alerts", **request.args))
 
 
@@ -1480,18 +1515,24 @@ def alerts_bulk():
 @bp.route("/alerts/<int:alert_id>/dismiss", methods=["POST"])
 def alert_dismiss(alert_id: int):
     gmail_alerts.set_dismissed(alert_id, True)
+    if _wants_alert_json():
+        return _alert_json(alert_id, action="dismiss", remove=True)
     return redirect(url_for("main.alerts", **request.args))
 
 
 @bp.route("/alerts/<int:alert_id>/restore", methods=["POST"])
 def alert_restore(alert_id: int):
     gmail_alerts.set_dismissed(alert_id, False)
+    if _wants_alert_json():
+        return _alert_json(alert_id, action="restore", remove=True)
     return redirect(url_for("main.alerts", all=1))
 
 
 @bp.route("/alerts/<int:alert_id>/ignore", methods=["POST"])
 def alert_ignore(alert_id: int):
     gmail_alerts.set_ignored(alert_id, True)
+    if _wants_alert_json():
+        return _alert_json(alert_id, action="ignore", remove=True)
     flash("Added to the ignore list — this job won't notify you again.", "ok")
     return redirect(url_for("main.alerts", **request.args))
 
@@ -1499,6 +1540,8 @@ def alert_ignore(alert_id: int):
 @bp.route("/alerts/<int:alert_id>/unignore", methods=["POST"])
 def alert_unignore(alert_id: int):
     gmail_alerts.set_ignored(alert_id, False)
+    if _wants_alert_json():
+        return _alert_json(alert_id, action="unignore", remove=True)
     return redirect(url_for("main.alerts", ignored=1))
 
 

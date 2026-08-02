@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS status_history (
 
 CREATE INDEX IF NOT EXISTS idx_app_status ON applications(status);
 CREATE INDEX IF NOT EXISTS idx_hist_app ON status_history(application_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_queue
+    ON job_alerts(ignored, dismissed, matched_app_id, seen, alert_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_badge
+    ON job_alerts(seen, dismissed, ignored, matched_app_id);
 
 -- Job postings extracted from Gmail job-alert emails (see gmail_alerts.py).
 CREATE TABLE IF NOT EXISTS job_alerts (
@@ -409,6 +413,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
 
     _migrate_mailbox_tables(conn)
+
+    # Idempotent indexes for alerts queue / badge (older DBs may lack them).
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_alerts_queue "
+        "ON job_alerts(ignored, dismissed, matched_app_id, seen, alert_at)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_alerts_badge "
+        "ON job_alerts(seen, dismissed, ignored, matched_app_id)")
 
 
 def init_db() -> None:

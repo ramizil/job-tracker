@@ -478,7 +478,7 @@ def fetch_alerts() -> dict:
             errors.append(str(exc))
         except Exception as exc:
             errors.append(f"{acct.get('email') or acct.get('id')}: {exc}")
-    refresh_matches()
+    refresh_matches(force=True)
     out = {"emails": total_emails, "jobs": total_jobs, "mailboxes": len(accounts)}
     if errors and not (total_emails or total_jobs):
         raise AlertsError("; ".join(errors))
@@ -592,6 +592,13 @@ def _fetch_alerts_for_account(account: dict) -> dict:
 # --------------------------------------------------------------------------- #
 # Matching alerts against the applications list
 # --------------------------------------------------------------------------- #
+# Full rematch used to run on every GET /alerts and cost several seconds with
+# hundreds of alerts. Throttle page-load refreshes; force after Gmail fetch /
+# when applications change (mark_matches_dirty).
+_MATCH_STATE = {"at": 0.0, "dirty": True}
+_MATCH_TTL_S = 300  # 5 minutes between automatic rematches
+
+
 def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9\u0590-\u05ff ]+", " ", (s or "").lower()).strip()
 
@@ -600,61 +607,110 @@ def _sim(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
 
 
+def mark_matches_dirty() -> None:
+    """Call after applications are added/updated so the next alerts view rematches."""
+    _MATCH_STATE["dirty"] = True
+
+
+def _app_match_index(apps) -> tuple[list[tuple], dict[str, int]]:
+    """Precompute per-app keys + normalised fields once for the whole rematch."""
+    from .tracker import _job_url_keys
+
+    meta: list[tuple] = []
+    by_key: dict[str, int] = {}
+    for app in apps:
+        keys = _job_url_keys(app["url"] or "")
+        m = _JOB_URL_RE.search(app["url"] or "")
+        if m:
+            keys.add(m.group(1))
+            keys.add(f"linkedin:{m.group(1)}")
+        aid = int(app["id"])
+        for k in keys:
+            if k and k not in by_key:
+                by_key[k] = aid
+        meta.append((aid, _norm(app["company"]), _norm(app["title"])))
+    return meta, by_key
+
+
 def _match_one(alert, apps) -> int | None:
-    """Best application match for an alert: URL job-id first, then fuzzy."""
+    """Best application match for an alert: URL job-id first, then fuzzy.
+
+    ``apps`` may be raw DB rows (legacy) or the precomputed meta from
+    ``_app_match_index`` — prefer calling ``refresh_matches`` which uses the fast path.
+    """
+    meta, by_key = _app_match_index(apps)
+    return _match_one_fast(alert, meta, by_key)
+
+
+def _match_one_fast(alert, app_meta: list[tuple],
+                    by_key: dict[str, int]) -> int | None:
     from .tracker import _job_url_keys
 
     key = alert["job_key"] or ""
     alert_keys = {key} if key else set()
-    # Also derive keys from the stored URL (Indeed jk, LinkedIn id, …).
-    # job_alerts rows don't always have url in the SELECT — handle both shapes.
     url = ""
     try:
         url = alert["url"] or ""
     except (KeyError, IndexError, TypeError):
         url = ""
     alert_keys |= _job_url_keys(url)
-    # LinkedIn legacy keys are bare numeric ids
     if key.isdigit():
         alert_keys.add(f"linkedin:{key}")
     if key.startswith("indeed:"):
         alert_keys.add(key)
 
-    for app in apps:
-        app_keys = _job_url_keys(app["url"] or "")
-        # Legacy LinkedIn bare-id equality
-        m = _JOB_URL_RE.search(app["url"] or "")
-        if m:
-            app_keys.add(m.group(1))
-            app_keys.add(f"linkedin:{m.group(1)}")
-        if alert_keys & app_keys:
-            return app["id"]
+    for k in alert_keys:
+        hit = by_key.get(k)
+        if hit is not None:
+            return hit
 
     a_company = _norm(alert["company"])
     a_title = _norm(alert["title"])
     if not a_company or not a_title:
         return None
-    for app in apps:
-        c = _norm(app["company"])
+    for aid, c, t in app_meta:
         if not c:
             continue
         company_ok = (c == a_company or c in a_company or a_company in c
                       or _sim(c, a_company) >= 0.85)
-        if company_ok and _sim(_norm(app["title"]), a_title) >= 0.55:
-            return app["id"]
+        if company_ok and _sim(t, a_title) >= 0.55:
+            return aid
     return None
 
 
-def refresh_matches() -> None:
-    """Recompute + persist which alerts correspond to existing applications."""
+def refresh_matches(*, force: bool = False) -> bool:
+    """Recompute which alerts correspond to existing applications.
+
+    Returns True if a rematch ran. Skips when not forced, not dirty, and the
+    last run was within ``_MATCH_TTL_S`` (keeps the Alerts tab snappy).
+    """
+    now = time.monotonic()
+    if not force and not _MATCH_STATE["dirty"]:
+        if now - _MATCH_STATE["at"] < _MATCH_TTL_S:
+            return False
+
     with get_connection() as conn:
         apps = conn.execute(
             "SELECT id, company, title, url FROM applications").fetchall()
+        app_meta, by_key = _app_match_index(apps)
         alerts = conn.execute(
-            "SELECT id, job_key, title, company, url FROM job_alerts").fetchall()
+            "SELECT id, job_key, title, company, url, matched_app_id "
+            "FROM job_alerts").fetchall()
+        updates: list[tuple[int | None, int]] = []
         for alert in alerts:
-            conn.execute("UPDATE job_alerts SET matched_app_id=? WHERE id=?",
-                         (_match_one(alert, apps), alert["id"]))
+            mid = _match_one_fast(alert, app_meta, by_key)
+            old = alert["matched_app_id"]
+            if mid != old:
+                updates.append((mid, int(alert["id"])))
+        if updates:
+            conn.executemany(
+                "UPDATE job_alerts SET matched_app_id=? WHERE id=?",
+                updates,
+            )
+
+    _MATCH_STATE["at"] = now
+    _MATCH_STATE["dirty"] = False
+    return True
 
 
 # --------------------------------------------------------------------------- #

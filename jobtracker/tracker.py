@@ -63,6 +63,11 @@ def add_application(
                    VALUES (?,?,?,?,?)""",
                 (app_id, None, status, "created", ts),
             )
+            try:
+                from . import gmail_alerts
+                gmail_alerts.mark_matches_dirty()
+            except Exception:
+                pass
             return app_id
         except sqlite3.IntegrityError:
             row = conn.execute(
