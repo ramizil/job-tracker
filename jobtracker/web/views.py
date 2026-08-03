@@ -14,8 +14,10 @@ from pathlib import Path
 
 from datetime import datetime
 
+import threading
+
 from flask import (
-    Blueprint, Response, abort, flash, make_response, redirect,
+    Blueprint, Response, abort, current_app, flash, make_response, redirect,
     render_template, request, send_file, url_for,
 )
 
@@ -1667,6 +1669,29 @@ def _refresh_rejection_overall() -> None:
         json.dumps(overall, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _schedule_rejection_analysis(app_id: int) -> None:
+    """Run per-rejection + overall AI insights off the request path (can take minutes)."""
+    if not ai.is_configured():
+        return
+    app = current_app._get_current_object()
+
+    def _run() -> None:
+        with app.app_context():
+            try:
+                _analyze_rejection_app(app_id)
+                try:
+                    _refresh_rejection_overall()
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    threading.Thread(
+        target=_run, daemon=True,
+        name=f"rejection-analysis-{app_id}",
+    ).start()
+
+
 @bp.route("/rejection-inbox/<int:row_id>/confirm", methods=["POST"])
 def rejection_inbox_confirm(row_id: int):
     app_id = int(request.form.get("app_id", "0") or 0)
@@ -1681,20 +1706,15 @@ def rejection_inbox_confirm(row_id: int):
         flash("Could not update that application.", "error")
         return redirect(url_for("main.rejection_inbox", **request.args))
 
-    flash("Application marked rejected.", "ok")
-    # Close the loop: analyze this rejection and open the insights dashboard.
+    # Confirm is a quick DB write — AI post-mortem used to block this request
+    # for 1+ minutes. Kick it off in the background instead.
     if ai.is_configured():
-        try:
-            _analyze_rejection_app(app_id)
-            flash("Rejection analysis ready — see insights below.", "ok")
-            try:
-                _refresh_rejection_overall()
-            except ai.AIError as exc:
-                flash(f"Overall patterns not refreshed: {exc}", "error")
-            return redirect(url_for("main.rejections"))
-        except ai.AIError as exc:
-            flash(f"Rejection saved, but analysis failed: {exc}", "error")
-    return redirect(url_for("main.rejection_inbox", **request.args))
+        _schedule_rejection_analysis(app_id)
+        flash("Application marked rejected. AI insights are generating in the "
+              "background — open Rejection insights in a moment.", "ok")
+    else:
+        flash("Application marked rejected.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id))
 
 
 @bp.route("/application/<int:app_id>")

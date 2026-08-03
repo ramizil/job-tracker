@@ -603,6 +603,7 @@ def _match_one(row: dict, apps) -> tuple[int | None, str]:
 
 
 def refresh_matches() -> None:
+    """Recompute matches for pending rejection-inbox rows (skip unchanged)."""
     with get_connection() as conn:
         apps = conn.execute(
             "SELECT id, company, title, url, status FROM applications"
@@ -621,6 +622,10 @@ def refresh_matches() -> None:
                         "UPDATE rejection_inbox SET company=? WHERE id=?",
                         (patched["company"], row["id"]))
             app_id, conf = _match_one(rd, apps)
+            old_id = row["matched_app_id"]
+            old_conf = row["match_confidence"] or ""
+            if app_id == old_id and (conf or "") == old_conf:
+                continue
             conn.execute(
                 """UPDATE rejection_inbox
                       SET matched_app_id=?, match_confidence=?
