@@ -322,6 +322,124 @@
   </script>
 
   <script>
+    // Background rejection-analysis toast + chime when AI post-mortem finishes.
+    (function () {
+      var URL = '{{ url_for('main.rejection_analysis_status') }}';
+      var ACK = '{{ url_for('main.rejection_analysis_ack') }}';
+      var INSIGHTS = '{{ url_for('main.rejections') }}';
+      var SEEN_KEY = 'jt-rej-analysis-seen';
+      var timer = null;
+      var fastUntil = 0;
+
+      // After Confirm rejection (?rej_analysis=1), poll faster for a few minutes.
+      try {
+        if (/[?&]rej_analysis=1(?:&|$)/.test(location.search)) {
+          fastUntil = Date.now() + 8 * 60 * 1000;
+          var u = new URL(location.href);
+          u.searchParams.delete('rej_analysis');
+          history.replaceState(null, '', u.pathname + u.search + u.hash);
+        }
+      } catch (e) {}
+
+      function seenIds() {
+        try { return JSON.parse(sessionStorage.getItem(SEEN_KEY) || '[]'); }
+        catch (e) { return []; }
+      }
+      function markSeen(ids) {
+        var seen = seenIds();
+        ids.forEach(function (id) {
+          if (seen.indexOf(id) < 0) seen.push(id);
+        });
+        sessionStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+      }
+
+      function toastReady(job) {
+        var el = document.createElement('a');
+        el.className = 'toast';
+        el.href = INSIGHTS;
+        var label = (job.company || 'Job') + (job.title ? ' — ' + job.title : '');
+        el.innerHTML = '🧠 Rejection analysis ready for <b>' +
+                       label.replace(/[<>&]/g, '') + '</b> — view insights';
+        document.body.appendChild(el);
+        setTimeout(function () { el.classList.add('show'); }, 30);
+        setTimeout(function () {
+          el.classList.remove('show');
+          setTimeout(function () { el.remove(); }, 400);
+        }, 14000);
+        if (window.jtAiSound) window.jtAiSound.play();
+      }
+
+      function toastError(job) {
+        var el = document.createElement('a');
+        el.className = 'toast';
+        el.href = INSIGHTS;
+        el.innerHTML = '⚠️ Rejection analysis failed' +
+                       (job.company ? ' for <b>' + String(job.company).replace(/[<>&]/g, '') + '</b>' : '') +
+                       ' — open insights to retry';
+        document.body.appendChild(el);
+        setTimeout(function () { el.classList.add('show'); }, 30);
+        setTimeout(function () {
+          el.classList.remove('show');
+          setTimeout(function () { el.remove(); }, 400);
+        }, 14000);
+      }
+
+      function ack(ids) {
+        if (!ids.length) return;
+        fetch(ACK, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'fetch',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ ids: ids }),
+          credentials: 'same-origin'
+        }).catch(function () {});
+      }
+
+      function scheduleNext(hasRunning) {
+        if (timer) clearTimeout(timer);
+        var ms = 30000;
+        if (hasRunning || Date.now() < fastUntil) ms = 4000;
+        timer = setTimeout(poll, ms);
+      }
+
+      function poll() {
+        fetch(URL, { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d) { scheduleNext(false); return; }
+            var seen = seenIds();
+            var notify = [];
+            (d.ready || []).forEach(function (j) {
+              if (!j || seen.indexOf(j.app_id) >= 0) return;
+              toastReady(j);
+              notify.push(j.app_id);
+            });
+            (d.errors || []).forEach(function (j) {
+              if (!j || seen.indexOf(j.app_id) >= 0) return;
+              toastError(j);
+              notify.push(j.app_id);
+            });
+            if (notify.length) {
+              markSeen(notify);
+              ack(notify);
+            }
+            if ((d.running || []).length) fastUntil = Math.max(fastUntil, Date.now() + 60000);
+            scheduleNext((d.running || []).length > 0);
+          })
+          .catch(function () { scheduleNext(Date.now() < fastUntil); });
+      }
+
+      poll();
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) poll();
+      });
+    })();
+  </script>
+
+  <script>
     // Liveness heartbeat: keeps the local server alive only while a tab is open.
     // When the window/tab is closed, pings stop and the server auto-shuts down.
     (function () {

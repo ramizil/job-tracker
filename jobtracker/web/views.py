@@ -1669,27 +1669,105 @@ def _refresh_rejection_overall() -> None:
         json.dumps(overall, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# Background rejection-analysis jobs (for toast when ready). app_id → job dict.
+_REJ_ANALYSIS_JOBS: dict[int, dict] = {}
+_REJ_ANALYSIS_LOCK = threading.Lock()
+_REJ_ANALYSIS_KEEP_S = 900  # keep ready/error jobs ~15 min for polling
+
+
+def _rej_analysis_prune(now: float | None = None) -> None:
+    now = time.time() if now is None else now
+    stale = [
+        aid for aid, job in _REJ_ANALYSIS_JOBS.items()
+        if job.get("status") != "running"
+        and (now - float(job.get("ready_at") or job.get("started_at") or 0))
+        > _REJ_ANALYSIS_KEEP_S
+    ]
+    for aid in stale:
+        _REJ_ANALYSIS_JOBS.pop(aid, None)
+
+
 def _schedule_rejection_analysis(app_id: int) -> None:
     """Run per-rejection + overall AI insights off the request path (can take minutes)."""
     if not ai.is_configured():
         return
     app = current_app._get_current_object()
+    row = tracker.get_application(app_id)
+    company = (row["company"] if row else "") or ""
+    title = (row["title"] if row else "") or ""
+    started = time.time()
+    with _REJ_ANALYSIS_LOCK:
+        _rej_analysis_prune(started)
+        _REJ_ANALYSIS_JOBS[app_id] = {
+            "app_id": app_id,
+            "status": "running",
+            "started_at": started,
+            "ready_at": None,
+            "error": None,
+            "company": company,
+            "title": title,
+        }
 
     def _run() -> None:
         with app.app_context():
+            err: str | None = None
             try:
                 _analyze_rejection_app(app_id)
                 try:
                     _refresh_rejection_overall()
                 except Exception:
                     pass
-            except Exception:
-                pass
+            except Exception as exc:
+                err = str(exc)[:240]
+            ready_at = time.time()
+            with _REJ_ANALYSIS_LOCK:
+                job = _REJ_ANALYSIS_JOBS.get(app_id)
+                if not job:
+                    return
+                job["ready_at"] = ready_at
+                if err:
+                    job["status"] = "error"
+                    job["error"] = err
+                else:
+                    job["status"] = "ready"
+                    job["error"] = None
 
     threading.Thread(
         target=_run, daemon=True,
         name=f"rejection-analysis-{app_id}",
     ).start()
+
+
+@bp.route("/rejections/analysis-status")
+def rejection_analysis_status():
+    """Polled by the UI: toast + chime when a background rejection analysis finishes."""
+    with _REJ_ANALYSIS_LOCK:
+        _rej_analysis_prune()
+        jobs = [dict(j) for j in _REJ_ANALYSIS_JOBS.values()]
+    return {
+        "running": [j for j in jobs if j.get("status") == "running"],
+        "ready": [j for j in jobs if j.get("status") == "ready"],
+        "errors": [j for j in jobs if j.get("status") == "error"],
+    }
+
+
+@bp.route("/rejections/analysis-ack", methods=["POST"])
+def rejection_analysis_ack():
+    """Client saw the ready toast — drop those jobs so they aren't re-toasted."""
+    payload = request.get_json(silent=True) or {}
+    ids = payload.get("ids") or request.form.getlist("ids")
+    cleared = 0
+    with _REJ_ANALYSIS_LOCK:
+        for raw in ids:
+            try:
+                aid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            job = _REJ_ANALYSIS_JOBS.get(aid)
+            if job and job.get("status") in ("ready", "error"):
+                _REJ_ANALYSIS_JOBS.pop(aid, None)
+                cleared += 1
+    return {"ok": True, "cleared": cleared}
 
 
 @bp.route("/rejection-inbox/<int:row_id>/confirm", methods=["POST"])
@@ -1711,9 +1789,9 @@ def rejection_inbox_confirm(row_id: int):
     if ai.is_configured():
         _schedule_rejection_analysis(app_id)
         flash("Application marked rejected. AI insights are generating in the "
-              "background — open Rejection insights in a moment.", "ok")
-    else:
-        flash("Application marked rejected.", "ok")
+              "background — you'll get a notification when they're ready.", "ok")
+        return redirect(url_for("main.detail", app_id=app_id, rej_analysis=1))
+    flash("Application marked rejected.", "ok")
     return redirect(url_for("main.detail", app_id=app_id))
 
 
