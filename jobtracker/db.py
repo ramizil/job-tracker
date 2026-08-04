@@ -43,10 +43,6 @@ CREATE TABLE IF NOT EXISTS status_history (
 
 CREATE INDEX IF NOT EXISTS idx_app_status ON applications(status);
 CREATE INDEX IF NOT EXISTS idx_hist_app ON status_history(application_id);
-CREATE INDEX IF NOT EXISTS idx_alerts_queue
-    ON job_alerts(ignored, dismissed, matched_app_id, seen, alert_at);
-CREATE INDEX IF NOT EXISTS idx_alerts_badge
-    ON job_alerts(seen, dismissed, ignored, matched_app_id);
 
 -- Job postings extracted from Gmail job-alert emails (see gmail_alerts.py).
 CREATE TABLE IF NOT EXISTS job_alerts (
@@ -68,6 +64,11 @@ CREATE TABLE IF NOT EXISTS job_alerts (
     comment        TEXT,                 -- user note; kept when the same job resurfaces
     created_at     TEXT NOT NULL
 );
+-- Indexes must come AFTER the table (new profiles have an empty DB).
+CREATE INDEX IF NOT EXISTS idx_alerts_queue
+    ON job_alerts(ignored, dismissed, matched_app_id, seen, alert_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_badge
+    ON job_alerts(seen, dismissed, ignored, matched_app_id);
 
 -- Alert emails already parsed, so a fetch never re-processes them.
 CREATE TABLE IF NOT EXISTS alert_emails (
