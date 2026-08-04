@@ -82,12 +82,59 @@
       <details class="mt"><summary class="btn danger sm">Mark rejected…</summary>
         <form method="post" action="{{ url_for('main.reject', app_id=app.id) }}" class="stack">
           <label>Stage <select name="stage">{% for s in stages %}<option>{{ s }}</option>{% endfor %}</select></label>
+          <p class="muted sm">Early = no_response / cv_screen (email/ATS). Later stages = after process started.</p>
           <label>Reason <select name="reason">{% for s in reasons %}<option>{{ s }}</option>{% endfor %}</select></label>
           <input name="note" placeholder="free-text note">
           <button class="btn danger" type="submit">Confirm rejection</button>
         </form>
       </details>
     </section>
+
+    {% if app.status == 'rejected' or rej_files %}
+    <section class="panel" id="rejection-files">
+      <div class="panel-head">
+        <h2>📎 Rejection files</h2>
+        {% if app.status == 'rejected' %}
+        <span class="pill rej-kind-{{ rejection_kind(app.rejection_stage) }}">{{ rejection_kind_label(app.rejection_stage) }}</span>
+        {% endif %}
+      </div>
+      <p class="muted sm">Attach the rejection email (PDF/screenshot), feedback, or take-home notes —
+        used by AI rejection insights.</p>
+      {% if app.status == 'rejected' %}
+      <p class="muted sm">Stage: <b>{{ app.rejection_stage or '—' }}</b>
+        · reason: <b>{{ app.rejection_reason or '—' }}</b>
+        {% if app.rejection_note %} · note: “{{ app.rejection_note }}”{% endif %}
+      </p>
+      {% endif %}
+      {% if rej_files %}
+      <ul class="rej-file-list">
+        {% for f in rej_files %}
+        <li>
+          <a href="{{ url_for('main.rejection_file_view', app_id=app.id, file_id=f.id) }}"
+             target="_blank" rel="noopener">{{ f.original_name }}</a>
+          <span class="muted sm">· {{ (f.created_at or '')[:10] }}</span>
+          {% if f.note %}<span class="muted sm">· {{ f.note }}</span>{% endif %}
+          <form method="post"
+                action="{{ url_for('main.rejection_file_delete', app_id=app.id, file_id=f.id) }}"
+                style="display:inline"
+                onsubmit="return confirm('Remove this attachment?');">
+            <button class="btn sm danger" type="submit" title="Remove">🗑</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted sm">No files attached yet.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('main.rejection_file_upload', app_id=app.id) }}"
+            enctype="multipart/form-data" class="stack mt">
+        <input type="file" name="file"
+               accept=".pdf,.txt,.md,.html,.htm,.docx,.png,.jpg,.jpeg,.webp,.gif" required>
+        <input name="note" placeholder="Optional note (e.g. email screenshot, feedback PDF)">
+        <button class="btn" type="submit">Attach file</button>
+      </form>
+    </section>
+    {% endif %}
 
     <section class="panel">
       <h2>👤 Contact</h2>

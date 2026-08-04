@@ -51,6 +51,15 @@ REJECTION_STAGES: list[str] = [
     "other",
 ]
 
+# Early = never reached a human process (email / ATS / silence).
+EARLY_REJECTION_STAGES = frozenset({"no_response", "cv_screen"})
+
+REJECTION_KIND_LABELS: dict[str, str] = {
+    "early": "Early — email / ATS",
+    "process": "After process",
+    "unknown": "Rejection (stage unset)",
+}
+
 # Common, codifiable rejection reasons - free text is also allowed.
 COMMON_REJECTION_REASONS: list[str] = [
     "overqualified",
@@ -75,3 +84,19 @@ def normalize_status(value: str) -> str:
             f"Unknown status '{value}'. Valid: {', '.join(STATUSES)}"
         )
     return v
+
+
+def rejection_kind(stage: str | None) -> str:
+    """Bucket a rejection stage: early | process | unknown."""
+    s = (stage or "").strip().lower()
+    if not s:
+        return "unknown"
+    if s in EARLY_REJECTION_STAGES:
+        return "early"
+    if s in REJECTION_STAGES:
+        return "process"
+    return "unknown"
+
+
+def rejection_kind_label(stage: str | None) -> str:
+    return REJECTION_KIND_LABELS.get(rejection_kind(stage), REJECTION_KIND_LABELS["unknown"])

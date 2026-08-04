@@ -2039,8 +2039,12 @@ Description:
 
 REJECTION DETAILS RECORDED BY THE CANDIDATE:
 Stage reached: {stage}
+Kind: {kind}  (early = email/ATS/no process; process = after interview/screen/test)
 Stated reason: {reason}
 Candidate's note: {note}
+
+EVIDENCE FILES THE CANDIDATE ATTACHED (email PDF, feedback, notes — use when present):
+{attachments}
 
 EARLIER AI FIT ANALYSIS OF THIS APPLICATION:
 {fit_summary}
@@ -2052,17 +2056,36 @@ CANDIDATE RESUME (plain text):
 
 def analyze_rejection(*, title: str, company: str, description: str,
                       stage: str, reason: str, note: str,
-                      fit_summary: str, resume: str | None = None
+                      fit_summary: str, resume: str | None = None,
+                      attachments: str = "",
+                      kind: str = "",
+                      image_parts: list[tuple[bytes, str]] | None = None,
                       ) -> dict[str, Any]:
     """Post-mortem of a single rejected application (bilingual, structured)."""
+    from .models import rejection_kind as _rej_kind, rejection_kind_label
+    kind_val = (kind or _rej_kind(stage)).strip() or "unknown"
+    kind_label = rejection_kind_label(stage)
     prompt = _REJECTION_PROMPT.format(
         title=title or "", company=company or "",
         description=(description or "")[:6000],
-        stage=stage or "unknown", reason=reason or "none given",
-        note=note or "none", fit_summary=(fit_summary or "not available")[:3000],
+        stage=stage or "unknown",
+        kind=f"{kind_val} ({kind_label})",
+        reason=reason or "none given",
+        note=note or "none",
+        attachments=(attachments or "(none)").strip()[:12000],
+        fit_summary=(fit_summary or "not available")[:3000],
         resume=(resume or resume_text())[:9000],
     )
-    data = _parse_json(_generate(prompt, as_json=True))
+    raw = ""
+    # Prefer multimodal Gemini when screenshots were attached.
+    if image_parts and active_provider() == "gemini" and config.GEMINI_API_KEY:
+        try:
+            raw = _generate_rejection_multimodal(prompt, image_parts)
+        except Exception:
+            raw = ""
+    if not raw:
+        raw = _generate(prompt, as_json=True)
+    data = _parse_json(raw)
     if not isinstance(data, dict):
         raise AIError("The AI returned an unexpected rejection-analysis format. "
                       "Please try again.")
@@ -2073,7 +2096,37 @@ def analyze_rejection(*, title: str, company: str, description: str,
                 "improvement", "improvement_he"):
         data[key] = str(data.get(key, "")).strip()
     data["missed_requirements"] = _bi_list(data.get("missed_requirements"))
+    data["rejection_kind"] = kind_val
     return data
+
+
+def _generate_rejection_multimodal(prompt: str,
+                                   image_parts: list[tuple[bytes, str]]) -> str:
+    """Gemini multimodal call for rejection screenshots + prompt."""
+    import time
+    from google.genai import types  # type: ignore
+
+    client = _client()
+    contents: list[Any] = []
+    for data, mime in image_parts[:4]:
+        if not data:
+            continue
+        contents.append(types.Part.from_bytes(data=data, mime_type=mime))
+    contents.append(prompt + "\n\nReturn ONLY valid JSON as specified.")
+    deadline = time.monotonic() + AI_TIMEOUT_S
+    last_exc: Exception | None = None
+    for model in _model_candidates():
+        if time.monotonic() >= deadline:
+            break
+        try:
+            resp = client.models.generate_content(model=model, contents=contents)
+            text = (getattr(resp, "text", None) or "").strip()
+            if text:
+                return text
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise AIError(f"Multimodal rejection analysis failed (last: {last_exc}).")
 
 
 _REJECTION_OVERALL_PROMPT = """You are a career coach reviewing a candidate's

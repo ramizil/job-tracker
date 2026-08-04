@@ -19,13 +19,20 @@
 </div>
 
 <div class="filters">
-  <a class="chip {{ '' if active or scope else 'on' }}" href="{{ url_for('main.applications') }}">all</a>
+  <a class="chip {{ '' if active or scope or rej_kind else 'on' }}" href="{{ url_for('main.applications') }}">all</a>
   {% if scope %}
   <a class="chip on" href="{{ url_for('main.applications', scope=scope) }}">{{ scope_label or scope }}</a>
   {% endif %}
   {% for s in statuses %}
-    <a class="chip {{ 'on' if active==s }}" href="{{ url_for('main.applications', status=s) }}">{{ s }}</a>
+    <a class="chip {{ 'on' if active==s and not rej_kind }}" href="{{ url_for('main.applications', status=s) }}">{{ s }}</a>
   {% endfor %}
+  <span class="muted sm" style="margin-left:6px">Rejected:</span>
+  <a class="chip {{ 'on' if rej_kind=='early' }}"
+     href="{{ url_for('main.applications', rej='early') }}"
+     title="Rejected by email / ATS / no response — no human process started">Early — email/ATS</a>
+  <a class="chip {{ 'on' if rej_kind=='process' }}"
+     href="{{ url_for('main.applications', rej='process') }}"
+     title="Rejected after recruiter screen, interview, test, etc.">After process</a>
 </div>
 
 <div class="tablebar" data-table-filter="#apps-table" data-table-ux="#apps-table">
@@ -51,7 +58,14 @@
       <td class="rowno" data-val="{{ seq[r.id] }}"><button type="button" class="star-btn {{ 'on' if r.starred }}"
             title="{{ 'Unstar' if r.starred else 'Mark as preferred' }}"
             data-star-url="{{ url_for('main.star', app_id=r.id) }}">{{ '★' if r.starred else '☆' }}</button> {{ seq[r.id] }}</td>
-      <td><span class="pill status-{{ r.status }}" title="{{ status_labels.get(r.status, r.status) }}">{{ r.status }}</span>{% if r.status == 'saved' %} <span class="alert-ic" title="Saved but not applied yet — handle this">⏰</span>{% endif %}</td>
+      <td>
+        <span class="pill status-{{ r.status }}" title="{{ status_labels.get(r.status, r.status) }}">{{ r.status }}</span>
+        {% if r.status == 'saved' %} <span class="alert-ic" title="Saved but not applied yet — handle this">⏰</span>{% endif %}
+        {% if r.status == 'rejected' %}
+        {% set rk = rejection_kind(r.rejection_stage) %}
+        <span class="pill rej-kind-{{ rk }}" title="Stage: {{ r.rejection_stage or 'unset' }}">{{ rejection_kind_label(r.rejection_stage) }}</span>
+        {% endif %}
+      </td>
       <td>{% if r.ai_fit_level %}<span class="fit fit-{{ r.ai_fit_level|lower }}" data-val="{{ r.ai_fit_level }}" title="{{ r.ai_fit_level }}{% if r.ai_verdict %} · {{ r.ai_verdict }}{% endif %}">{% if r.ai_fit_score is not none %}{{ r.ai_fit_score }}%{% else %}{{ r.ai_fit_level }}{% endif %}</span>{% endif %}</td>
       <td>{{ r.company }}</td>
       <td>{{ r.title }}</td>

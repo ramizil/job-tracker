@@ -160,6 +160,19 @@ CREATE TABLE IF NOT EXISTS application_resume_history (
 );
 CREATE INDEX IF NOT EXISTS idx_app_resume_hist
     ON application_resume_history(application_id);
+
+-- Evidence files attached to a rejection (email PDF, feedback, notes, …).
+CREATE TABLE IF NOT EXISTS rejection_files (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL,
+    original_name  TEXT NOT NULL,
+    stored_name    TEXT NOT NULL,
+    mime           TEXT,
+    note           TEXT,
+    created_at     TEXT NOT NULL,
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_rej_files_app ON rejection_files(application_id);
 """
 
 

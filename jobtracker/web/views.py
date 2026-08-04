@@ -23,13 +23,14 @@ from flask import (
 
 from .. import (ai, analytics, backup, config, connection_status, exporter,
                 gitbackup, gsheets, gmail_alerts, gmail_rejections, job_search,
-                pitch, resumes, search_hidden, search_meta, syncstatus, tracker,
-                tts, usage)
+                pitch, rejection_files, resumes, search_hidden, search_meta,
+                syncstatus, tracker, tts, usage)
 from .. import profiles as profiles_mod
 from .. import resume as resume_mod
 from ..matcher import score_job
-from ..models import (COMMON_REJECTION_REASONS, REJECTION_STAGES, STATUSES,
-                      STATUS_LABELS)
+from ..models import (COMMON_REJECTION_REASONS, REJECTION_KIND_LABELS,
+                      REJECTION_STAGES, STATUSES, STATUS_LABELS,
+                      rejection_kind, rejection_kind_label)
 from ..sources import get_sources, job_matches_query
 from ..sources.base import JobResult
 from ..db import now_iso
@@ -164,7 +165,12 @@ def inject_profiles():
 @bp.app_context_processor
 def inject_status_labels():
     """Friendly status labels (e.g. closed → closed — no longer hiring)."""
-    return {"status_labels": STATUS_LABELS}
+    return {
+        "status_labels": STATUS_LABELS,
+        "rejection_kind_labels": REJECTION_KIND_LABELS,
+        "rejection_kind": rejection_kind,
+        "rejection_kind_label": rejection_kind_label,
+    }
 
 def _tailored_path(app_id: int):
     return config.TAILORED_DIR / f"{app_id}.html"
@@ -950,8 +956,32 @@ def _fit_summary_for_prompt(r) -> str:
     return "\n".join(parts)
 
 
+def _analyze_rejection_kwargs(r, *, resume: str | None = None) -> dict:
+    """Common kwargs for ai.analyze_rejection from an application row."""
+    app_id = int(r["id"])
+    stage = r["rejection_stage"] or ""
+    files = rejection_files.list_for(app_id)
+    excerpt = rejection_files.text_excerpt(app_id)
+    if files and not excerpt:
+        excerpt = f"({len(files)} file(s) attached; no extractable text.)"
+    elif files:
+        excerpt = f"({len(files)} file(s) attached)\n\n{excerpt}"
+    return dict(
+        title=r["title"], company=r["company"],
+        description=r["description"] or "",
+        stage=stage, reason=r["rejection_reason"] or "",
+        note=r["rejection_note"] or "",
+        fit_summary=_fit_summary_for_prompt(r),
+        resume=resume,
+        kind=rejection_kind(stage),
+        attachments=excerpt,
+        image_parts=rejection_files.image_parts_for_gemini(app_id),
+    )
+
+
 def _rejection_verdicts_digest(rows, analyses) -> str:
     """Compact JSON of all cached per-rejection verdicts for the overall prompt."""
+    file_counts = rejection_files.counts_for([r["id"] for r in rows])
     items = []
     for r in rows:
         a = analyses.get(r["id"])
@@ -959,7 +989,10 @@ def _rejection_verdicts_digest(rows, analyses) -> str:
             continue
         items.append({
             "company": r["company"], "title": r["title"],
-            "stage": r["rejection_stage"], "reason": r["rejection_reason"],
+            "stage": r["rejection_stage"],
+            "kind": rejection_kind(r["rejection_stage"]),
+            "attachments": file_counts.get(r["id"], 0),
+            "reason": r["rejection_reason"],
             "ai_fit_score": r["ai_fit_score"],
             "cause": a.get("cause"), "confidence": a.get("confidence"),
             "avoidable": a.get("avoidable"),
@@ -1083,6 +1116,7 @@ def rejections():
         r["id"]: _resume_tune_prompt_for_rejection(r, analyses[r["id"]])
         for r in rows if analyses[r["id"]] and analyses[r["id"]].get("improvement")
     }
+    file_counts = rejection_files.counts_for([r["id"] for r in rows])
     return render_template(
         "rejections.html", rows=rows, analyses=analyses,
         overall=overall,
@@ -1091,6 +1125,7 @@ def rejections():
         baseline=analytics.rejection_baseline(),
         pending=sum(1 for r in rows if not analyses[r["id"]]),
         ai_on=ai.is_configured(),
+        file_counts=file_counts,
     )
 
 
@@ -1113,14 +1148,7 @@ def rejections_analyze():
             continue
         try:
             data = ai.analyze_rejection(
-                title=r["title"], company=r["company"],
-                description=r["description"] or "",
-                stage=r["rejection_stage"] or "",
-                reason=r["rejection_reason"] or "",
-                note=r["rejection_note"] or "",
-                fit_summary=_fit_summary_for_prompt(r),
-                resume=resume_txt or None,
-            )
+                **_analyze_rejection_kwargs(r, resume=resume_txt or None))
             tracker.set_rejection_analysis(r["id"], data)
             done += 1
         except ai.AIError as exc:
@@ -1163,13 +1191,7 @@ def rejection_reanalyze(app_id: int):
     if not r:
         abort(404)
     try:
-        data = ai.analyze_rejection(
-            title=r["title"], company=r["company"],
-            description=r["description"] or "",
-            stage=r["rejection_stage"] or "", reason=r["rejection_reason"] or "",
-            note=r["rejection_note"] or "",
-            fit_summary=_fit_summary_for_prompt(r),
-        )
+        data = ai.analyze_rejection(**_analyze_rejection_kwargs(r))
         tracker.set_rejection_analysis(app_id, data)
         flash(f"Rejection analysis updated for {r['company']}.", "ok")
     except ai.AIError as exc:
@@ -1207,6 +1229,9 @@ def rejections_export():
 def applications():
     status = request.args.get("status") or None
     scope = (request.args.get("scope") or "").strip().lower() or None
+    rej_kind = (request.args.get("rej") or "").strip().lower() or None
+    if rej_kind not in ("early", "process", "unknown"):
+        rej_kind = None
     # Scope presets from Dashboard metric cards (multi-status filters).
     scope_statuses: list[str] | None = None
     scope_label = None
@@ -1227,7 +1252,13 @@ def applications():
 
     # Default order = row number descending (newest application on top),
     # matching the '#' column; click a column header to re-sort client-side.
-    if scope_statuses:
+    if rej_kind:
+        rows = tracker.list_applications(status="rejected", order_by="id DESC")
+        rows = [r for r in rows
+                if rejection_kind(r["rejection_stage"]) == rej_kind]
+        status = "rejected"
+        scope = None
+    elif scope_statuses:
         rows = tracker.list_applications(
             statuses=scope_statuses, order_by="id DESC")
         status = None  # scope takes precedence over single status
@@ -1241,6 +1272,9 @@ def applications():
     return render_template(
         "applications.html", rows=rows, statuses=STATUSES,
         active=status, scope=scope, scope_label=scope_label, seq=seq,
+        rej_kind=rej_kind, rejection_kind_labels=REJECTION_KIND_LABELS,
+        rejection_kind=rejection_kind,
+        rejection_kind_label=rejection_kind_label,
     )
 
 
@@ -1642,13 +1676,7 @@ def _analyze_rejection_app(app_id: int) -> bool:
     r = tracker.get_application(app_id)
     if not r:
         return False
-    data = ai.analyze_rejection(
-        title=r["title"], company=r["company"],
-        description=r["description"] or "",
-        stage=r["rejection_stage"] or "", reason=r["rejection_reason"] or "",
-        note=r["rejection_note"] or "",
-        fit_summary=_fit_summary_for_prompt(r),
-    )
+    data = ai.analyze_rejection(**_analyze_rejection_kwargs(r))
     tracker.set_rejection_analysis(app_id, data)
     return True
 
@@ -1811,12 +1839,14 @@ def detail(app_id: int):
     resume_groups = resumes.list_resume_groups()
     sent_resume = resumes.for_application(app_id)
     resume_history = resumes.history_for(app_id)
+    rej_files = rejection_files.list_for(app_id)
     return render_template(
         "detail.html", app=r, history=tracker.get_history(app_id),
         analysis=analysis, mock=mock, statuses=STATUSES,
         status_labels=STATUS_LABELS,
         stages=REJECTION_STAGES,
         reasons=COMMON_REJECTION_REASONS, ai_on=ai.is_configured(),
+        rej_files=rej_files,
         has_tailored=_tailored_path(app_id).exists(),
         has_resume_draft=_tailored_draft_path(app_id).exists(),
         base_pitch=pitch.load_base_pitch("interview"),
@@ -2217,7 +2247,50 @@ def reject(app_id: int):
     tracker.set_rejection(app_id, stage=f.get("stage", ""),
                           reason=f.get("reason", ""), note=f.get("note", ""))
     flash("Marked rejected.", "ok")
-    return redirect(url_for("main.detail", app_id=app_id))
+    return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
+
+
+@bp.route("/application/<int:app_id>/rejection-files", methods=["POST"])
+def rejection_file_upload(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Choose a file to attach.", "error")
+        return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
+    try:
+        rejection_files.add(
+            app_id, data=f.read(), original_name=f.filename,
+            note=request.form.get("note", ""), mime=f.mimetype or "")
+        flash("Rejection file attached.", "ok")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    except OSError as exc:
+        flash(f"Could not save file: {exc}", "error")
+    return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
+
+
+@bp.route("/application/<int:app_id>/rejection-files/<int:file_id>")
+def rejection_file_view(app_id: int, file_id: int):
+    row = rejection_files.get(file_id)
+    if not row or int(row["application_id"]) != app_id:
+        abort(404)
+    path = rejection_files.path_for(row)
+    if not path.is_file():
+        abort(404)
+    return send_file(path, as_attachment=False,
+                     download_name=row["original_name"] or path.name)
+
+
+@bp.route("/application/<int:app_id>/rejection-files/<int:file_id>/delete",
+          methods=["POST"])
+def rejection_file_delete(app_id: int, file_id: int):
+    row = rejection_files.get(file_id)
+    if not row or int(row["application_id"]) != app_id:
+        abort(404)
+    rejection_files.delete(file_id)
+    flash("Attachment removed.", "ok")
+    return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
 
 
 @bp.route("/application/<int:app_id>/note", methods=["POST"])

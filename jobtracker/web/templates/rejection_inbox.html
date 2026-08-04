@@ -138,6 +138,8 @@
             <option {{ 'selected' if s == r.stage }}>{{ s }}</option>
             {% endfor %}
           </select>
+          <span class="muted sm" title="Used to separate Early (email/ATS) vs After process on Apps">
+            Early = no_response / cv_screen · later stages = after process started</span>
           <select name="reason" title="Rejection reason">
             {% for s in reasons %}
             <option {{ 'selected' if s == r.reason }}>{{ s }}</option>

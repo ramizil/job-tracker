@@ -112,8 +112,15 @@
   </div>
   <p class="muted sm">
     {% if r.rejection_date %}rejected {{ r.rejection_date[:10] }} · {% endif %}
-    stage: <b>{{ r.rejection_stage or '—' }}</b> · reason: <b>{{ r.rejection_reason or '—' }}</b>
+    <span class="pill rej-kind-{{ rejection_kind(r.rejection_stage) }}">{{ rejection_kind_label(r.rejection_stage) }}</span>
+    · stage: <b>{{ r.rejection_stage or '—' }}</b> · reason: <b>{{ r.rejection_reason or '—' }}</b>
     {% if r.rejection_note %} · note: “{{ r.rejection_note }}”{% endif %}
+    {% set nfiles = file_counts.get(r.id, 0) if file_counts else 0 %}
+    {% if nfiles %}
+    · <a href="{{ url_for('main.detail', app_id=r.id) }}#rejection-files">{{ nfiles }} file{{ 's' if nfiles != 1 else '' }}</a>
+    {% else %}
+    · <a href="{{ url_for('main.detail', app_id=r.id) }}#rejection-files">attach files</a>
+    {% endif %}
   </p>
 
   {% if a %}
