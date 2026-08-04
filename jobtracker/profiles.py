@@ -16,13 +16,22 @@ from .db import init_db
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
 
-# Files copied when a new profile "imports" from an existing one.
-# The applications DB is intentionally NOT copied — a new profile starts empty.
-_IMPORT_FILES = (
+# Personal artefacts — never copied unless the user explicitly opts in.
+_IMPORT_PERSONAL_FILES = (
     "profile.yaml", "pitch.md", "pitch.html",
     "pitch_recruiter.md", "pitch_recruiter.html",
     "built_resume.html",
 )
+
+# .env keys that identify a person / their paths — stripped on normal import.
+_PERSONAL_ENV_KEYS = frozenset({
+    "RESUME_PATH",
+    "BACKUP_DIR",
+    "DATA_BACKUP_REMOTE",
+    "GDRIVE_FOLDER",
+    "LINKEDIN_URL",
+    "GITHUB_URL",
+})
 
 
 class ProfileError(ValueError):
@@ -47,11 +56,38 @@ def _validate_name(name: str) -> str:
     return name
 
 
-def create_profile(name: str, import_from: str | None = None) -> str:
-    """Create a new profile; optionally import settings from another profile.
+def _copy_env(src_profile: str, dest_profile: str, *, copy_personal: bool) -> None:
+    """Copy .env; by default omit personal paths and profile links."""
+    src = config.env_path_for(src_profile)
+    if not src.exists():
+        return
+    dest = config.env_path_for(dest_profile)
+    if copy_personal:
+        shutil.copy2(src, dest)
+        return
+    lines_out: list[str] = []
+    for line in src.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            lines_out.append(line)
+            continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in _PERSONAL_ENV_KEYS:
+            continue
+        lines_out.append(line)
+    dest.write_text("\n".join(lines_out) + ("\n" if lines_out else ""),
+                    encoding="utf-8")
 
-    Importing copies the source profile's settings (.env) plus its match
-    profile, pitch and built resume — but never the applications database.
+
+def create_profile(name: str, import_from: str | None = None,
+                   *, copy_personal: bool = False) -> str:
+    """Create a new profile; optionally import non-personal settings.
+
+    By default, importing copies API keys and shared tool settings only —
+    not resume path, backup remotes, LinkedIn/GitHub links, pitch, or match
+    profile. Pass ``copy_personal=True`` to also copy those (explicit opt-in).
+
+    The applications database is never copied.
     """
     name = _validate_name(name)
     dest = config.PROFILES_DIR / name
@@ -65,14 +101,13 @@ def create_profile(name: str, import_from: str | None = None) -> str:
 
     dest.mkdir(parents=True)
     if import_from:
-        src_env = config.env_path_for(import_from)
-        if src_env.exists():
-            shutil.copy2(src_env, config.env_path_for(name))
-        src_dir = config.PROFILES_DIR / import_from
-        for fname in _IMPORT_FILES:
-            src = src_dir / fname
-            if src.exists():
-                shutil.copy2(src, dest / fname)
+        _copy_env(import_from, name, copy_personal=copy_personal)
+        if copy_personal:
+            src_dir = config.PROFILES_DIR / import_from
+            for fname in _IMPORT_PERSONAL_FILES:
+                src = src_dir / fname
+                if src.exists():
+                    shutil.copy2(src, dest / fname)
     return name
 
 

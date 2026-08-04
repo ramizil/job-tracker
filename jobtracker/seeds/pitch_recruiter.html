@@ -1,104 +1,55 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>תסריט לגיוס – רמי זילברשמיט</title>
+<title>Recruiter pitch — template</title>
 <style>
-
-:root{
+  :root{
     --bg:#0f172a; --card:#ffffff; --ink:#1f2937; --muted:#6b7280;
-    --accent:#1a5276; --accent2:#2563eb; --line:#e5e7eb; --chip:#eef2ff;
+    --accent:#1a5276; --accent2:#2563eb; --line:#e5e7eb;
   }
   *{box-sizing:border-box;}
   body{
     margin:0; background:linear-gradient(160deg,#eef2f7,#dbe4f0);
     font-family:'Segoe UI','Arial',sans-serif; color:var(--ink);
-    direction:rtl; text-align:right; line-height:1.7; padding:32px 16px;
+    direction:ltr; text-align:left; line-height:1.7; padding:32px 16px;
   }
   .wrap{max-width:860px; margin:0 auto;}
   header{
     background:linear-gradient(135deg,#1a5276,#2563eb); color:#fff;
-    border-radius:18px; padding:28px 32px; box-shadow:0 12px 30px rgba(30,64,120,.25);
+    border-radius:18px; padding:28px 32px;
   }
-  header h1{margin:0 0 6px; font-size:26px;}
+  header h1{margin:0 0 6px; font-size:24px;}
   header p{margin:0; opacity:.92; font-size:15px;}
   .card{
     background:var(--card); border-radius:16px; padding:22px 28px; margin-top:20px;
-    box-shadow:0 6px 20px rgba(15,23,42,.06); border:1px solid var(--line);
+    border:1px solid var(--line);
   }
-  h2{
-    font-size:21px; color:var(--accent); margin:4px 0 14px;
-    border-bottom:2px solid var(--line); padding-bottom:8px;
-  }
-  h3{font-size:17px; color:var(--accent2); margin:20px 0 6px;}
-  h3 .num{
-    display:inline-flex; align-items:center; justify-content:center;
-    width:26px; height:26px; border-radius:50%; background:var(--accent2);
-    color:#fff; font-size:14px; margin-left:8px; vertical-align:middle;
-  }
-  p{margin:8px 0;}
-  ul{margin:8px 0; padding-inline-start:22px;}
-  li{margin:6px 0;}
-  .tip{
-    background:var(--chip); border-right:4px solid var(--accent2);
-    padding:10px 14px; border-radius:8px; font-size:14px; color:#334155;
-  }
-  .lead{color:var(--muted); font-size:14px; margin-top:4px;}
-  strong{color:#0f2f4a;}
-  .quote{background:#f8fafc; border-radius:10px; padding:2px 16px; border:1px solid var(--line);}
-  footer{text-align:center; color:var(--muted); font-size:13px; margin:26px 0 4px;}
-  @media print{
-    body{background:#fff; padding:0;}
-    .card,header{box-shadow:none;}
-  }
-
+  h2{font-size:18px; color:var(--accent); margin:4px 0 12px;}
+  .lead{color:var(--muted); font-size:14px;}
+  ol{padding-left:1.2rem;}
+  li{margin:8px 0;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-  <h1>תסריט לגיוס – רמי זילברשמיט</h1>
-  <p>גרסה קצרה ושיחתית לשיחת טלפון / Zoom עם מגייסת · כ־45–60 שניות · בנוי כ־3 תחנות.</p>
+    <h1>Recruiter pitch — template</h1>
+    <p>Short screen pitch (~45–60s). Edit in My Pitch — no personal details in this seed.</p>
   </header>
-
   <section class="card">
-  <h2>חלק א׳ · התקציר לזיכרון</h2>
-  <p class="lead">אל תשנן מילים – תשנן שלוש תחנות:</p>
-  <ul>
-  <li><strong>1. מי אני:</strong> רמי · מעל עשור ב־QA ואוטומציה באמדוקס · Core Team על מערכות Billing / OSS-BSS לענקיות כמו AT&amp;T ו־T-Mobile.</li>
-  <li><strong>2. מה אני יודע לעשות:</strong> ידני → Frontend (Selenium) → Backend API (Java / Spring Boot / TestNG) → גם Performance (LoadRunner) · ובצד Python / Playwright · CI/CD על Kubernetes.</li>
-  <li><strong>3. ערך + מה מחפש:</strong> כלי Innovation שחוסכים ימי עבודה (Jenkins upgrade, HTML→LoadRunner עם GenAI) · מחפש בית ארוך טווח באוטומציה / SDET עם מקום לחדשנות ו־AI.</li>
-  </ul>
+    <h2>Three stops</h2>
+    <p class="lead">Don't memorise words — memorise the three stops, then speak naturally.</p>
+    <ol>
+      <li><strong>Who I am:</strong> Name, role/field, years of experience, and the kind of teams or systems you've worked with.</li>
+      <li><strong>What I do:</strong> Day-to-day strengths and 1–2 concrete examples (tools, impact).</li>
+      <li><strong>What I'm looking for:</strong> The role/environment you want next, and why you're a fit.</li>
+    </ol>
+    <p>Hi — I'm [your name]. I work in [field] with about [N] years of experience…
+      Recently I've focused on [strength / project]. I'm looking for [role type]
+      where I can [contribution]. Happy to share more — what would be most useful?</p>
   </section>
-
-  <section class="card">
-  <h2>חלק ב׳ · הסקריפט הקצר (לשיחה)</h2>
-
-  <h3><span class="num">1</span>מי אני – בפתיחה אחת</h3>
-  <div class="quote">
-  <p>נעים מאוד, אני רמי. אני Senior Automation Engineer עם מעל עשור באמדוקס – רוב הזמן האחרון בצוות ה־Core, שבונים תשתית אוטומציה לתרחישי הבסיס של מערכות Billing, CRM ו־OSS/BSS ללקוחות גדולים כמו AT&amp;T ו־T-Mobile.</p>
-  </div>
-
-  <h3><span class="num">2</span>המיומנויות והתפקידים – מה באמת עשיתי</h3>
-  <div class="quote">
-  <p>הדרך שלי הייתה מגוונת: התחלתי בבדיקות ידניות (System Test, UAT, Smoke), עברתי לאוטומציית Frontend עם Selenium, ואז ל־Core עם אוטומציית Backend ו־REST API ב־Java – Spring Boot, TestNG, Maven – כולל ולידציות מול Oracle ו־Postgres, ושילוב ב־CI/CD על Kubernetes / OpenShift עם Jenkins ו־ArgoCD.</p>
-  <p>בשנה האחרונה נגעתי גם בבדיקות עומסים עם LoadRunner וניטור ב־Dynatrace ו־Grafana, ובמקביל הרחבתי בצד Python ו־Playwright – כולל framework ציבורי ב־GitHub.</p>
-  </div>
-
-  <h3><span class="num">3</span>הערך שאני מביא ומה אני מחפש</h3>
-  <div class="quote">
-  <p>מעבר ליום-יום, אני אוהב לזהות עבודה סיזיפית ולבנות כלים שחוסכים זמן לצוות – למשל כלי ל־Jenkins שמחליף שדרוג גרסאות ידני של יום שלם, וכלי שממיר דוחות HTML לסקריפטים של LoadRunner בעזרת GenAI במקום יומיים ידניים.</p>
-  <p>אני מחפש עכשיו בית מקצועי לטווח ארוך – תפקיד אוטומציה / SDET שבו אפשר להוביל תשתיות, להביא Java ו־Python, ולשלב גם AI בכלים חדשים.</p>
-  </div>
-  </section>
-
-  <section class="card">
-  <h2>חלק ג׳ · טיפ לשיחה</h2>
-  <p class="tip"><strong>טיפ:</strong> בשיחת גיוס תן את התחנות בקצב שיחה – לא כמו הרצאה. אם שואלים על טכנולוגיה ספציפית מהג׳וב – עצור בתחנה 2 והעמיק שם במשפט-שניים מהניסיון שלך בלבד. אל תיכנס לשרשרת החיוב המלאה ולסיפור הילדות – זה לתסריט הראיון הארוך.</p>
-  </section>
-
-  <footer>גרסת מגייסת · מקבילה לתסריט הראיון המלא · ניתן להדפיס ל־PDF מהדפדפן</footer>
 </div>
 </body>
 </html>

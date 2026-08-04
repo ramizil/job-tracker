@@ -163,6 +163,15 @@ def inject_profiles():
 
 
 @bp.app_context_processor
+def inject_quick_links():
+    """Per-profile LinkedIn / GitHub for Quick copy (never hardcoded)."""
+    return {
+        "linkedin_url": getattr(config, "LINKEDIN_URL", "") or "",
+        "github_url": getattr(config, "GITHUB_URL", "") or "",
+    }
+
+
+@bp.app_context_processor
 def inject_status_labels():
     """Friendly status labels (e.g. closed → closed — no longer hiring)."""
     return {
@@ -427,10 +436,18 @@ def profile_switch():
 def profile_create():
     name = request.form.get("name", "")
     import_from = request.form.get("import_from", "").strip() or None
+    copy_personal = bool(request.form.get("copy_personal"))
     try:
-        profiles_mod.create_profile(name, import_from=import_from)
+        profiles_mod.create_profile(
+            name, import_from=import_from, copy_personal=copy_personal)
         profiles_mod.switch_profile(name.strip())
-        note = f" (settings imported from “{import_from}”)" if import_from else ""
+        if import_from and copy_personal:
+            note = (f" (API keys + personal content from “{import_from}”)")
+        elif import_from:
+            note = (f" (API keys from “{import_from}” — pitch/links/resume "
+                    "path left blank for privacy)")
+        else:
+            note = ""
         flash(f"Profile “{name.strip()}” created and activated{note}.", "ok")
     except Exception as exc:
         flash(f"Could not create profile: {exc}", "error")

@@ -136,6 +136,8 @@ EDITABLE_KEYS: dict[str, str] = {
     "CURSOR_MODEL": "Cursor model (default auto)",
     "CURSOR_BASE_URL": "Cursor proxy base URL (default http://localhost:8080/v1)",
     "RESUME_PATH": "Path to your resume (HTML, PDF, Word .docx, or text)",
+    "LINKEDIN_URL": "Your LinkedIn profile URL (Quick copy on job detail)",
+    "GITHUB_URL": "Your GitHub / website URL (Quick copy on job detail)",
     "BACKUP_DIR": "Folder for backups (a OneDrive path = auto-synced & private)",
     "DATA_BACKUP_REMOTE": "Private git repo URL to mirror your data to (GitHub backup)",
     "GDRIVE_FOLDER": "Google Drive folder URL for the online applications sheet",
@@ -169,6 +171,8 @@ CURSOR_API_KEY = ""
 CURSOR_MODEL = "auto"
 CURSOR_BASE_URL = "http://localhost:8080/v1"
 RESUME_PATH = DEFAULT_RESUME
+LINKEDIN_URL = ""
+GITHUB_URL = ""
 BACKUP_DIR = _default_backup_dir()
 DATA_BACKUP_REMOTE = ""
 GDRIVE_FOLDER = ""
@@ -189,7 +193,7 @@ def reload() -> None:
     global OPENAI_API_KEY, OPENAI_MODEL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
     global GROQ_API_KEY, GROQ_MODEL
     global CURSOR_API_KEY, CURSOR_MODEL, CURSOR_BASE_URL
-    global RESUME_PATH, BACKUP_DIR, DATA_BACKUP_REMOTE
+    global RESUME_PATH, LINKEDIN_URL, GITHUB_URL, BACKUP_DIR, DATA_BACKUP_REMOTE
     global GDRIVE_FOLDER, GOOGLE_CLIENT_SECRET, GMAIL_LABEL, GMAIL_REJECTION_LABEL
 
     _migrate_legacy_layout()
@@ -238,6 +242,8 @@ def reload() -> None:
     CURSOR_MODEL = os.getenv("CURSOR_MODEL", "auto").strip()
     CURSOR_BASE_URL = os.getenv("CURSOR_BASE_URL", "http://localhost:8080/v1").strip()
     RESUME_PATH = Path(os.getenv("RESUME_PATH") or DEFAULT_RESUME)
+    LINKEDIN_URL = os.getenv("LINKEDIN_URL", "").strip()
+    GITHUB_URL = os.getenv("GITHUB_URL", "").strip()
     BACKUP_DIR = Path(os.getenv("BACKUP_DIR") or _default_backup_dir())
     DATA_BACKUP_REMOTE = os.getenv("DATA_BACKUP_REMOTE", "").strip()
     GDRIVE_FOLDER = os.getenv("GDRIVE_FOLDER", "").strip()
@@ -272,6 +278,8 @@ def current_settings() -> dict[str, str]:
         "CURSOR_MODEL": CURSOR_MODEL,
         "CURSOR_BASE_URL": CURSOR_BASE_URL,
         "RESUME_PATH": str(RESUME_PATH),
+        "LINKEDIN_URL": LINKEDIN_URL,
+        "GITHUB_URL": GITHUB_URL,
         "BACKUP_DIR": str(BACKUP_DIR),
         "DATA_BACKUP_REMOTE": DATA_BACKUP_REMOTE,
         "GDRIVE_FOLDER": GDRIVE_FOLDER,

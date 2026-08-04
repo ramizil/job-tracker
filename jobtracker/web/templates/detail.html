@@ -352,19 +352,28 @@
   <div>
     <section class="panel ai" id="quick-copy">
       <div class="panel-head"><h2>🔗 Quick copy</h2></div>
-      <p class="muted sm">One-click copy for job application forms.</p>
+      <p class="muted sm">One-click copy for job application forms
+        (set per profile in <a href="{{ url_for('main.settings') }}#tab-resume">Settings → Resume</a>).</p>
+      {% if linkedin_url or github_url %}
       <div class="copy-list">
+        {% if linkedin_url %}
         <div class="copy-row">
           <span class="copy-label">LinkedIn</span>
-          <code class="copy-val">https://linkedin.com/in/rami-zilbershmit</code>
-          <button class="btn sm" type="button" data-copy-text="https://linkedin.com/in/rami-zilbershmit">Copy</button>
+          <code class="copy-val">{{ linkedin_url }}</code>
+          <button class="btn sm" type="button" data-copy-text="{{ linkedin_url }}">Copy</button>
         </div>
+        {% endif %}
+        {% if github_url %}
         <div class="copy-row">
-          <span class="copy-label">Website</span>
-          <code class="copy-val">https://github.com/ramizil</code>
-          <button class="btn sm" type="button" data-copy-text="https://github.com/ramizil">Copy</button>
+          <span class="copy-label">GitHub / site</span>
+          <code class="copy-val">{{ github_url }}</code>
+          <button class="btn sm" type="button" data-copy-text="{{ github_url }}">Copy</button>
         </div>
+        {% endif %}
       </div>
+      {% else %}
+      <p class="muted sm">No links set for this profile yet.</p>
+      {% endif %}
     </section>
 
     <section class="panel" id="history">

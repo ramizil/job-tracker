@@ -21,7 +21,8 @@ KIND_LABELS = {
     "recruiter": "Recruiter pitch",
 }
 
-# Neutral starter template — intentionally contains NO personal information.
+# Neutral starter templates — intentionally contain NO personal information.
+# Never seed a profile from another person's pitch file on disk.
 SEED_PITCH = """My pitch — the "5 stops" structure
 
 Stop 1: Opening (who I am + the big picture)
@@ -47,9 +48,22 @@ Tip: don't memorise words — memorise the 5 stops, then speak naturally.
 Edit this in the app (My Pitch) to make it your own; it is saved locally only.
 """
 
-DEFAULT_PITCH_HTML_SOURCE = Path(
-    "/Users/ramizilbershmit/MyDocuments/Resume/סקריפט ראיון - מאוחד.html"
-)
+SEED_RECRUITER_PITCH = """Recruiter pitch — short screen (~45–60s)
+
+Don't memorise words — memorise three stops, then speak naturally.
+
+1. Who I am: name, field, years of experience, kind of teams/systems.
+2. What I do: day-to-day strengths and 1–2 concrete examples (tools, impact).
+3. What I'm looking for: the role/environment next, and why you're a fit.
+
+Hi — I'm [your name]. I work in [field] with about [N] years of experience…
+Recently I've focused on [strength / project]. I'm looking for [role type]
+where I can [contribution]. Happy to share more — what would be most useful?
+
+Edit this in My Pitch (Recruiter) — saved locally for this profile only.
+"""
+
+# Optional CSS/layout shell only (must stay free of personal content).
 SEED_RECRUITER_HTML = Path(__file__).resolve().parent / "seeds" / "pitch_recruiter.html"
 
 _SECTION_RE = re.compile(
@@ -108,6 +122,12 @@ def normalize_kind(kind: str | None) -> str:
     return "interview"
 
 
+def _seed_text(kind: str) -> str:
+    """Neutral starter text for a kind — never another profile's content."""
+    return (SEED_RECRUITER_PITCH if normalize_kind(kind) == "recruiter"
+            else SEED_PITCH)
+
+
 def pitch_md_path(kind: str = "interview") -> Path:
     if normalize_kind(kind) == "recruiter":
         return config.PITCH_RECRUITER_PATH
@@ -144,13 +164,7 @@ def load_base_pitch(kind: str = "interview") -> str:
             return plain
     path = pitch_md_path(kind)
     if not path.exists():
-        seed = SEED_PITCH if kind == "interview" else ""
-        if kind == "recruiter" and SEED_RECRUITER_HTML.is_file():
-            try:
-                seed = html_to_plain_text(
-                    SEED_RECRUITER_HTML.read_text(encoding="utf-8"))
-            except OSError:
-                seed = ""
+        seed = _seed_text(kind)
         try:
             path.write_text(seed, encoding="utf-8")
         except Exception:
@@ -159,7 +173,7 @@ def load_base_pitch(kind: str = "interview") -> str:
     try:
         return path.read_text(encoding="utf-8")
     except Exception:
-        return SEED_PITCH if kind == "interview" else ""
+        return _seed_text(kind)
 
 
 def save_base_pitch(text: str, kind: str = "interview") -> None:
@@ -167,10 +181,7 @@ def save_base_pitch(text: str, kind: str = "interview") -> None:
     kind = normalize_kind(kind)
     text = text or ""
     _write_md(text, kind)
-    if has_html(kind) or (
-            kind == "interview" and DEFAULT_PITCH_HTML_SOURCE.is_file()
-    ) or (kind == "recruiter" and SEED_RECRUITER_HTML.is_file()):
-        save_html(html_from_plain(text, kind=kind), kind=kind, sync_text=False)
+    save_html(html_from_plain(text, kind=kind), kind=kind, sync_text=False)
 
 
 def _read_html_raw(kind: str = "interview") -> str:
@@ -288,24 +299,27 @@ _DEFAULT_STYLE = """
 """.strip()
 
 
-def _template_shell(existing_html: str = "") -> tuple[str, str]:
+def _template_shell(existing_html: str = "", *, kind: str = "interview") -> tuple[str, str]:
     """Return (title, style_css) from an existing HTML doc or defaults."""
-    title = "הסקריפט המלא לראיון"
+    kind = normalize_kind(kind)
+    title = ("Recruiter pitch" if kind == "recruiter" else "Interview pitch")
     style = _DEFAULT_STYLE
-    if not existing_html.strip():
-        src = DEFAULT_PITCH_HTML_SOURCE
-        if src.is_file():
-            try:
-                existing_html = src.read_text(encoding="utf-8")
-            except OSError:
-                existing_html = ""
+    # Prefer this profile's HTML, else the neutral recruiter shell for CSS only.
+    if not existing_html.strip() and kind == "recruiter" and SEED_RECRUITER_HTML.is_file():
+        try:
+            existing_html = SEED_RECRUITER_HTML.read_text(encoding="utf-8")
+        except OSError:
+            existing_html = ""
     if not existing_html.strip():
         return title, style
     try:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(existing_html, "html.parser")
         if soup.title and soup.title.string:
-            title = soup.title.string.strip() or title
+            t = soup.title.string.strip()
+            # Never adopt a personal name baked into an old seed title.
+            if t and "רמי" not in t and "zilber" not in t.lower():
+                title = t
         tag = soup.find("style")
         if tag and tag.string and tag.string.strip():
             style = tag.string.strip()
@@ -325,8 +339,8 @@ def html_from_plain(text: str, *, template_html: str = "",
             template = SEED_RECRUITER_HTML.read_text(encoding="utf-8")
         except OSError:
             template = ""
-    title, style = _template_shell(template)
-    if kind == "recruiter" and title == "הסקריפט המלא לראיון":
+    title, style = _template_shell(template, kind=kind)
+    if kind == "recruiter" and title in ("הסקריפט המלא לראיון", "Interview pitch"):
         title = "תסריט לגיוס"
     lines = text.split("\n") if text else []
 
@@ -539,7 +553,9 @@ def html_from_plain(text: str, *, template_html: str = "",
 def ensure_html(kind: str | None = None) -> Path | None:
     """Ensure profile pitch HTML exists for ``kind`` (or both kinds).
 
-    When HTML exists, the ``.md`` mirror is always refreshed from it (HTML wins).
+    Missing files are seeded with a **neutral** template only — never from
+    another profile or a personal file on disk. When HTML exists, the ``.md``
+    mirror is refreshed from it (HTML wins).
     """
     if kind is None:
         ensure_html("interview")
@@ -548,15 +564,13 @@ def ensure_html(kind: str | None = None) -> Path | None:
     kind = normalize_kind(kind)
     dest = pitch_html_path(kind)
     if not dest.is_file():
-        src = (DEFAULT_PITCH_HTML_SOURCE if kind == "interview"
-               else SEED_RECRUITER_HTML)
-        if src.is_file():
-            try:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
-            except OSError:
-                return None
-        else:
+        seed = _seed_text(kind)
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            # Build HTML from neutral text (do not copy personal seed bodies).
+            dest.write_text(html_from_plain(seed, kind=kind), encoding="utf-8")
+            _write_md(seed, kind)
+        except OSError:
             return None
 
     try:

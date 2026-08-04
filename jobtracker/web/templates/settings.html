@@ -280,6 +280,20 @@
         <em>Tip: an HTML resume produces the best-looking tailored CV; PDF/Word are
         read as text.</em></small>
     </div>
+    <div class="setting">
+      <label for="LINKEDIN_URL">LinkedIn URL</label>
+      <input type="url" id="LINKEDIN_URL" name="LINKEDIN_URL" form="settings-form"
+             value="{{ values.LINKEDIN_URL }}"
+             placeholder="https://www.linkedin.com/in/…" autocomplete="off">
+      <small>Shown in Quick copy on each job (this profile only).</small>
+    </div>
+    <div class="setting">
+      <label for="GITHUB_URL">GitHub / website URL</label>
+      <input type="url" id="GITHUB_URL" name="GITHUB_URL" form="settings-form"
+             value="{{ values.GITHUB_URL }}"
+             placeholder="https://github.com/…" autocomplete="off">
+      <small>Optional second Quick-copy link for this profile.</small>
+    </div>
   </section>
 
   <section class="panel">
@@ -653,7 +667,7 @@
       <summary class="btn sm">➕ New profile…</summary>
       <form method="post" action="{{ url_for('main.profile_create') }}" class="stack mt">
         <input name="name" placeholder="profile name (letters, digits, - and _)" required pattern="[A-Za-z0-9][A-Za-z0-9_-]*" maxlength="40">
-        <label class="muted sm">Import settings from
+        <label class="muted sm">Import API keys / tool settings from
           <select name="import_from">
             <option value="">— start blank —</option>
             {% for p in profiles %}
@@ -661,9 +675,13 @@
             {% endfor %}
           </select>
         </label>
-        <small>Importing copies the source profile's settings (API keys, resume path…),
-          match profile and pitch — the applications list starts <b>empty</b>.
-          The new profile is activated right away.</small>
+        <label class="check-setting muted sm">
+          <input type="checkbox" name="copy_personal" value="1">
+          Also copy personal content (pitch, match profile, resume path, LinkedIn/GitHub, backups)
+        </label>
+        <small>By default a new profile stays private: only shared API keys are
+          imported — <b>not</b> pitch, resume path, or profile links.
+          Applications always start empty. The new profile is activated right away.</small>
         <button class="btn primary" type="submit">Create profile</button>
       </form>
     </details>
