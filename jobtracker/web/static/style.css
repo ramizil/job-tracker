@@ -599,9 +599,21 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 .status-withdrawn{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none}
 .status-ghosted{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none}
 .status-closed{background:#78716c;color:#fff;border-color:#78716c;box-shadow:none}
-.rej-kind-early{background:#b45309;color:#fff;border-color:#b45309;box-shadow:none;font-size:calc(var(--base-font) * .78)}
-.rej-kind-process{background:#7c3aed;color:#fff;border-color:#7c3aed;box-shadow:none;font-size:calc(var(--base-font) * .78)}
-.rej-kind-unknown{background:#64748b;color:#fff;border-color:#64748b;box-shadow:none;font-size:calc(var(--base-font) * .78)}
+/* Compact rejection-kind tag (Apps list) — sits inline next to status pill */
+.status-cell{white-space:nowrap}
+.rej-tag{
+  display:inline-block;margin-left:4px;padding:1px 6px;
+  border-radius:999px;font-size:calc(var(--base-font) * .72);
+  font-weight:600;line-height:1.35;vertical-align:middle;
+  border:1px solid transparent;letter-spacing:.01em;
+}
+.rej-kind-early{background:#b45309;color:#fff;border-color:#b45309}
+.rej-kind-process{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.rej-kind-unknown{background:#64748b;color:#fff;border-color:#64748b}
+/* Full pills on detail / rejections keep .pill + .rej-kind-* */
+.pill.rej-kind-early,.pill.rej-kind-process,.pill.rej-kind-unknown{
+  box-shadow:none;font-size:calc(var(--base-font) * .78);
+}
 .rej-file-list{margin:8px 0;padding-left:1.2rem}
 .rej-file-list li{margin:0 0 .45em;line-height:1.4}
 .status-new{background:#0ea5e9;color:#fff;border-color:#0ea5e9;box-shadow:none}
