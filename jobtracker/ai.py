@@ -570,6 +570,10 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav",
     raise AIError(f"Could not transcribe the audio (last error: {last_exc}). "
                   "Please try again or type / paste the transcript.")
 
+# How much of the source HTML we feed into tailor/revise prompts.
+_RESUME_HTML_BUDGET = 50000
+
+
 def resume_text(resume_path: Path | None = None) -> str:
     from . import resume as _resume
     path = Path(resume_path) if resume_path else config.RESUME_PATH
@@ -580,30 +584,259 @@ def resume_text(resume_path: Path | None = None) -> str:
 def _text_to_resume_html(text: str) -> str:
     """Wrap plain resume text in a clean, printable HTML document.
 
-    Used when the source resume is a PDF/Word/text file (no HTML to reuse), so
-    the tailored-resume feature still has markup to work with.
+    Last-resort fallback when there is no HTML twin and PDF/DOCX style
+    extraction failed — still marks short ALL-CAPS lines as section headings.
     """
     import html as _html
-    body = "\n".join(
-        f"<p>{_html.escape(line)}</p>" if line.strip() else "<br>"
-        for line in text.splitlines()
-    )
+    parts: list[str] = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            parts.append("<br>")
+            continue
+        esc = _html.escape(s)
+        letters = re.sub(r"[^A-Za-z\u0590-\u05FF]+", "", s)
+        if (letters and letters.upper() == letters and len(s) <= 48
+                and len(s.split()) <= 6):
+            parts.append(f"<h2>{esc}</h2>")
+        elif len(s) <= 60 and s.endswith(":") and not s.startswith("http"):
+            parts.append(f"<p><strong>{esc}</strong></p>")
+        else:
+            parts.append(f"<p>{esc}</p>")
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
-        "<style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;"
-        "max-width:800px;margin:32px auto;line-height:1.5;color:#1f2937;}"
-        "p{margin:0 0 6px;}h1,h2{color:#111827;}</style></head>"
-        f"<body>{body}</body></html>"
+        "<style>body{font-family:Calibri,'Segoe UI',Roboto,Arial,sans-serif;"
+        "max-width:800px;margin:32px auto;line-height:1.45;color:#222;"
+        "font-size:10.5pt;}"
+        "h1{font-size:20pt;margin:0 0 4px;color:#111;}"
+        "h2{font-size:12pt;margin:14px 0 6px;padding:4px 8px;color:#fff;"
+        "background:#1a5276;font-weight:700;letter-spacing:.04em;}"
+        "p{margin:0 0 5px;}strong{color:#111;}</style></head>"
+        f"<body>{''.join(parts)}</body></html>"
+    )
+
+
+def _rgb_css(color: int) -> str | None:
+    """PyMuPDF int color → CSS hex; None means 'use default / heading style'."""
+    if color is None:
+        return None
+    r = (int(color) >> 16) & 255
+    g = (int(color) >> 8) & 255
+    b = int(color) & 255
+    # Near-white text is usually on a colored bar — treat as section heading.
+    if r + g + b >= 720:
+        return None
+    if r + g + b <= 40:
+        return "#222222"
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _pdf_to_styled_html(path: Path) -> str:
+    """Rebuild HTML from a PDF keeping font sizes, bold, and colors when possible."""
+    import html as _html
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return ""
+
+    from collections import Counter
+    accent_votes: Counter[str] = Counter()
+    lines_out: list[str] = []
+    try:
+        doc = fitz.open(str(path))
+    except Exception:
+        return ""
+
+    try:
+        for page in doc:
+            data = page.get_text("dict")
+            for block in data.get("blocks", []) or []:
+                if block.get("type") != 0:
+                    continue
+                for line in block.get("lines", []) or []:
+                    spans = line.get("spans") or []
+                    if not spans:
+                        continue
+                    # Collect line-level stats.
+                    texts = [(s.get("text") or "") for s in spans]
+                    joined = "".join(texts).strip()
+                    if not joined:
+                        continue
+                    max_size = max(float(s.get("size") or 11) for s in spans)
+                    any_bold = any(bool(int(s.get("flags") or 0) & 16)
+                                   for s in spans)
+                    colors = [_rgb_css(int(s.get("color") or 0)) for s in spans]
+                    for c in colors:
+                        if c and c not in ("#222222", "#000000"):
+                            accent_votes[c] += 1
+
+                    letters = re.sub(r"[^A-Za-z\u0590-\u05FF]+", "", joined)
+                    all_caps = (bool(letters)
+                                and letters.upper() == letters
+                                and len(joined) <= 48)
+                    # White/near-white text (typical colored section bars).
+                    is_white_head = any(
+                        c is None and (
+                            bool(int(s.get("flags") or 0) & 16)
+                            or float(s.get("size") or 0) >= 12
+                            or all_caps
+                        )
+                        for s, c in zip(spans, colors)
+                    )
+
+                    if max_size >= 16:
+                        tag = "h1"
+                    elif is_white_head or (any_bold and all_caps and max_size >= 12):
+                        tag = "h2"
+                    else:
+                        tag = "p"
+
+                    bits: list[str] = []
+                    for s in spans:
+                        t = s.get("text") or ""
+                        if not t:
+                            continue
+                        esc = _html.escape(t)
+                        size = float(s.get("size") or 11)
+                        bold = bool(int(s.get("flags") or 0) & 16)
+                        italic = bool(int(s.get("flags") or 0) & 2)
+                        css_color = _rgb_css(int(s.get("color") or 0))
+                        styles: list[str] = []
+                        if tag == "p" and abs(size - 11) >= 0.6:
+                            styles.append(f"font-size:{size:.1f}pt")
+                        if css_color and tag == "p":
+                            styles.append(f"color:{css_color}")
+                        if bold and tag == "p":
+                            esc = f"<strong>{esc}</strong>"
+                        if italic:
+                            esc = f"<em>{esc}</em>"
+                        if styles:
+                            bits.append(
+                                f'<span style="{";".join(styles)}">{esc}</span>')
+                        else:
+                            bits.append(esc)
+                    inner = "".join(bits)
+                    if tag == "h2":
+                        lines_out.append(f"<h2>{_html.escape(joined)}</h2>")
+                    elif tag == "h1":
+                        lines_out.append(f"<h1>{inner}</h1>")
+                    else:
+                        lines_out.append(f"<p>{inner}</p>")
+    finally:
+        doc.close()
+
+    if not lines_out:
+        return ""
+    accent = (accent_votes.most_common(1)[0][0]
+              if accent_votes else "#1a5276")
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>"
+        "body{font-family:Calibri,'Segoe UI',Arial,Helvetica,sans-serif;"
+        "font-size:10.5pt;line-height:1.35;color:#222;background:#fff;"
+        "max-width:800px;margin:28px auto;padding:0 16px;}"
+        "h1{font-size:18pt;font-weight:700;color:#111;margin:0 0 4px;"
+        "letter-spacing:-0.01em;}"
+        f"h2{{font-size:12pt;font-weight:700;color:#fff;background:{accent};"
+        "padding:4px 10px;margin:14px 0 6px;letter-spacing:.04em;}}"
+        "p{margin:0 0 4px;}strong{font-weight:700;color:#111;}"
+        "a{color:inherit;text-decoration:none;}"
+        "@media print{body{margin:0;max-width:none;}}"
+        "</style></head>"
+        f"<body>{''.join(lines_out)}</body></html>"
+    )
+
+
+def _docx_to_styled_html(path: Path) -> str:
+    """Convert a Word resume to HTML preserving bold / headings / sizes."""
+    import html as _html
+    try:
+        import docx  # python-docx
+        from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+    except ImportError:
+        return ""
+    try:
+        document = docx.Document(str(path))
+    except Exception:
+        return ""
+
+    parts: list[str] = []
+    for para in document.paragraphs:
+        text = (para.text or "").strip()
+        style_name = ((para.style.name if para.style else "") or "").lower()
+        if not text:
+            parts.append("<br>")
+            continue
+        bits: list[str] = []
+        for run in para.runs:
+            t = run.text or ""
+            if not t:
+                continue
+            esc = _html.escape(t)
+            if run.bold:
+                esc = f"<strong>{esc}</strong>"
+            if run.italic:
+                esc = f"<em>{esc}</em>"
+            size_pt = None
+            try:
+                if run.font and run.font.size:
+                    size_pt = run.font.size.pt
+            except Exception:
+                size_pt = None
+            color_hex = None
+            try:
+                if run.font and run.font.color and run.font.color.rgb:
+                    color_hex = f"#{run.font.color.rgb}"
+            except Exception:
+                color_hex = None
+            styles: list[str] = []
+            if size_pt and abs(size_pt - 11) >= 0.5:
+                styles.append(f"font-size:{size_pt:.1f}pt")
+            if color_hex and color_hex.upper() not in ("#FFFFFF", "#FFF"):
+                styles.append(f"color:{color_hex}")
+            if styles:
+                bits.append(f'<span style="{";".join(styles)}">{esc}</span>')
+            else:
+                bits.append(esc)
+        inner = "".join(bits) or _html.escape(text)
+        if "heading 1" in style_name or "title" in style_name:
+            parts.append(f"<h1>{inner}</h1>")
+        elif "heading" in style_name:
+            parts.append(f"<h2>{inner}</h2>")
+        else:
+            letters = re.sub(r"[^A-Za-z\u0590-\u05FF]+", "", text)
+            if (letters and letters.upper() == letters and len(text) <= 48
+                    and any(r.bold for r in para.runs if r.text)):
+                parts.append(f"<h2>{_html.escape(text)}</h2>")
+            else:
+                align = ""
+                try:
+                    if para.alignment == WD_PARAGRAPH_ALIGNMENT.CENTER:
+                        align = ' style="text-align:center"'
+                except Exception:
+                    pass
+                parts.append(f"<p{align}>{inner}</p>")
+
+    if not parts:
+        return ""
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<style>body{font-family:Calibri,'Segoe UI',Arial,sans-serif;"
+        "font-size:10.5pt;line-height:1.4;color:#222;max-width:800px;"
+        "margin:28px auto;padding:0 16px;}"
+        "h1{font-size:18pt;font-weight:700;margin:0 0 4px;}"
+        "h2{font-size:12pt;font-weight:700;color:#fff;background:#1a5276;"
+        "padding:4px 10px;margin:14px 0 6px;}"
+        "p{margin:0 0 5px;}strong{font-weight:700;}</style></head>"
+        f"<body>{''.join(parts)}</body></html>"
     )
 
 
 def _find_style_twin(path: Path) -> Path | None:
-    """Find a sibling .html file with (roughly) the same content as this resume.
+    """Find an .html file with (roughly) the same content as this resume.
 
-    Many people keep their CV as both a styled HTML file and the PDF exported
-    from it. When RESUME_PATH points at the PDF, using the HTML twin as the
-    tailoring template preserves the original design instead of falling back
-    to a plain-text wrapper.
+    Searches the resume's folder and the active profile's resumes library so a
+    PDF path can still reuse a styled HTML twin.
     """
     import difflib
     from . import resume as _resume
@@ -617,28 +850,132 @@ def _find_style_twin(path: Path) -> Path | None:
         return None
     if not target:
         return None
+
+    dirs: list[Path] = []
+    if path.parent.is_dir():
+        dirs.append(path.parent)
+    lib = Path(config.PROFILE_DIR) / "resumes"
+    if lib.is_dir() and lib.resolve() not in {d.resolve() for d in dirs}:
+        dirs.append(lib)
+
     best: tuple[float, Path] | None = None
-    for cand in sorted(path.parent.glob("*.htm*")):
-        try:
-            text = _norm(_resume.extract_text(cand))
-        except Exception:
-            continue
-        ratio = difflib.SequenceMatcher(a=target, b=text, autojunk=False).ratio()
-        if ratio > 0.6 and (best is None or ratio > best[0]):
-            best = (ratio, cand)
+    for folder in dirs:
+        for cand in sorted(folder.glob("*.htm*")):
+            try:
+                text = _norm(_resume.extract_text(cand))
+            except Exception:
+                continue
+            if not text:
+                continue
+            ratio = difflib.SequenceMatcher(
+                a=target, b=text, autojunk=False).ratio()
+            if ratio > 0.6 and (best is None or ratio > best[0]):
+                best = (ratio, cand)
     return best[1] if best else None
 
 
+def _strip_md_fences(html: str) -> str:
+    html = (html or "").strip()
+    html = re.sub(r"^```(?:html)?\s*", "", html)
+    html = re.sub(r"\s*```$", "", html)
+    return html.strip()
+
+
+def _preserve_resume_style(original_html: str, tailored_html: str) -> str:
+    """Re-inject the original stylesheet / body classes into AI output.
+
+    Models often simplify or drop CSS even when asked to keep it. This restores
+    the source <style>/<link> blocks and html/body presentation attributes so
+    colors, sizes, and heading styles survive tailoring.
+    """
+    original = (original_html or "").strip()
+    tailored = (tailored_html or "").strip()
+    if not original or not tailored:
+        return tailored_html
+    try:
+        src = BeautifulSoup(original, "html.parser")
+        out = BeautifulSoup(tailored, "html.parser")
+    except Exception:
+        return tailored_html
+
+    style_bits: list[str] = []
+    for tag in src.find_all("style"):
+        style_bits.append(str(tag))
+    for tag in src.find_all("link"):
+        rel = tag.get("rel") or []
+        if isinstance(rel, str):
+            rel = [rel]
+        rel_l = {str(r).lower() for r in rel}
+        if "stylesheet" in rel_l or (tag.get("type") or "").lower() == "text/css":
+            style_bits.append(str(tag))
+    if not style_bits and not (src.html and src.html.attrs) and not (
+            src.body and src.body.attrs):
+        return tailored_html
+
+    if out.html is None:
+        wrapped = BeautifulSoup(
+            f"<!doctype html><html><head><meta charset='utf-8'></head>"
+            f"<body>{tailored}</body></html>",
+            "html.parser",
+        )
+        out = wrapped
+    if out.head is None and out.html is not None:
+        head = out.new_tag("head")
+        out.html.insert(0, head)
+    head = out.head
+    if head is not None and style_bits:
+        for tag in list(head.find_all("style")):
+            tag.decompose()
+        for bit in style_bits:
+            frag = BeautifulSoup(bit, "html.parser")
+            node = frag.style or frag.link
+            if node is not None:
+                head.append(node)
+
+    keep_attrs = ("class", "style", "dir", "lang")
+    if out.html is not None and src.html is not None:
+        for key in keep_attrs:
+            if key in src.html.attrs:
+                out.html[key] = src.html.attrs[key]
+    if out.body is not None and src.body is not None:
+        for key in keep_attrs:
+            if key in src.body.attrs:
+                out.body[key] = src.body.attrs[key]
+        # Prefer original body class that drives theme CSS.
+        if src.body.get("class") and not out.body.get("class"):
+            out.body["class"] = src.body["class"]
+
+    # Ensure a charset meta exists.
+    if head is not None and not head.find("meta", attrs={"charset": True}):
+        meta = out.new_tag("meta")
+        meta.attrs["charset"] = "utf-8"
+        head.insert(0, meta)
+
+    result = str(out)
+    if not result.lstrip().lower().startswith("<!doctype"):
+        result = "<!DOCTYPE html>\n" + result
+    return result
+
+
 def resume_html(resume_path: Path | None = None) -> str:
+    """Return HTML for tailoring — prefer real HTML, else style-aware PDF/DOCX."""
     from . import resume as _resume
     path = Path(resume_path) if resume_path else config.RESUME_PATH
     if path.suffix.lower() in (".html", ".htm"):
         return path.read_text(encoding="utf-8", errors="ignore")
-    # PDF/Word source: prefer a styled HTML twin in the same folder so the
-    # tailored resume (and its PDF export) keeps the original design.
+    # Prefer a styled HTML twin (same folder or profile resumes library).
     twin = _find_style_twin(path)
     if twin:
         return twin.read_text(encoding="utf-8", errors="ignore")
+    ext = path.suffix.lower()
+    if ext == ".pdf":
+        html = _pdf_to_styled_html(path)
+        if html.strip():
+            return html
+    if ext == ".docx":
+        html = _docx_to_styled_html(path)
+        if html.strip():
+            return html
     return _text_to_resume_html(_resume.extract_text(path))
 
 
@@ -1396,11 +1733,22 @@ def tailor_pitch(*, title: str, company: str, location: str = "",
 
 
 # --------------------------------------------------------------------------- #
+_STYLE_KEEP_RULES = """
+STYLING (non-negotiable — the candidate's visual brand must survive):
+- Copy the original <style> block(s) and stylesheet <link> tags into your
+  output <head> UNCHANGED (same colors, font sizes, weights, spacing).
+- Keep every class="..." and style="..." attribute on elements.
+- Keep bold/strong emphasis on section titles ("subjects") and labels.
+- Do NOT invent a new color scheme, font stack, or typography scale.
+- Prefer editing text inside existing tags; do not rebuild the layout from
+  scratch or wrap everything in a plain unstyled document.
+"""
+
 _TAILOR_PROMPT = """You are an expert resume writer. Rewrite the candidate's
 HTML resume so it is optimally positioned for the SPECIFIC job below, applying
 the TAILORING INSTRUCTIONS. Hard rules:
 - Output a COMPLETE, valid HTML document.
-- KEEP the existing <style> / CSS and overall visual layout intact.
+""" + _STYLE_KEEP_RULES + """
 - Do NOT invent experience, employers, dates, or skills. Only re-emphasise,
   re-order, and re-word what is already true in the resume.
 - Adjust the summary/tagline and bullet emphasis to match the job.
@@ -1422,24 +1770,22 @@ ORIGINAL RESUME HTML:
 
 def tailor_resume(*, title: str, company: str, description: str,
                   instructions: str, original_html: str | None = None) -> str:
-    """Return a tailored full-HTML resume string."""
+    """Return a tailored full-HTML resume string (original styling preserved)."""
+    source = original_html if original_html is not None else resume_html()
     prompt = _TAILOR_PROMPT.format(
         title=title or "", company=company or "",
         description=(description or "")[:6000],
         instructions=(instructions or "Tailor for this role.")[:4000],
-        resume_html=(original_html or resume_html())[:30000],
+        resume_html=(source or "")[:_RESUME_HTML_BUDGET],
     )
-    html = _generate(prompt, as_json=False).strip()
-    # Strip accidental markdown fences.
-    html = re.sub(r"^```(?:html)?\s*", "", html)
-    html = re.sub(r"\s*```$", "", html)
-    return html
+    html = _strip_md_fences(_generate(prompt, as_json=False))
+    return _preserve_resume_style(source, html)
 
 
 _RESUME_REVISE_PROMPT = """You are an expert resume editor. Revise the candidate's
 HTML resume according to the INSTRUCTIONS below. Hard rules:
 - Output a COMPLETE, valid HTML document.
-- KEEP the existing <style> / CSS and overall visual layout intact.
+""" + _STYLE_KEEP_RULES + """
 - Do NOT invent experience, employers, dates, skills, or achievements.
   Only rephrase, re-order, emphasise, shorten, or clarify what is already true.
 - Apply the instructions faithfully; leave unrelated sections unchanged.
@@ -1458,17 +1804,15 @@ def revise_resume(*, instructions: str, original_html: str | None = None) -> str
     instr = (instructions or "").strip()
     if not instr:
         raise AIError("Write an instruction first (what should change in the resume?).")
+    source = original_html if original_html is not None else resume_html()
     prompt = _RESUME_REVISE_PROMPT.format(
         instructions=instr[:4000],
-        resume_html=(original_html or resume_html())[:30000],
+        resume_html=(source or "")[:_RESUME_HTML_BUDGET],
     )
-    html = _generate(prompt, as_json=False).strip()
-    html = re.sub(r"^```(?:html)?\s*", "", html)
-    html = re.sub(r"\s*```$", "", html)
+    html = _strip_md_fences(_generate(prompt, as_json=False))
     if not html.strip():
         raise AIError("AI returned an empty resume. Please try again.")
-    return html
-
+    return _preserve_resume_style(source, html)
 
 # --------------------------------------------------------------------------- #
 # Resume Builder: a spoken Hebrew interview that produces an English resume.
@@ -1591,10 +1935,11 @@ candidate.
 
 Hard rules:
 - Output a COMPLETE, valid HTML document.
-- REUSE the TEMPLATE's <style>/CSS, structure and overall visual design — produce
-  the SAME look and feel, only populated with THIS candidate's content. Keep a
-  similar section ordering (header/contact, summary, experience, education,
-  skills, languages, etc.).
+""" + _STYLE_KEEP_RULES + """
+- REUSE the TEMPLATE's structure and overall visual design — produce the SAME
+  look and feel, only populated with THIS candidate's content. Keep a similar
+  section ordering (header/contact, summary, experience, education, skills,
+  languages, etc.).
 - Translate everything into natural, professional ENGLISH (the interview is in
   Hebrew). Keep proper nouns sensible (transliterate names/companies if needed).
 - Use ONLY facts present in the interview. Do NOT invent employers, dates,
@@ -1625,11 +1970,10 @@ def build_resume_from_interview(conversation: list[dict[str, Any]],
         raise AIError("There's no interview content yet to build a resume from.")
     tpl = template_html if template_html is not None else resume_html()
     prompt = _RESUME_BUILD_PROMPT.format(
-        conversation=convo[:14000], template_html=(tpl or "")[:30000])
-    html = _generate(prompt, as_json=False).strip()
-    html = re.sub(r"^```(?:html)?\s*", "", html)
-    html = re.sub(r"\s*```$", "", html)
-    return html
+        conversation=convo[:14000],
+        template_html=(tpl or "")[:_RESUME_HTML_BUDGET])
+    html = _strip_md_fences(_generate(prompt, as_json=False))
+    return _preserve_resume_style(tpl or "", html)
 
 
 # --------------------------------------------------------------------------- #

@@ -37,7 +37,7 @@
   <div class="editor">
     <section class="panel">
       <h2>✨ Fine-tune with Gemini</h2>
-      <p class="muted sm">Describe the change in plain language. Gemini keeps your styling and only re-words / re-orders content that's already true.</p>
+      <p class="muted sm">Describe the change in plain language. Styling (colors, sizes, bold section titles) is kept from your original resume — only wording / emphasis changes.</p>
       <form method="post" action="{{ url_for('main.resume_refine', app_id=app.id) }}" data-loading="Refining your resume with Gemini…" class="stack">
         <textarea name="instructions" rows="4" placeholder="e.g. 'Make the summary punchier, max 3 lines'
 'Move Cloud & Infrastructure skills above Databases'
