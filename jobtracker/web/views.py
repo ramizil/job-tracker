@@ -2241,12 +2241,45 @@ def set_contact(app_id: int):
     return redirect(url_for("main.detail", app_id=app_id))
 
 
+def _save_rejection_uploads(app_id: int, *, note: str = "") -> int:
+    """Persist multipart rejection evidence from the current request. Returns count saved."""
+    uploads = list(request.files.getlist("files"))
+    single = request.files.get("file")
+    if single is not None and single.filename:
+        uploads.append(single)
+    saved = 0
+    for f in uploads:
+        if not f or not f.filename:
+            continue
+        try:
+            rejection_files.add(
+                app_id, data=f.read(), original_name=f.filename,
+                note=note, mime=f.mimetype or "")
+            saved += 1
+        except ValueError as exc:
+            flash(str(exc), "error")
+        except OSError as exc:
+            flash(f"Could not save {f.filename}: {exc}", "error")
+    return saved
+
+
 @bp.route("/application/<int:app_id>/reject", methods=["POST"])
 def reject(app_id: int):
+    if not tracker.get_application(app_id):
+        abort(404)
     f = request.form
     tracker.set_rejection(app_id, stage=f.get("stage", ""),
                           reason=f.get("reason", ""), note=f.get("note", ""))
-    flash("Marked rejected.", "ok")
+    n = _save_rejection_uploads(app_id)
+    if ai.is_configured():
+        _schedule_rejection_analysis(app_id)
+        msg = "Marked rejected. AI insights are generating in the background."
+        if n:
+            msg += f" ({n} file{'s' if n != 1 else ''} attached.)"
+        flash(msg, "ok")
+        return redirect(url_for("main.detail", app_id=app_id, rej_analysis=1)
+                        + "#rejection-files")
+    flash("Marked rejected." + (f" ({n} file(s) attached.)" if n else ""), "ok")
     return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
 
 
@@ -2254,19 +2287,12 @@ def reject(app_id: int):
 def rejection_file_upload(app_id: int):
     if not tracker.get_application(app_id):
         abort(404)
-    f = request.files.get("file")
-    if not f or not f.filename:
+    n = _save_rejection_uploads(app_id, note=request.form.get("note", ""))
+    if n:
+        flash(f"{'Rejection file' if n == 1 else f'{n} rejection files'} attached.",
+              "ok")
+    else:
         flash("Choose a file to attach.", "error")
-        return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
-    try:
-        rejection_files.add(
-            app_id, data=f.read(), original_name=f.filename,
-            note=request.form.get("note", ""), mime=f.mimetype or "")
-        flash("Rejection file attached.", "ok")
-    except ValueError as exc:
-        flash(str(exc), "error")
-    except OSError as exc:
-        flash(f"Could not save file: {exc}", "error")
     return redirect(url_for("main.detail", app_id=app_id) + "#rejection-files")
 
 

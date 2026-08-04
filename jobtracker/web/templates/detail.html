@@ -79,12 +79,20 @@
           {% endif %}
         </div>
       </form>
-      <details class="mt"><summary class="btn danger sm">Mark rejected…</summary>
-        <form method="post" action="{{ url_for('main.reject', app_id=app.id) }}" class="stack">
+      <details class="mt" id="mark-rejected"{% if request.args.get('reject') %} open{% endif %}>
+        <summary class="btn danger sm">Mark rejected…</summary>
+        <form method="post" action="{{ url_for('main.reject', app_id=app.id) }}"
+              class="stack" enctype="multipart/form-data">
           <label>Stage <select name="stage">{% for s in stages %}<option>{{ s }}</option>{% endfor %}</select></label>
           <p class="muted sm">Early = no_response / cv_screen (email/ATS). Later stages = after process started.</p>
           <label>Reason <select name="reason">{% for s in reasons %}<option>{{ s }}</option>{% endfor %}</select></label>
           <input name="note" placeholder="free-text note">
+          <label>Evidence files
+            <span class="muted sm">(optional — rejection email PDF/screenshot, feedback)</span>
+            <input type="file" name="files" multiple
+                   accept=".pdf,.txt,.md,.html,.htm,.docx,.png,.jpg,.jpeg,.webp,.gif">
+          </label>
+          <p class="muted sm">Attached files feed AI rejection insights. You can add more later too.</p>
           <button class="btn danger" type="submit">Confirm rejection</button>
         </form>
       </details>
