@@ -2194,6 +2194,7 @@ def share(app_id: int):
         analysis=tracker.get_ai_analysis(app_id),
         salary=tracker.get_salary_research(app_id),
         company_brief=tracker.get_company_brief(app_id),
+        ats=tracker.get_ats_check(app_id),
         generated=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
     safe_co = re.sub(r"[^A-Za-z0-9_-]+", "-", r["company"] or "job").strip("-")

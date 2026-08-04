@@ -35,6 +35,8 @@
   td{border-top:1px solid var(--rule);padding:7px 8px;vertical-align:top;}
   .m-yes{color:var(--ok);font-weight:700;} .m-partial{color:var(--warn);font-weight:700;}
   .m-no{color:var(--bad);font-weight:700;}
+  .m-strong{color:var(--ok);font-weight:700;} .m-gap{color:var(--bad);font-weight:700;}
+  .pill.must{background:#fde8e8;color:var(--bad);}
   ul{padding-left:20px;font-size:13.5px;}
   li{margin-bottom:5px;}
   .salary-range{font-size:21px;font-weight:800;margin:4px 0 8px;}
@@ -172,19 +174,76 @@
   </div>
   {% endif %}
 
-  {% if app.pitch %}
+  {% if ats %}
   <div class="panel">
-    <h2>🎤 About-me pitch (תסריט)</h2>
+    <h2>🎯 ATS keyword check</h2>
+    <div class="verdict">
+      <span class="fit fit-{{ 'yes' if ats.ats_score >= 70 else ('maybe' if ats.ats_score >= 45 else 'no') }}">{{ ats.ats_score }}%</span>
+      <div style="flex:1">
+        {% if ats.summary_he %}
+        <div class="bi"><span dir="ltr">{{ ats.summary }}</span><span class="he">{{ ats.summary_he }}</span></div>
+        {% else %}
+        <span dir="auto">{{ ats.summary }}</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if ats.keywords %}
+    <h3>Keywords</h3>
+    <table><tbody>
+      {% for k in ats.keywords %}
+      <tr>
+        <td class="m-{{ 'strong' if k.in_resume else 'gap' }}">{{ '✓ found' if k.in_resume else '✗ missing' }}</td>
+        <td><b dir="auto">{{ k.keyword }}</b>{% if k.importance == 'must' %} <span class="pill must">must</span>{% endif %}</td>
+        <td>
+          {% if k.in_resume and k.evidence %}<span class="muted" dir="auto">{{ k.evidence }}</span>
+          {% elif k.fix %}
+            {% if k.fix_he %}<div class="bi"><span dir="ltr">{{ k.fix }}</span><span class="he">{{ k.fix_he }}</span></div>
+            {% else %}<span dir="auto">{{ k.fix }}</span>{% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody></table>
+    {% endif %}
+    {% if ats.tips %}
+    <h3>Tips</h3>
+    <ul>
+      {% for t in ats.tips %}
+      <li>{% if t.he %}<div class="bi"><span dir="ltr">{{ t.en }}</span><span class="he">{{ t.he }}</span></div>{% else %}<span dir="auto">{{ t.en }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% set interview_pitch = (app.pitch or '')|trim %}
+  {% set recruiter_pitch = (app.pitch_recruiter or '')|trim %}
+  {% if interview_pitch %}
+  <div class="panel">
+    <h2>🎤 Interview pitch (תסריט)</h2>
     {% if app.pitch_notes %}
     <h3>AI suggestions for this job</h3>
     <div class="md" dir="auto">{{ app.pitch_notes | md | safe }}</div>
     {% endif %}
     <h3>Script</h3>
-    <div class="pitch" dir="auto">{{ app.pitch }}</div>
+    <div class="pitch" dir="auto">{{ interview_pitch }}</div>
   </div>
   {% endif %}
 
-  {% if not analysis and not company_brief and not salary and not app.pitch %}
+  {% if recruiter_pitch %}
+  <div class="panel">
+    <h2>📞 Recruiter pitch</h2>
+    {% if app.pitch_recruiter_notes %}
+    <h3>AI suggestions for this job</h3>
+    <div class="md" dir="auto">{{ app.pitch_recruiter_notes | md | safe }}</div>
+    {% endif %}
+    <h3>Script</h3>
+    <div class="pitch" dir="auto">{{ recruiter_pitch }}</div>
+  </div>
+  {% endif %}
+
+  {% if not analysis and not company_brief and not salary and not ats
+        and not interview_pitch and not recruiter_pitch %}
   <div class="panel"><p class="muted">No AI insights have been generated for this
     application yet.</p></div>
   {% endif %}
