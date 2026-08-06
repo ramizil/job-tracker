@@ -239,16 +239,30 @@
       {% endif %}
       <form method="post" action="{{ url_for('main.set_sent_resume', app_id=app.id) }}"
             enctype="multipart/form-data" class="stack mt" id="resume-sent-form">
-        <p class="muted sm" style="margin:0">Click a card to link it — the choice saves
-          straight away.</p>
-        {% set mode = 'pick' %}
         {% set selected_id = sent_resume.id if sent_resume else none %}
-        {% set form_name = 'resume_id' %}
-        {% set show_actions = false %}
-        {% set usage = none %}
-        {% include "_resume_cards.html" %}
-        <label class="muted sm" style="margin-top:8px"><input type="radio" name="resume_id" value=""
-          {{ 'checked' if not sent_resume }}> — none —</label>
+        {% set pick = namespace(color='none') %}
+        {% for g in resume_groups %}
+        {% if selected_id is not none and selected_id in g.member_ids %}
+        {% set pick.color = g.color or 'blue' %}
+        {% endif %}
+        {% endfor %}
+        <div class="rsel-row">
+          <span class="rsel-dot rc-{{ pick.color }}" id="resume-dot" aria-hidden="true"></span>
+          <select name="resume_id" id="resume-select" class="rsel"
+                  title="Which CV was sent for this application">
+            <option value="" data-color="none" {{ 'selected' if not sent_resume }}>— none —</option>
+            {% for g in resume_groups %}
+            {% set gc = g.color or 'blue' %}
+            <option value="{{ g.primary_id }}" data-color="{{ gc }}" class="opt-{{ gc }}"
+                    {{ 'selected' if selected_id is not none and selected_id in g.member_ids }}>
+              {{ g.label }}{% if g.is_default %} ★{% endif %}
+              {%- if g.html and g.pdf %} · HTML+PDF{% elif g.pdf_name %} · PDF{% elif g.html_name %} · HTML{% endif %}
+              {%- if g.created_at %} · {{ g.created_at[:10] }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="muted sm" style="margin:0">Saves as soon as you pick one.</p>
         <div class="row mt">
           <input type="file" name="resume_file" accept=".pdf,.html,.htm,.docx,.txt,.md">
           <input name="resume_label" placeholder="Label for new file (required if uploading)">
@@ -1328,30 +1342,28 @@
 })();
 </script>
 <script>
-// Resume picker: highlight the chosen card and save the link on the spot.
+// Resume picker: colour dot follows the dropdown and the link saves on pick.
 (function () {
   var form = document.getElementById('resume-sent-form');
-  if (!form) return;
-  var radios = form.querySelectorAll('input[name="resume_id"]');
-  if (!radios.length) return;
+  var sel = document.getElementById('resume-select');
+  if (!form || !sel) return;
+  var dot = document.getElementById('resume-dot');
   var file = form.querySelector('input[name="resume_file"]');
   var path = form.querySelector('input[name="resume_path"]');
 
   function paint() {
-    Array.prototype.forEach.call(form.querySelectorAll('.resume-card'), function (card) {
-      var r = card.querySelector('input[name="resume_id"]');
-      card.classList.toggle('is-selected', !!(r && r.checked));
-    });
+    if (!dot) return;
+    var opt = sel.options[sel.selectedIndex];
+    dot.className = 'rsel-dot rc-' +
+      ((opt && opt.getAttribute('data-color')) || 'none');
   }
-  Array.prototype.forEach.call(radios, function (r) {
-    r.addEventListener('change', function () {
-      paint();
-      // An in-progress upload/path wins over the library pick, so let the
-      // user finish it and submit with the button instead.
-      if ((file && file.files && file.files.length) ||
-          (path && path.value.trim())) return;
-      if (form.requestSubmit) form.requestSubmit(); else form.submit();
-    });
+  sel.addEventListener('change', function () {
+    paint();
+    // An in-progress upload/path wins over the library pick, so let the
+    // user finish it and submit with the button instead.
+    if ((file && file.files && file.files.length) ||
+        (path && path.value.trim())) return;
+    if (form.requestSubmit) form.requestSubmit(); else form.submit();
   });
   paint();
 })();
