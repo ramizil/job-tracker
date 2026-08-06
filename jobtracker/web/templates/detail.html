@@ -238,7 +238,9 @@
       </ul>
       {% endif %}
       <form method="post" action="{{ url_for('main.set_sent_resume', app_id=app.id) }}"
-            enctype="multipart/form-data" class="stack mt">
+            enctype="multipart/form-data" class="stack mt" id="resume-sent-form">
+        <p class="muted sm" style="margin:0">Click a card to link it — the choice saves
+          straight away.</p>
         {% set mode = 'pick' %}
         {% set selected_id = sent_resume.id if sent_resume else none %}
         {% set form_name = 'resume_id' %}
@@ -265,6 +267,7 @@
         <p class="muted sm">If the file matches something already in the library (same bytes or
           nearly the same text), that existing resume is linked instead of adding a duplicate.</p>
         <button class="btn" type="submit">Save resume link</button>
+        <p class="muted sm">Only needed when uploading a file or typing a path.</p>
         <p class="muted sm">Manage labels &amp; defaults in
           <a href="{{ url_for('main.my_resumes') }}">My resumes</a>.</p>
       </form>
@@ -1322,6 +1325,35 @@
   }
   if (toggle) toggle.addEventListener('click', function () { showEdit(true); });
   if (cancel) cancel.addEventListener('click', function () { showEdit(false); });
+})();
+</script>
+<script>
+// Resume picker: highlight the chosen card and save the link on the spot.
+(function () {
+  var form = document.getElementById('resume-sent-form');
+  if (!form) return;
+  var radios = form.querySelectorAll('input[name="resume_id"]');
+  if (!radios.length) return;
+  var file = form.querySelector('input[name="resume_file"]');
+  var path = form.querySelector('input[name="resume_path"]');
+
+  function paint() {
+    Array.prototype.forEach.call(form.querySelectorAll('.resume-card'), function (card) {
+      var r = card.querySelector('input[name="resume_id"]');
+      card.classList.toggle('is-selected', !!(r && r.checked));
+    });
+  }
+  Array.prototype.forEach.call(radios, function (r) {
+    r.addEventListener('change', function () {
+      paint();
+      // An in-progress upload/path wins over the library pick, so let the
+      // user finish it and submit with the button instead.
+      if ((file && file.files && file.files.length) ||
+          (path && path.value.trim())) return;
+      if (form.requestSubmit) form.requestSubmit(); else form.submit();
+    });
+  });
+  paint();
 })();
 </script>
 <script>

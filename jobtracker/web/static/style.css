@@ -1024,8 +1024,11 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 .resume-card{border:1px solid var(--rule);border-radius:12px;background:var(--panel,rgba(15,23,42,.55));
   overflow:hidden;display:flex;flex-direction:column;min-height:96px;
   box-shadow:0 8px 24px -18px rgba(0,0,0,.7)}
-.resume-card.is-default{outline:2px solid rgba(52,211,153,.55);outline-offset:1px}
-.resume-card.is-selected{outline:2px solid rgba(96,165,250,.7);outline-offset:1px}
+.resume-card.is-default{outline:1px dashed rgba(52,211,153,.5);outline-offset:1px}
+.resume-card.is-selected,
+.resume-card:has(.rc-pick input:checked){
+  outline:2px solid rgba(96,165,250,.9);outline-offset:1px;
+  box-shadow:0 0 0 4px rgba(96,165,250,.18),0 8px 24px -18px rgba(0,0,0,.7)}
 .resume-card .rc-body,.resume-card .rc-pick{display:flex;gap:12px;padding:12px 14px;align-items:flex-start;
   text-decoration:none;color:inherit;flex:1;cursor:pointer}
 .resume-card .rc-pick{margin:0}
@@ -1041,6 +1044,9 @@ html:is([data-theme="futuristic-light"],[data-theme="light"],[data-theme="profes
 .rc-badge{display:inline-block;font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:999px;
   background:rgba(52,211,153,.2);color:#6ee7b7;width:fit-content}
 .rc-badge-pair{background:rgba(96,165,250,.18);color:#93c5fd}
+.rc-badge-sel{display:none;background:rgba(96,165,250,.28);color:#bfdbfe}
+.resume-card.is-selected .rc-badge-sel,
+.resume-card:has(.rc-pick input:checked) .rc-badge-sel{display:inline-block}
 .rc-path{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .rc-meta{line-height:1.35}
@@ -1185,8 +1191,11 @@ html[data-theme="light"] .fit-no{background:#dc2626;color:#fff;border-color:#dc2
 .resume-card{border:1px solid var(--rule);border-radius:12px;background:var(--panel,rgba(15,23,42,.55));
   overflow:hidden;display:flex;flex-direction:column;min-height:96px;
   box-shadow:0 8px 24px -18px rgba(0,0,0,.7)}
-.resume-card.is-default{outline:2px solid rgba(52,211,153,.55);outline-offset:1px}
-.resume-card.is-selected{outline:2px solid rgba(96,165,250,.7);outline-offset:1px}
+.resume-card.is-default{outline:1px dashed rgba(52,211,153,.5);outline-offset:1px}
+.resume-card.is-selected,
+.resume-card:has(.rc-pick input:checked){
+  outline:2px solid rgba(96,165,250,.9);outline-offset:1px;
+  box-shadow:0 0 0 4px rgba(96,165,250,.18),0 8px 24px -18px rgba(0,0,0,.7)}
 .resume-card .rc-body,.resume-card .rc-pick{display:flex;gap:12px;padding:12px 14px;align-items:flex-start;
   text-decoration:none;color:inherit;flex:1;cursor:pointer}
 .resume-card .rc-pick{margin:0}
@@ -1202,6 +1211,9 @@ html[data-theme="light"] .fit-no{background:#dc2626;color:#fff;border-color:#dc2
 .rc-badge{display:inline-block;font-size:10.5px;font-weight:650;padding:1px 7px;border-radius:999px;
   background:rgba(52,211,153,.2);color:#6ee7b7;width:fit-content}
 .rc-badge-pair{background:rgba(96,165,250,.18);color:#93c5fd}
+.rc-badge-sel{display:none;background:rgba(96,165,250,.28);color:#bfdbfe}
+.resume-card.is-selected .rc-badge-sel,
+.resume-card:has(.rc-pick input:checked) .rc-badge-sel{display:inline-block}
 .rc-path{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .rc-meta{line-height:1.35}
